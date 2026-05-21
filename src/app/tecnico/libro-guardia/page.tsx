@@ -54,13 +54,13 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       turnoAbierto.cliente_id
         ? supabaseAdmin()
             .from('incidencias')
-            .select('*')
+            .select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni)')
             .eq('cliente_id', turnoAbierto.cliente_id)
             .eq('estado', 'abierto')
             .order('created_at', { ascending: true })
         : supabaseAdmin()
             .from('incidencias')
-            .select('*')
+            .select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni)')
             .is('cliente_id', null)
             .eq('estado', 'abierto')
             .order('created_at', { ascending: true }),

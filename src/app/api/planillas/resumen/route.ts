@@ -11,16 +11,22 @@ export async function GET(req: NextRequest) {
 
   const { data: planilla } = await supabaseAdmin()
     .from('planillas')
-    .select('id, tipo, fecha, turno, tecnico_nombre, tecnico_dni, enviada_at')
+    .select('id, tipo, fecha, turno, enviada_at, users!tecnico_id(nombre, apellido, dni)')
     .eq('id', planillaId)
     .single()
 
   if (!planilla) return NextResponse.json({ error: 'Planilla no encontrada' }, { status: 404 })
 
+  const tecnicoUser = planilla.users as { nombre: string; apellido: string; dni: string | null } | null
+  const tecnico_nombre = tecnicoUser ? `${tecnicoUser.nombre} ${tecnicoUser.apellido}` : '—'
+  const tecnico_dni = tecnicoUser?.dni ?? ''
+
   // Fetch items según tipo
   let itemsConObservacion: unknown[] = []
   let total = 0
   let ok = 0
+
+  let allItems: unknown[] = []
 
   if (planilla.tipo === 'hidrantes') {
     const { data: items } = await supabaseAdmin()
@@ -29,7 +35,8 @@ export async function GET(req: NextRequest) {
       .eq('planilla_id', planillaId)
       .order('numero')
 
-    total = (items ?? []).length
+    allItems = items ?? []
+    total = allItems.length
     ok = (items ?? []).filter(
       (i) => i.gabinete && i.manga && i.lanza && i.valvula
     ).length
@@ -43,7 +50,8 @@ export async function GET(req: NextRequest) {
       .eq('planilla_id', planillaId)
       .order('numero')
 
-    total = (items ?? []).length
+    allItems = items ?? []
+    total = allItems.length
     ok = (items ?? []).filter(
       (i) => i.senalizacion && i.acceso && i.presion_peso
     ).length
@@ -53,8 +61,9 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    planilla,
+    planilla: { ...planilla, tecnico_nombre, tecnico_dni },
     stats: { total, ok, conObservaciones: total - ok },
     itemsConObservacion,
+    allItems,
   })
 }

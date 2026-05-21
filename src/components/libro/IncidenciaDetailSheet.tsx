@@ -18,7 +18,12 @@ interface HistorialEntry {
   hora: string
   descripcion: string
   created_at: string
-  libro_turno?: { users?: { nombre: string; apellido: string } | null } | null
+  users?: { nombre: string; apellido: string } | null
+}
+
+function resolverNombre(h: HistorialEntry): string | null {
+  if (!h.users) return null
+  return `${h.users.nombre} ${h.users.apellido}`
 }
 
 type SheetMode = 'detail' | 'seguimiento' | 'resolucion'
@@ -177,9 +182,19 @@ export default function IncidenciaDetailSheet({ incidencia, turnoId, onClose, on
                   <p className="text-sm text-brand-ink">{incidencia.descripcion}</p>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <Clock size={13} />
-                  <span>Reportada el {formatDate(incidencia.created_at)}</span>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Clock size={13} />
+                    <span>Reportada el {formatDate(incidencia.created_at)}</span>
+                  </div>
+                  {incidencia.libro_turno?.tecnico_nombre && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <User size={13} />
+                      <span>Reportada por <span className="font-semibold text-brand-ink">{incidencia.libro_turno.tecnico_nombre}</span>
+                        {incidencia.libro_turno.tecnico_dni ? ` (DNI ${incidencia.libro_turno.tecnico_dni})` : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {incidencia.foto_url && (
@@ -204,9 +219,7 @@ export default function IncidenciaDetailSheet({ incidencia, turnoId, onClose, on
                     <div className="flex flex-col gap-2">
                       {historial.map((h) => {
                         const esResolucion = h.descripcion.startsWith('INCIDENCIA RESUELTA')
-                        const nombre = h.libro_turno?.users
-                          ? `${h.libro_turno.users.nombre} ${h.libro_turno.users.apellido}`
-                          : null
+                        const nombre = resolverNombre(h)
                         return (
                           <div key={h.id} className={`rounded-lg border p-2.5 ${esResolucion ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
                             <div className="flex items-center gap-2 mb-1">

@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
     .from('libro_novedad')
     .insert({
       turno_id: nuevoTurno.id,
+      tecnico_id: user.id,
       tipo: 'apertura',
       hora: horario_inicio,
       descripcion: 'Apertura de guardia',

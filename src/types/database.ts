@@ -111,6 +111,7 @@ export interface Incidencia {
   estado: 'abierto' | 'resuelto'
   foto_url: string | null
   created_at: string
+  libro_turno?: { tecnico_nombre: string; tecnico_dni: string } | null
 }
 
 export interface LibroNovedad {

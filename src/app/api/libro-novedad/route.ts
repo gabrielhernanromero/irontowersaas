@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     .from('libro_novedad')
     .insert({
       turno_id,
+      tecnico_id: user.id,
       tipo:                    'novedad',
       hora,
       descripcion,

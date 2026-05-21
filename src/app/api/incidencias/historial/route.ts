@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin()
     .from('libro_novedad')
-    .select('id, hora, descripcion, created_at, libro_turno(users(nombre, apellido))')
+    .select('id, hora, descripcion, created_at, users!tecnico_id(nombre, apellido)')
     .eq('incidencia_id', incidenciaId)
     .order('created_at', { ascending: true })
 
