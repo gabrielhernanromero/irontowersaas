@@ -1,0 +1,46 @@
+markdown_content = """# Requerimiento Técnico: Distinción Visual de Incidencias Persistentes en el Registro del Turno
+## Proyecto: Iron Tower OS
+
+### 1. Contexto del Problema
+Actualmente, el flujo de creación de novedades permite activar el toggle de **"Incidencia persistente"** (con su respectivo título y nivel de severidad). Los datos se guardan correctamente en la base de datos, pero en la pantalla principal del libro de guardia (`/tecnico/libro-guardia`), las incidencias se renderizan usando el mismo estilo exacto que las novedades ordinarias (mismo contenedor blanco, mismo nodo naranja en la línea de tiempo, misma tipografía). 
+
+Esto rompe la jerarquía visual de la aplicación. Un técnico entrante o un supervisor no puede identificar de un vistazo rápido qué elementos son simples registros del día (logs ordinarios) y cuáles son problemas activos/críticos que requieren atención o seguimiento inmediato (como *"el porton no funciona"*).
+
+---
+
+### 2. Objetivo de la Modificación
+Modificar el componente que renderiza la línea de tiempo de la sección **"REGISTRO DEL TURNO"** para que aplique estilos condicionales basados en el tipo de registro. Las incidencias persistentes deben resaltar del resto de las novedades ordinarias de forma limpia, profesional y alineada con la paleta de colores del sistema.
+
+---
+
+### 3. Especificaciones de Diseño y UI (Tailwind CSS)
+
+Se deben aplicar los siguientes cambios condicionales en el mapeo de las novedades del turno:
+
+#### A. Nodo indicador de la Línea de Tiempo (Timeline Dot)
+* **Apertura de Guardia:** Se mantiene verde (`bg-emerald-500`).
+* **Novedad Ordinaria / Envío de Planillas:** Se mantiene naranja (`bg-amber-500`).
+* **Incidencia Persistente Activa:** Debe cambiar a color rojo/alerta o ámbar oscuro según su severidad para advertir peligro o estado pendiente.
+    * *Severidad Alta:* `bg-red-600` junto con un ícono de advertencia o un anillo de pulso (`animate-pulse`).
+    * *Severidad Media:* `bg-orange-500`.
+
+#### B. Contenedor de la Tarjeta (Card Container)
+Para evitar la monotonía de las tarjetas blancas idénticas, las incidencias persistentes deben mutar su contenedor:
+* **Borde de Acento Izquierdo:** Agregar un borde izquierdo grueso (`border-l-4`) condicional:
+    * Si es severidad Alta: `border-l-red-500`
+    * Si es severidad Media: `border-l-amber-500`
+* **Fondo sutil:** Un fondo ligeramente tintado para separarlo del resto de las novedades blancas (ej: `bg-red-50/30` para alta o `bg-amber-50/30` para media).
+
+#### C. Inclusión de Badges (Etiquetas de Estado)
+Dentro de la tarjeta de la novedad, al lado de la hora de registro, se debe renderizar un **Badge** que explicite el estado y severidad de la incidencia:
+* Ejemplo de Badge Alta: `<span class="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10">Incidencia Crítica</span>`
+* Ejemplo de Badge Media: `<span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/10">Incidencia — Media</span>`
+
+---
+
+### 4. Guía de Implementación para el Agente (Claude Code / Cursor)
+
+Revisá el componente que maneja el feed en `app/tecnico/libro-guardia/page.tsx` (o el componente hijo correspondiente al timeline).
+
+1.  **Verificación del Modelo:** Asegurate de evaluar correctamente las propiedades de la fila de la base de datos (`libro_novedad` o el join con `incidencias`). Podés identificar una incidencia si el campo `tipo === 'incidencia'` o si posee campos extendidos como `riesgo_detectado`, `titulo_incidencia` o un flag `es_persistente`.
+2.  **Código de Ejemplo para Renderizado Condicional:**

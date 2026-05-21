@@ -4,6 +4,16 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import type { Incidencia, LibroNovedad } from '@/types/database'
 import RelevoPForm from './RelevoPForm'
+import type { EstadoAdmin } from '@/types/database'
+
+type ElementoParaRelevo = {
+  id: string
+  nombre: string
+  codigo_patrimonial: string
+  estado_admin: EstadoAdmin
+  motivo_mantenimiento: string | null
+  incidencias?: { id: string; estado: string }[]
+}
 
 function formatFecha(f: string | null) {
   if (!f) return '—'
@@ -77,6 +87,17 @@ export default async function RelevoPPage({ searchParams }: Props) {
   const { data: incidenciasData } = await incidenciasQuery
   const incidenciasActivas = (incidenciasData ?? []) as Incidencia[]
 
+  // Inventario del puesto para el checklist de relevo
+  const { data: elementosData } = turno.cliente_id
+    ? await supabaseAdmin()
+        .from('elementos_puesto')
+        .select('id, nombre, codigo_patrimonial, estado_admin, motivo_mantenimiento, incidencias!elemento_afectado_id(id, estado)')
+        .eq('cliente_id', turno.cliente_id)
+        .neq('estado_admin', 'inactivo')
+        .order('nombre')
+    : { data: [] }
+  const elementos = (elementosData ?? []) as ElementoParaRelevo[]
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-5">
@@ -115,8 +136,10 @@ export default async function RelevoPPage({ searchParams }: Props) {
         turnoSalienteId={turnoId}
         salienteNombre={turno.tecnico_nombre}
         salienteDNI={turno.tecnico_dni}
+        clienteId={turno.cliente_id ?? ''}
         novedades={(novedadesRaw ?? []) as LibroNovedad[]}
         incidenciasActivas={incidenciasActivas}
+        elementos={elementos}
         entranteNombre={entranteNombre}
         entranteDni={entranteDni}
       />

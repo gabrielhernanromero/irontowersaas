@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   if (!planilla) return NextResponse.json({ error: 'Planilla no encontrada' }, { status: 404 })
 
-  const tecnicoUser = planilla.users as { nombre: string; apellido: string; dni: string | null } | null
+  const tecnicoUser = (planilla.users as unknown) as { nombre: string; apellido: string; dni: string | null } | null
   const tecnico_nombre = tecnicoUser ? `${tecnicoUser.nombre} ${tecnicoUser.apellido}` : '—'
   const tecnico_dni = tecnicoUser?.dni ?? ''
 

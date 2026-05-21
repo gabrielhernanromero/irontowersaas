@@ -8,9 +8,10 @@ import IncidenciaDetailSheet from '@/components/libro/IncidenciaDetailSheet'
 function formatHora(h: string | null) { return h ? h.slice(0, 5) : '—' }
 
 const TIPO_CONFIG = {
-  apertura: { label: 'Apertura de guardia', color: 'text-emerald-600', dot: 'bg-emerald-500' },
-  novedad:  { label: 'Novedad',             color: 'text-amber-600',   dot: 'bg-amber-500'   },
-  cierre:   { label: 'Cierre de guardia',   color: 'text-brand-ink',   dot: 'bg-gray-500'    },
+  apertura: { label: 'Apertura de guardia',  color: 'text-emerald-600', dot: 'bg-emerald-500' },
+  novedad:  { label: 'Novedad',              color: 'text-amber-600',   dot: 'bg-amber-500'   },
+  cierre:   { label: 'Cierre de guardia',    color: 'text-brand-ink',   dot: 'bg-gray-500'    },
+  alerta:   { label: 'Alerta de inventario', color: 'text-red-600',     dot: 'bg-red-500'     },
 }
 
 const SEVERIDAD_DOT: Record<string, string> = {

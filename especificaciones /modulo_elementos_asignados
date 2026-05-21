@@ -1,0 +1,248 @@
+spec_content = """# Especificación Técnica de Arquitectura y Desarrollo: Módulo de Gestión de Activos e Inventario de Puesto
+## Proyecto: Iron Tower OS
+
+Este documento establece las especificaciones integrales para el diseño del modelo de datos, lógica de negocio en el backend y componentes de interfaz de usuario para el control patrimonial de los elementos asignados a los objetivos de seguridad.
+
+---
+
+## 1. Matriz de Estados de Dos Dimensiones
+
+Para garantizar la integridad del sistema y evitar colisiones lógicas, los estados de los activos se dividen estrictamente en dos dimensiones independientes: una administrativa (gestionada desde el Panel Web por el Supervisor) y otra operativa (informada en campo por el Técnico).
+
+### 1.1. Estados Administrativos (Tabla `elementos_puesto`)
+Define la condición jurídica e institucional del activo dentro de la empresa.
+
+| Estado Admin (`estado_admin`) | Descripción | Impacto en la App de Campo |
+| :--- | :--- | :--- |
+| `activo` | El elemento pertenece al puesto de control de forma oficial. | Es obligatorio auditarlo en cada proceso de relevo. |
+| `en_mantenimiento` | El elemento fue retirado por la supervisión para repararse. | Se muestra grisado y bloqueado con un badge informativo. No se audita. |
+| `inactivo` | El activo se dio de baja definitiva por destrucción o reemplazo. | Desaparece por completo de la vista del personal operativo. |
+
+### 1.2. Estados Operativos (Tabla `control_inventario_turno`)
+Define la condición física real del activo informada por el técnico en el puesto de control.
+
+| Estado Operativo (`estado_operativo`) | Significado Técnico | Acción Automatizada del Sistema |
+| :--- | :--- | :--- |
+| `ok` | El equipo está presente y funciona perfectamente. | Flujo normal sin alertas. |
+| `falla` | El equipo está presente pero dañado o inoperativo. | Dispara la creación automática de una **Incidencia** (Severidad Media/Alta). |
+| `faltante` | El equipo no se encuentra físicamente en el puesto. | Dispara de forma inmediata una **Alerta SOS Crítica** en el panel de control. |
+
+---
+
+## 2. Modelo de Datos y Relaciones (PostgreSQL / Supabase DDL)
+
+Ejecutar la siguiente migración para crear los tipos ENUM, las tablas de control y las claves foráneas necesarias.
+
+
+
+##3. Capa de Validación y Esquemas de Control (Zod)
+Ubicación del archivo: /schemas/inventario.ts
+
+import { z } from 'zod';
+
+export const ItemControlSchema = z.object({
+  elementoId: z.string().uuid(),
+  estadoOperativo: z.enum(['ok', 'falla', 'faltante']),
+  observacion: z.string().optional(),
+}).refine((data) => {
+  if ((data.estadoOperativo === 'falla' || data.estadoOperativo === 'faltante') && (!data.observacion || data.observacion.trim().length < 10)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Debes ingresar una justificación detallada de al menos 10 caracteres para reportar fallas o faltantes.",
+  path: ["observacion"]
+});
+
+export const RelevoInventarioSchema = z.object({
+  turnoNuevoId: z.string().uuid(),
+  turnoAnteriorId: z.string().uuid(),
+  tecnicoEntranteId: z.string().uuid(),
+  tecnicoSalienteId: z.string().uuid(),
+  clienteId: z.string().uuid(),
+  controles: z.array(ItemControlSchema).min(1, { message: "Debe auditar al menos un elemento." })
+});
+
+export const ReporteFallaIntraturnoSchema = z.object({
+  turnoId: z.string().uuid(),
+  elementoId: z.string().uuid(),
+  tecnicoId: z.string().uuid(),
+  descripcionFalla: z.string().min(10, { message: "Explicá el desperfecto con al menos 10 caracteres." })
+});
+
+
+4. Arquitectura de Endpoints y Lógica de Negocio Atómica
+4.1. Relevo de Guardia con Imputación Automatizada
+Ruta del archivo: /app/api/inventario/relevo/route.ts
+
+import { createRouteHandlerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+import { RelevoInventarioSchema } from '@/schemas/inventario';
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const validated = RelevoInventarioSchema.parse(body);
+    const supabase = createRouteHandlerClient({ cookies });
+
+    // Iterar de forma segura sobre los elementos auditados en el relevo
+    for (const control of validated.controles) {
+      // 1. Insertar el registro de auditoría estricto para el nuevo turno
+      const { error: insError } = await supabase
+        .from('control_inventario_turno')
+        .insert({
+          turno_id: validated.turnoNuevoId,
+          elemento_id: control.elementoId,
+          estado_operativo: control.estadoOperativo,
+          observacion: control.observacion
+        });
+
+      if (insError) return NextResponse.json({ error: insError.message }, { status: 400 });
+
+      // 2. Escenario de Imputación por Omisión (Técnico Saliente no avisó de la rotura/faltante)
+      if (control.estadoOperativo === 'falla' || control.estadoOperativo === 'faltante') {
+        
+        // Obtener metadatos del elemento para armar el ticket formal
+        const { data: item } = await supabase
+          .from('elementos_puesto')
+          .select('nombre, codigo_patrimonial')
+          .eq('id', control.elementoId)
+          .single();
+
+        const esFaltante = control.estadoOperativo === 'faltante';
+        const tituloTicket = `${esFaltante ? '🚨 [FALTANTE CRÍTICO]' : '⚠️ [FALLA DE INVENTARIO]'} - ${item?.nombre}`;
+        
+        // Inyectar incidencia automatizada cruzada deslindando al Técnico Entrante
+        await supabase
+          .from('incidencias')
+          .insert({
+            cliente_id: validated.clienteId,
+            turno_creacion_id: validated.turnoNuevoId,
+            titulo: tituloTicket,
+            descripcion: `Incidencia de control patrimonial automatizada generada durante el relevo de guardia.\\n\\nDetalle del hallazgo: "${control.observacion}"\\n\\nCódigo de activo afectado: ${item?.codigo_patrimonial}`,
+            severidad: esFaltante ? 'alta' : 'media',
+            estado: 'abierto',
+            elemento_afectado_id: control.elementoId,
+            tecnico_detector_id: validated.tecnicoEntranteId,
+            tecnico_imputado_id: validated.tecnicoSalienteId, -- Imputación directa al turno anterior
+            turno_imputado_id: validated.turnoAnteriorId
+          });
+
+        // Estampar el rastro legal inmutable dentro del libro de novedades del turno entrante
+        await supabase
+          .from('libro_novedad')
+          .insert({
+            turno_id: validated.turnoNuevoId,
+            tipo: esFaltante ? 'alerta' : 'novedad',
+            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+            descripcion: `${tituloTicket}. Código Patrimonial: ${item?.codigo_patrimonial}. Hallazgo: ${control.observacion}. Responsabilidad deslindada ante supervisión.`
+          });
+      }
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Internal Error' }, { status: 500 });
+  }
+}
+
+4.2. Reporte de Desperfecto Intraturno (Empleado Honesto)
+Ruta del archivo: /app/api/inventario/reportar-falla/route.ts
+
+
+import { createRouteHandlerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+import { ReporteFallaIntraturnoSchema } from '@/schemas/inventario';
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const validated = ReporteFallaIntraturnoSchema.parse(body);
+    const supabase = createRouteHandlerClient({ cookies });
+
+    const { data: item } = await supabase
+      .from('elementos_puesto')
+      .select('nombre, codigo_patrimonial, cliente_id')
+      .eq('id', validated.elementoId)
+      .single();
+
+    // 1. Crear incidencia de forma voluntaria asumiendo la responsabilidad del hecho durante su guardia
+    await supabase.from('incidencias').insert({
+      cliente_id: item?.cliente_id,
+      turno_creacion_id: validated.turnoId,
+      titulo: `⚠️ [DESPERFECTO EN GUARDIA] - ${item?.nombre}`,
+      descripcion: `El técnico reportó de manera voluntaria un daño ocurrido durante el transcurso operativo de su turno.\\n\\nDetalle del daño: "${validated.descripcionFalla}"\\n\\nActivo ID: ${item?.codigo_patrimonial}`,
+      severidad: 'media',
+      estado: 'abierto',
+      elemento_afectado_id: validated.elementoId,
+      tecnico_detector_id: validated.tecnicoId,
+      tecnico_imputado_id: validated.tecnicoId, -- El mismo usuario asume la trazabilidad del evento
+      turno_imputado_id: validated.turnoId
+    });
+
+    // 2. Dejar asentado de forma obligatoria en el feed lineal (Timeline) del libro actual
+    await supabase.from('libro_novedad').insert({
+      turno_id: validated.turnoId,
+      tipo: 'novedad',
+      hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      descripcion: `⚠️ [DAÑO DE MATERIAL] - Se reporta desperfecto en equipo: ${item?.nombre} (${item?.codigo_patrimonial}). Detalle: ${validated.descripcionFalla}`
+    });
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+5. Diseño UX de Frontend e Interfaces (Estrategia de Carga y Visualización)
+5.1. Pantalla de Relevo (Carga Condicional)
+Al renderizar el checklist antes de firmar, se debe ejecutar una consulta compuesta (Join) en Supabase para verificar si el elemento ya posee tickets abiertos activos.
+
+const { data: listadoElementos } = await supabase
+  .from('elementos_puesto')
+  .select(`
+    id,
+    nombre,
+    codigo_patrimonial,
+    estado_admin,
+    incidencias (id, estado)
+  `)
+  .eq('cliente_id', idClienteActual)
+  .neq('estado_admin', 'inactivo');
+
+  Reglas lógicas de maquetación en React:
+Si estado_admin === 'en_mantenimiento': Se deshabilita el elemento por completo. Se pinta con fondo gris (bg-slate-100 opacity-60) y se despliega un texto explicativo: "Elemento retirado temporalmente por Base para service".
+
+Si el elemento tiene incidencias con estado === 'abierto': Significa que el turno anterior (u otra guardia previa) ya reportó de manera honesta la rotura. Se bloquean los botones de control [ OK ] y [ Falla ] y se renderiza un badge plano que dice: [⚠️ REPARACIÓN PENDIENTE]. Esto evita la duplicación masiva de tickets basuras.
+
+Si no hay incidencias pendientes y está activo: Se muestran los controles de selección normales.
+
+5.2. Pestaña "Inicio" (Dashboard Vivo del Puesto)
+Siguiendo el diseño unificado de la barra de navegación inferior, la pantalla de Inicio alojará permanentemente una tarjeta de control denominada "Inventario Asignado al Puesto".
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🎒 INVENTARIO ASIGNADO AL PUESTO                            │
+├─────────────────────────────────────────────────────────────┤
+│ 📱 Celular Corporativo Samsung A12                          │
+│    N/S: 994-AFA82    • Estado: 🟢 OPERATIVO                 │
+│    [ Reportar Falla ] ➔ Abre Modal Intraturno               │
+├─────────────────────────────────────────────────────────────┤
+│ 📻 Handy Motorola EP450                                    │
+│    N/S: 103-MOT82    • Estado: 🟢 OPERATIVO                 │
+│    [ Reportar Falla ]                                       │
+├─────────────────────────────────────────────────────────────┤
+│ 🔧 Linterna Táctica Cree LED                                │
+│    N/S: LT-9923      • Estado: 🔧 EN MANTENIMIENTO          │
+│    (Retirado por Base el 20/05/2026 para cambio de batería) │
+└─────────────────────────────────────────────────────────────┘
+
+Acción del Botón "Reportar Falla": Abre un Bottom Sheet limpio con una advertencia transparente para el técnico: "Al enviar este formulario, dejarás constancia de que el daño ocurrió durante el transcurso operativo de tu guardia activa". Esto resguarda la veracidad jurídica y la inmutabilidad de los datos recolectados en campo.
+"""
+
+with open("especificacion-modulo-inventario-activos.md", "w", encoding="utf-8") as f:
+f.write(spec_content)
+
+print("Specification document written successfully.")
+

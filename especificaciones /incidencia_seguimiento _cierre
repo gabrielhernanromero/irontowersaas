@@ -1,0 +1,27 @@
+# Requerimientos de Funcionalidad: Seguimiento y Cierre de Incidencias
+## Proyecto: Iron Tower OS
+
+### 1. Base de Datos (Estructura y Relaciones)
+* **Enlace de Historial:** Modificar la tabla `libro_novedad` para aceptar un campo `incidencia_id` (UUID, Nullable, Foreign Key a `incidencias`). Esto permite vincular múltiples comentarios/avances a un problema activo.
+
+### 2. Frontend (UI / UX y Componentes)
+* **Panel de Acciones Divididas:** La tarjeta de la incidencia activa debe renderizar dos botones distintos:
+  * Botón Secundario: "Agregar Seguimiento"
+  * Botón Primario/Alerta: "Resolver Incidencia"
+* **Modal de Seguimiento (Baja Fricción):** Un `BottomSheet` o Modal simple con un campo de texto (`textarea`) para registrar el avance diario.
+* **Modal de Cierre Defensivo (Alta Fricción):** Un `BottomSheet` o Modal estricto para dar por solucionado el problema. Debe incluir:
+  * Banner visual de advertencia (ej: "Estás por dar por solucionada esta incidencia").
+  * Campo de texto obligatorio para detallar la resolución.
+  * **Carga de foto OPCIONAL** (input file/cámara) para adjuntar evidencia si la hubiera.
+* **Historial de Incidencia:** Un componente que permita expandir la incidencia para listar cronológicamente todos sus registros de seguimiento anteriores extraídos de `libro_novedad`.
+
+### 3. Backend (API, Validaciones y Reglas de Negocio)
+* **Esquemas de Validación (Zod):**
+  * `SeguimientoSchema`: Valida `incidenciaId`, `turnoId` y `descripcion` (mínimo de caracteres bajo, ej: 5).
+  * `ResolucionSchema`: Valida `incidenciaId`, `turnoId`, `descripcionResolucion` (mínimo de caracteres alto, ej: 15, para forzar detalle de cómo se arregló) y `fotoUrl` (declarado explícitamente como **opcional** usando `.optional()`).
+* **Endpoint de Seguimiento (`POST /api/incidencias/seguimiento`):** * Recibe el payload validado.
+  * Ejecuta un `INSERT` únicamente en la tabla `libro_novedad` (registrando el avance). La tabla `incidencias` NO se modifica (mantiene estado `abierto`).
+* **Endpoint de Resolución Atómica (`POST /api/incidencias/resolver`):** * Ejecuta una transacción o secuencia estricta de dos pasos:
+    1. `UPDATE` en la tabla `incidencias`: Cambia el `estado` a `resuelto` y asigna el `turno_cierre_id` actual.
+    2. `INSERT` en la tabla `libro_novedad`: Crea un registro final de "Clausura" en el turno actual (ej: "🟢 INCIDENCIA RESUELTA: [Detalle]"), guardando la `foto_url` solo en caso de que el usuario haya provisto una.
+* **Filtro de Consulta Activa:** Modificar el query de Supabase en la carga inicial de la pantalla de guardia para que solo traiga a la vista del técnico las incidencias donde `estado === 'abierto'`, limpiando la pantalla de los problemas ya resueltos.

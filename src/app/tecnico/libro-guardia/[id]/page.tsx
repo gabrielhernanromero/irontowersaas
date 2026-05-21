@@ -15,9 +15,10 @@ function fmtFecha(f: string | null) {
 }
 
 const TIPO_CONFIG = {
-  apertura: { label: 'Apertura de guardia', colorDot: 'bg-green-500', colorText: 'text-green-700', bg: 'bg-green-50 border-green-200' },
-  novedad:  { label: 'Novedad',             colorDot: 'bg-amber-500', colorText: 'text-amber-700', bg: 'bg-amber-50 border-amber-200'  },
-  cierre:   { label: 'Cierre de guardia',   colorDot: 'bg-gray-500',  colorText: 'text-gray-700',  bg: 'bg-gray-50 border-gray-200'   },
+  apertura: { label: 'Apertura de guardia',  colorDot: 'bg-green-500', colorText: 'text-green-700', bg: 'bg-green-50 border-green-200' },
+  novedad:  { label: 'Novedad',              colorDot: 'bg-amber-500', colorText: 'text-amber-700', bg: 'bg-amber-50 border-amber-200'  },
+  cierre:   { label: 'Cierre de guardia',    colorDot: 'bg-gray-500',  colorText: 'text-gray-700',  bg: 'bg-gray-50 border-gray-200'   },
+  alerta:   { label: 'Alerta de inventario', colorDot: 'bg-red-500',   colorText: 'text-red-700',   bg: 'bg-red-50 border-red-200'     },
 }
 
 export default async function LibroTurnoDetallePage({ params }: Props) {

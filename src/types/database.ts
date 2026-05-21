@@ -3,7 +3,9 @@ export type TipoPlanilla = 'hidrantes' | 'extintores'
 export type Turno = 'diurno' | 'nocturno'
 export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
-export type TipoNovedad = 'apertura' | 'novedad' | 'cierre'
+export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta'
+export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
+export type EstadoOperativo = 'ok' | 'falla' | 'faltante'
 
 export interface User {
   id: string
@@ -110,8 +112,36 @@ export interface Incidencia {
   severidad: 'bajo' | 'medio' | 'alto' | null
   estado: 'abierto' | 'resuelto'
   foto_url: string | null
+  elemento_afectado_id: string | null
+  tecnico_detector_id: string | null
+  tecnico_imputado_id: string | null
+  turno_imputado_id: string | null
   created_at: string
   libro_turno?: { tecnico_nombre: string; tecnico_dni: string } | null
+}
+
+export interface ElementoPuesto {
+  id: string
+  cliente_id: string
+  nombre: string
+  codigo_patrimonial: string
+  categoria: string | null
+  descripcion: string | null
+  estado_admin: EstadoAdmin
+  fecha_retiro_mantenimiento: string | null
+  motivo_mantenimiento: string | null
+  created_at: string
+  // Populated via join
+  incidencias?: { id: string; estado: string }[]
+}
+
+export interface ControlInventarioTurno {
+  id: string
+  turno_id: string
+  elemento_id: string
+  estado_operativo: EstadoOperativo
+  observacion: string | null
+  created_at: string
 }
 
 export interface LibroNovedad {

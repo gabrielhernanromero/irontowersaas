@@ -11,8 +11,9 @@ import {
 } from 'lucide-react'
 import FirmaCanvas from '@/components/signature/FirmaCanvas'
 import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
+import RelevoInventarioChecklist, { type ControlItem } from '@/components/inventario/RelevoInventarioChecklist'
 import { RelevoPSchema, type RelevoPInput } from '@/lib/validations/libroTurno'
-import type { Incidencia, LibroNovedad } from '@/types/database'
+import type { Incidencia, LibroNovedad, EstadoAdmin } from '@/types/database'
 
 interface PlanillaItem {
   numero: number
@@ -40,6 +41,7 @@ const TIPO_CONFIG = {
   apertura: { label: 'Apertura', color: 'text-green-600', dot: 'bg-green-500' },
   novedad:  { label: 'Novedad',  color: 'text-amber-600', dot: 'bg-amber-500' },
   cierre:   { label: 'Cierre',   color: 'text-gray-600',  dot: 'bg-gray-500'  },
+  alerta:   { label: 'Alerta',   color: 'text-red-600',   dot: 'bg-red-500'   },
 }
 
 const SEVERIDAD_CONFIG = {
@@ -50,18 +52,30 @@ const SEVERIDAD_CONFIG = {
 
 function formatHora(h: string | null) { return h ? h.slice(0, 5) : '—' }
 
+interface ElementoRelevo {
+  id: string
+  nombre: string
+  codigo_patrimonial: string
+  estado_admin: EstadoAdmin
+  motivo_mantenimiento: string | null
+  incidencias?: { id: string; estado: string }[]
+}
+
 interface Props {
   turnoSalienteId: string
   salienteNombre: string
   salienteDNI: string
+  clienteId: string
   novedades: LibroNovedad[]
   incidenciasActivas: Incidencia[]
+  elementos: ElementoRelevo[]
   entranteNombre?: string
   entranteDni?: string
 }
 
 export default function RelevoPForm({
-  turnoSalienteId, salienteNombre, salienteDNI, novedades, incidenciasActivas,
+  turnoSalienteId, salienteNombre, salienteDNI, clienteId,
+  novedades, incidenciasActivas, elementos,
   entranteNombre = '', entranteDni = '',
 }: Props) {
   const router = useRouter()
@@ -74,6 +88,7 @@ export default function RelevoPForm({
   const [planillaResumen, setPlanillaResumen] = useState<PlanillaResumen | null>(null)
   const [planillaLoading, setPlanillaLoading] = useState(false)
   const [planillaError, setPlanillaError] = useState(false)
+  const [inventarioControles, setInventarioControles] = useState<ControlItem[]>([])
   const novedadesRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<RelevoPInput>({
@@ -129,6 +144,7 @@ export default function RelevoPForm({
     setError(null)
     setSubmitting(true)
     try {
+      // 1. Confirmar el relevo y abrir nuevo turno
       const res = await fetch('/api/libro-turno/relevo', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +152,23 @@ export default function RelevoPForm({
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al registrar el relevo'); return }
+
+      // 2. Registrar auditoría de inventario con el ID real del nuevo turno
+      const nuevoTurnoId = json.id
+      if (inventarioControles.length > 0 && nuevoTurnoId && clienteId) {
+        await fetch('/api/inventario/relevo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            turnoNuevoId:    nuevoTurnoId,
+            turnoAnteriorId: turnoSalienteId,
+            clienteId,
+            controles:       inventarioControles,
+          }),
+        })
+        // Error no-bloqueante: el relevo ya fue confirmado
+      }
+
       router.push('/tecnico/libro-guardia?ok=1')
       router.refresh()
     } catch {
@@ -167,6 +200,14 @@ export default function RelevoPForm({
 
         {/* Incidencias activas del puesto */}
         <IncidenciasActivas incidencias={incidenciasActivas} />
+
+        {/* Control de inventario del puesto */}
+        {elementos.length > 0 && (
+          <RelevoInventarioChecklist
+            elementos={elementos}
+            onChange={setInventarioControles}
+          />
+        )}
 
         {/* Lista de novedades — scrollable */}
         <div>
