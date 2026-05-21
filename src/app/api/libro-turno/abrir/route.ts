@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, turno_saliente_id, relevo_firma_dataurl } = parsed.data
+  const { fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, cliente_id, turno_saliente_id, relevo_firma_dataurl } = parsed.data
 
   // Verificar que no hay turno abierto propio
   const { data: turnoAbierto } = await supabaseAdmin()
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       tecnico_nombre,
       tecnico_dni,
       horario_inicio,
+      cliente_id: cliente_id ?? null,
       estado: 'abierto',
     })
     .select()

@@ -1,10 +1,12 @@
+export const dynamic = 'force-dynamic'
+
 import { getSession } from '@/lib/auth/getSession'
 import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import {
   Droplets, FlameKindling, CheckCircle2, ChevronRight,
-  BookOpen, AlertTriangle, CircleDot, Lock,
+  BookOpen, AlertTriangle, CircleDot, Lock, UserCheck,
 } from 'lucide-react'
 
 function getTurnoActual(): 'diurno' | 'nocturno' {
@@ -14,22 +16,29 @@ function getTurnoActual(): 'diurno' | 'nocturno' {
 export default async function TecnicoHome() {
   const { user } = await getSession()
   const turno = getTurnoActual()
-  const hoy = new Date().toISOString().split('T')[0]
 
-  const [{ data: planillasHoy }, { data: turnoActivo }] = await Promise.all([
-    supabaseServer()
-      .from('planillas')
-      .select('tipo, inmutable, id')
-      .eq('tecnico_id', user!.id)
-      .eq('fecha', hoy)
-      .eq('turno', turno),
-    supabaseAdmin()
-      .from('libro_turno')
-      .select('id, folio_numero, horario_inicio')
-      .eq('tecnico_id', user!.id)
-      .eq('estado', 'abierto')
-      .maybeSingle(),
-  ])
+  const { data: turnoActivo } = await supabaseAdmin()
+    .from('libro_turno')
+    .select('id, folio_numero, horario_inicio')
+    .eq('tecnico_id', user!.id)
+    .eq('estado', 'abierto')
+    .maybeSingle()
+
+  const { data: pendingRelevo } = await supabaseAdmin()
+    .from('libro_turno')
+    .select('id, tecnico_nombre, horario_fin, fecha, turno')
+    .eq('estado', 'pendiente_relevo')
+    .neq('tecnico_id', user!.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { data: planillasHoy } = turnoActivo
+    ? await supabaseServer()
+        .from('planillas')
+        .select('tipo, inmutable, id')
+        .eq('turno_id', turnoActivo.id)
+    : { data: [] as { tipo: string; inmutable: boolean; id: string }[] }
 
   const enviada = (tipo: string) => planillasHoy?.find((p) => p.tipo === tipo && p.inmutable)
   const hidrantesEnviada = enviada('hidrantes')
@@ -47,7 +56,24 @@ export default async function TecnicoHome() {
         </span>
       </div>
 
-      {/* Estado del turno — aviso prominente */}
+      {/* Banner relevo pendiente */}
+      {!turnoAbierto && pendingRelevo && (
+        <Link
+          href={`/tecnico/libro-guardia/relevo?turno_id=${pendingRelevo.id}`}
+          className="flex items-center gap-3 bg-amber-500 text-white rounded-xl p-4 shadow-md active:bg-amber-600"
+        >
+          <UserCheck size={24} className="shrink-0" />
+          <div className="flex-1">
+            <p className="font-bold text-base">Firmá el relevo</p>
+            <p className="text-sm opacity-90">
+              El turno de <strong>{pendingRelevo.tecnico_nombre}</strong> está esperando tu firma
+            </p>
+          </div>
+          <ChevronRight size={20} className="shrink-0 opacity-80" />
+        </Link>
+      )}
+
+      {/* Estado del turno — aviso secundario */}
       {turnoAbierto ? (
         <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
           <CircleDot size={16} className="text-green-500 animate-pulse shrink-0" />

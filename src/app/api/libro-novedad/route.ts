@@ -35,11 +35,11 @@ export async function POST(req: NextRequest) {
 
   // Si es incidencia: crear primero para obtener el ID y enlazarlo a la novedad
   let incidenciaId: string | null = null
-  if (es_incidencia && incidencia_titulo?.trim() && turno.cliente_id) {
+  if (es_incidencia && incidencia_titulo?.trim()) {
     const { data: inc, error: incErr } = await supabaseAdmin()
       .from('incidencias')
       .insert({
-        cliente_id:        turno.cliente_id,
+        cliente_id:        turno.cliente_id ?? null,
         turno_creacion_id: turno_id,
         titulo:            incidencia_titulo.trim(),
         descripcion,

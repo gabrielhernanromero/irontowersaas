@@ -1,19 +1,17 @@
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import type { TipoPlanilla, Turno } from '@/types/database'
+import type { TipoPlanilla } from '@/types/database'
 
 export async function checkDuplicatePlanilla(
   tecnicoId: string,
   tipo: TipoPlanilla,
-  fecha: string,
-  turno: Turno
+  turnoId: string
 ): Promise<boolean> {
   const { data, error } = await supabaseAdmin()
     .from('planillas')
     .select('id')
     .eq('tecnico_id', tecnicoId)
     .eq('tipo', tipo)
-    .eq('fecha', fecha)
-    .eq('turno', turno)
+    .eq('turno_id', turnoId)
     .maybeSingle()
 
   if (error) throw new Error(`Error checking duplicate: ${error.message}`)

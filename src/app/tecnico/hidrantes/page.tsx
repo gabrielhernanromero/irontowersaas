@@ -6,29 +6,30 @@ import type { Cliente } from '@/types/database'
 import Link from 'next/link'
 import { CheckCircle2, Eye } from 'lucide-react'
 
-function getTurnoActual(): 'diurno' | 'nocturno' {
-  return new Date().getHours() < 18 ? 'diurno' : 'nocturno'
-}
-
 export default async function HidrantesPage() {
   const user = await requireRole('tecnico', 'admin')
-  const hoy = new Date().toISOString().split('T')[0]
-  const turno = getTurnoActual()
+
+  const { data: turnoActivo } = await supabaseAdmin()
+    .from('libro_turno')
+    .select('id, turno, fecha')
+    .eq('tecnico_id', user.id)
+    .eq('estado', 'abierto')
+    .maybeSingle()
 
   const [{ data: clientes }, { data: planillaEnviada }] = await Promise.all([
     supabaseServer()
       .from('clientes')
       .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono')
       .order('nombre_empresa'),
-    supabaseAdmin()
-      .from('planillas')
-      .select('id, tipo, fecha, turno, inmutable')
-      .eq('tecnico_id', user.id)
-      .eq('tipo', 'hidrantes')
-      .eq('fecha', hoy)
-      .eq('turno', turno)
-      .eq('inmutable', true)
-      .maybeSingle(),
+    turnoActivo
+      ? supabaseAdmin()
+          .from('planillas')
+          .select('id, tipo')
+          .eq('turno_id', turnoActivo.id)
+          .eq('tipo', 'hidrantes')
+          .eq('inmutable', true)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   if (planillaEnviada) {
@@ -40,7 +41,7 @@ export default async function HidrantesPage() {
         <div>
           <h1 className="text-xl font-condensed font-bold text-brand-ink">Planilla ya enviada</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Ya registraste la planilla de hidrantes para el turno {turno} del {hoy}.
+            Ya registraste la planilla de hidrantes para este turno.
           </p>
         </div>
         <Link

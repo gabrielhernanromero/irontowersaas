@@ -8,9 +8,10 @@ export const AbrirTurnoSchema = z.object({
   tecnico_nombre: z.string().min(2, 'Ingresá tu nombre completo'),
   tecnico_dni: z.string().min(7, 'DNI inválido').max(10, 'DNI inválido'),
   horario_inicio: z.string().regex(hora, 'Formato HH:MM'),
+  cliente_id: z.string().uuid().optional(),
   // Relevo del turno anterior (opcional — si hay turno cerrado sin relevo)
   turno_saliente_id: z.string().uuid().optional(),
-  relevo_firma_dataurl: z.string().optional(), // firma del entrante en el libro del saliente
+  relevo_firma_dataurl: z.string().optional(),
 })
 
 export const NuevaNovedadSchema = z.object({
@@ -58,6 +59,21 @@ export const RelevoEspecSchema = z.object({
   relevoDni:         z.string().min(7, 'DNI inválido').max(10, 'DNI inválido'),
 })
 
+export const SeguimientoSchema = z.object({
+  incidencia_id: z.string().uuid('ID inválido'),
+  turno_id:      z.string().uuid('ID inválido'),
+  descripcion:   z.string().min(5, 'Mínimo 5 caracteres'),
+})
+
+export const ResolucionSchema = z.object({
+  incidencia_id:          z.string().uuid('ID inválido'),
+  turno_id:               z.string().uuid('ID inválido'),
+  descripcion_resolucion: z.string().min(15, 'Describí en detalle cómo se resolvió (mínimo 15 caracteres)'),
+  foto_url:               z.string().optional(),
+})
+
+export type SeguimientoInput  = z.infer<typeof SeguimientoSchema>
+export type ResolucionInput   = z.infer<typeof ResolucionSchema>
 export type AbrirTurnoInput    = z.infer<typeof AbrirTurnoSchema>
 export type NuevaNovedadInput  = z.infer<typeof NuevaNovedadSchema>
 export type CerrarTurnoInput   = z.infer<typeof CerrarTurnoSchema>

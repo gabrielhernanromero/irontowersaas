@@ -1,16 +1,23 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import {
   Lock, UserCheck, XCircle, CheckCircle2, ChevronDown,
-  X, Clock, AlertTriangle, TriangleAlert,
+  X, Clock, AlertTriangle, TriangleAlert, ClipboardList,
 } from 'lucide-react'
 import FirmaCanvas from '@/components/signature/FirmaCanvas'
+import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
 import { RelevoPSchema, type RelevoPInput } from '@/lib/validations/libroTurno'
 import type { Incidencia, LibroNovedad } from '@/types/database'
+
+interface PlanillaResumen {
+  planilla: { tipo: string; fecha: string; turno: string; tecnico_nombre: string; tecnico_dni: string }
+  stats: { total: number; ok: number; conObservaciones: number }
+  itemsConObservacion: { numero: number; [k: string]: unknown }[]
+}
 
 function nowTime() { return new Date().toTimeString().slice(0, 5) }
 function todayDate() { return new Date().toISOString().split('T')[0] }
@@ -36,10 +43,13 @@ interface Props {
   salienteDNI: string
   novedades: LibroNovedad[]
   incidenciasActivas: Incidencia[]
+  entranteNombre?: string
+  entranteDni?: string
 }
 
 export default function RelevoPForm({
   turnoSalienteId, salienteNombre, salienteDNI, novedades, incidenciasActivas,
+  entranteNombre = '', entranteDni = '',
 }: Props) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
@@ -47,20 +57,34 @@ export default function RelevoPForm({
   const [firmaDataUrl, setFirmaDataUrl] = useState<string | null>(null)
   const [scrolledToBottom, setScrolledToBottom] = useState(false)
   const [selectedNovedad, setSelectedNovedad] = useState<LibroNovedad | null>(null)
+  const [planillaResumen, setPlanillaResumen] = useState<PlanillaResumen | null>(null)
+  const [planillaLoading, setPlanillaLoading] = useState(false)
+  const [, startTransition] = useTransition()
   const novedadesRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<RelevoPInput>({
     resolver: zodResolver(RelevoPSchema),
     defaultValues: {
       turno_saliente_id:  turnoSalienteId,
-      relevo_nombre:      '',
-      relevo_dni:         '',
+      relevo_nombre:      entranteNombre,
+      relevo_dni:         entranteDni,
       firma_relevo_dataurl: '',
       horario_inicio:     nowTime(),
       fecha:              todayDate(),
       turno:              currentTurno(),
     },
   })
+
+  useEffect(() => {
+    if (!selectedNovedad?.planilla_id) { setPlanillaResumen(null); return }
+    setPlanillaLoading(true)
+    startTransition(() => {
+      fetch(`/api/planillas/resumen?id=${selectedNovedad.planilla_id}`)
+        .then((r) => r.json())
+        .then((data) => { setPlanillaResumen(data?.stats ? data : null); setPlanillaLoading(false) })
+        .catch(() => setPlanillaLoading(false))
+    })
+  }, [selectedNovedad])
 
   const handleFirma = useCallback((dataUrl: string | null) => {
     setFirmaDataUrl(dataUrl)
@@ -70,13 +94,13 @@ export default function RelevoPForm({
   useEffect(() => {
     const el = novedadesRef.current
     if (!el) return
-    if (el.scrollHeight <= el.clientHeight) { setScrolledToBottom(true); return }
-    const onScroll = () => {
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setScrolledToBottom(true)
-    }
-    el.addEventListener('scroll', onScroll)
-    return () => el.removeEventListener('scroll', onScroll)
+    if (el.scrollHeight <= el.clientHeight + 40) setScrolledToBottom(true)
   }, [])
+
+  function handleNovedadesScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    if (Math.ceil(el.scrollTop + el.clientHeight) >= el.scrollHeight - 40) setScrolledToBottom(true)
+  }
 
   async function onSubmit(data: RelevoPInput) {
     setError(null)
@@ -90,6 +114,7 @@ export default function RelevoPForm({
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al registrar el relevo'); return }
       router.push('/tecnico/libro-guardia?ok=1')
+      router.refresh()
     } catch {
       setError('Error de conexión. Intentá de nuevo.')
     } finally {
@@ -118,35 +143,7 @@ export default function RelevoPForm({
         </div>
 
         {/* Incidencias activas del puesto */}
-        {incidenciasActivas.length > 0 && (
-          <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={16} className="text-red-500 shrink-0" />
-              <p className="text-sm font-bold text-red-700">
-                {incidenciasActivas.length === 1
-                  ? '1 incidencia activa en este puesto'
-                  : `${incidenciasActivas.length} incidencias activas en este puesto`}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              {incidenciasActivas.map((inc) => (
-                <div key={inc.id} className="bg-white rounded-lg border border-red-200 p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-red-800">{inc.titulo}</span>
-                    {inc.severidad && (
-                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${
-                        SEVERIDAD_CONFIG[inc.severidad].color
-                      }`}>
-                        {SEVERIDAD_CONFIG[inc.severidad].label}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-red-700 line-clamp-2">{inc.descripcion}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <IncidenciasActivas incidencias={incidenciasActivas} />
 
         {/* Lista de novedades — scrollable */}
         <div>
@@ -167,12 +164,41 @@ export default function RelevoPForm({
             )}
           </div>
 
-          <div ref={novedadesRef} className="max-h-[40vh] overflow-y-auto pr-1 relative">
-            <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-200 pointer-events-none" />
+          <div className="relative">
+            <div ref={novedadesRef} onScroll={handleNovedadesScroll} className="max-h-[60vh] overflow-y-auto pr-1">
+              <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-200 pointer-events-none z-0" />
             <div className="flex flex-col gap-3">
               {novedades.map((n) => {
-                const cfg = TIPO_CONFIG[n.tipo]
-                const esInc = !!n.incidencias
+                const cfg           = TIPO_CONFIG[n.tipo]
+                const esInc         = !!n.incidencias
+                const esSeguimiento = !!n.incidencia_id && n.descripcion.startsWith('Seguimiento:')
+
+                if (esSeguimiento) {
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => setSelectedNovedad(n)}
+                      className="flex gap-4 items-start pl-1 text-left w-full active:opacity-70 ml-4"
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 bg-gray-400 ring-2 ring-white" />
+                      <div className="flex-1 rounded-xl border border-gray-200 p-2.5 shadow-sm bg-slate-50">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            {n.incidencias?.titulo
+                              ? `${n.incidencias.titulo} — Seguimiento`
+                              : 'Seguimiento'}
+                          </span>
+                          <span className="text-xs text-gray-400 shrink-0">{formatHora(n.hora)}</span>
+                        </div>
+                        <p className="text-xs text-gray-600 line-clamp-2">
+                          {n.descripcion.replace(/^Seguimiento:\s*/i, '')}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                }
+
                 return (
                   <button
                     key={n.id}
@@ -213,6 +239,11 @@ export default function RelevoPForm({
                 <p className="text-sm text-gray-400 text-center py-4">Sin novedades registradas</p>
               )}
             </div>
+            </div>
+            {/* Gradient fade que desaparece cuando ya se llegó al final */}
+            {!scrolledToBottom && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent" />
+            )}
           </div>
         </div>
 
@@ -382,6 +413,70 @@ export default function RelevoPForm({
                       alt="Foto"
                       className="w-full rounded-xl object-cover max-h-72"
                     />
+                  </div>
+                )}
+
+                {/* Resumen de planilla vinculada */}
+                {selectedNovedad.planilla_id && (
+                  <div className="mt-2 border-t border-gray-100 pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <ClipboardList size={15} className="text-brand-blue shrink-0" />
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Planilla enviada</p>
+                    </div>
+                    {planillaLoading ? (
+                      <p className="text-xs text-gray-400">Cargando...</p>
+                    ) : planillaResumen ? (
+                      <div className="flex flex-col gap-3">
+                        {/* Stats */}
+                        <div className="flex gap-2">
+                          <div className="flex-1 bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                            <p className="text-xl font-bold text-green-700">{planillaResumen.stats.ok}</p>
+                            <p className="text-xs text-green-600">OK</p>
+                          </div>
+                          <div className={`flex-1 rounded-lg p-3 text-center border ${planillaResumen.stats.conObservaciones > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                            <p className={`text-xl font-bold ${planillaResumen.stats.conObservaciones > 0 ? 'text-red-700' : 'text-gray-400'}`}>
+                              {planillaResumen.stats.conObservaciones}
+                            </p>
+                            <p className={`text-xs ${planillaResumen.stats.conObservaciones > 0 ? 'text-red-600' : 'text-gray-400'}`}>Con obs.</p>
+                          </div>
+                          <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                            <p className="text-xl font-bold text-gray-600">{planillaResumen.stats.total}</p>
+                            <p className="text-xs text-gray-500">Total</p>
+                          </div>
+                        </div>
+
+                        {/* Items con observación */}
+                        {planillaResumen.itemsConObservacion.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-red-600 mb-2">Ítems con observaciones:</p>
+                            <div className="flex flex-col gap-1.5">
+                              {planillaResumen.itemsConObservacion.map((item) => {
+                                const campos = planillaResumen.planilla.tipo === 'hidrantes'
+                                  ? [
+                                      !item.gabinete && `Gabinete${item.obs_gabinete ? ': ' + item.obs_gabinete : ''}`,
+                                      !item.manga   && `Manga${item.obs_manga   ? ': ' + item.obs_manga   : ''}`,
+                                      !item.lanza   && `Lanza${item.obs_lanza   ? ': ' + item.obs_lanza   : ''}`,
+                                      !item.valvula && `Válvula${item.obs_valvula ? ': ' + item.obs_valvula : ''}`,
+                                    ].filter(Boolean)
+                                  : [
+                                      !item.senalizacion && `Señalización${item.obs_senalizacion ? ': ' + item.obs_senalizacion : ''}`,
+                                      !item.acceso       && `Acceso${item.obs_acceso       ? ': ' + item.obs_acceso       : ''}`,
+                                      !item.presion_peso && `Presión/Peso${item.obs_presion_peso ? ': ' + item.obs_presion_peso : ''}`,
+                                    ].filter(Boolean)
+                                return (
+                                  <div key={item.numero} className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+                                    <p className="text-xs font-bold text-red-800 mb-1">Ítem #{item.numero}</p>
+                                    {campos.map((c, i) => (
+                                      <p key={i} className="text-xs text-red-700">• {c as string}</p>
+                                    ))}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>

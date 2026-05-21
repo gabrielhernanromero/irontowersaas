@@ -124,6 +124,7 @@ export interface LibroNovedad {
   observaciones_generales: string | null
   foto_url: string | null
   incidencia_id: string | null
+  planilla_id: string | null
   // Populated when fetched with join: select('*, incidencias(*)')
   incidencias?: {
     id: string

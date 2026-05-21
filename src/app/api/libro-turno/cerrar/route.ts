@@ -42,6 +42,25 @@ export async function POST(req: NextRequest) {
   if (turno.tecnico_id !== user.id) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   if (turno.estado !== 'abierto') return NextResponse.json({ error: 'El turno no está abierto' }, { status: 409 })
 
+  // Verificar que se enviaron ambas planillas del turno
+  const { data: planillasEnviadas } = await supabaseAdmin()
+    .from('planillas')
+    .select('tipo')
+    .eq('turno_id', turno_id)
+    .eq('inmutable', true)
+
+  const tiposEnviados = (planillasEnviadas ?? []).map((p) => p.tipo)
+  const faltantes: string[] = []
+  if (!tiposEnviados.includes('hidrantes')) faltantes.push('Hidrantes')
+  if (!tiposEnviados.includes('extintores')) faltantes.push('Extintores')
+
+  if (faltantes.length > 0) {
+    return NextResponse.json(
+      { error: `Debés enviar las planillas antes de cerrar el turno: ${faltantes.join(', ')}` },
+      { status: 422 },
+    )
+  }
+
   // Subir firma de cierre
   let firmaCierreUrl: string
   try {

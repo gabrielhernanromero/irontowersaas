@@ -16,7 +16,7 @@ interface Props {
 }
 
 export default async function RelevoPPage({ searchParams }: Props) {
-  await requireRole('tecnico', 'admin')
+  const me = await requireRole('tecnico', 'admin')
 
   const turnoId = searchParams.turno_id ?? ''
 
@@ -53,6 +53,16 @@ export default async function RelevoPPage({ searchParams }: Props) {
     )
   }
 
+  // Perfil del técnico entrante para pre-llenar nombre/DNI
+  const { data: perfil } = await supabaseAdmin()
+    .from('users')
+    .select('nombre, apellido, dni')
+    .eq('id', me.id)
+    .single()
+
+  const entranteNombre = `${perfil?.nombre ?? ''} ${perfil?.apellido ?? ''}`.trim()
+  const entranteDni = perfil?.dni ?? ''
+
   // Novedades con join a incidencias para mostrar badge
   const { data: novedadesRaw } = await supabaseAdmin()
     .from('libro_novedad')
@@ -61,16 +71,11 @@ export default async function RelevoPPage({ searchParams }: Props) {
     .order('created_at', { ascending: true })
 
   // Incidencias activas en el puesto (de cualquier turno anterior)
-  let incidenciasActivas: Incidencia[] = []
-  if (turno.cliente_id) {
-    const { data } = await supabaseAdmin()
-      .from('incidencias')
-      .select('*')
-      .eq('cliente_id', turno.cliente_id)
-      .eq('estado', 'abierto')
-      .order('created_at', { ascending: true })
-    incidenciasActivas = (data ?? []) as Incidencia[]
-  }
+  const incidenciasQuery = turno.cliente_id
+    ? supabaseAdmin().from('incidencias').select('*').eq('cliente_id', turno.cliente_id).eq('estado', 'abierto').order('created_at', { ascending: true })
+    : supabaseAdmin().from('incidencias').select('*').is('cliente_id', null).eq('estado', 'abierto').order('created_at', { ascending: true })
+  const { data: incidenciasData } = await incidenciasQuery
+  const incidenciasActivas = (incidenciasData ?? []) as Incidencia[]
 
   return (
     <div>
@@ -112,6 +117,8 @@ export default async function RelevoPPage({ searchParams }: Props) {
         salienteDNI={turno.tecnico_dni}
         novedades={(novedadesRaw ?? []) as LibroNovedad[]}
         incidenciasActivas={incidenciasActivas}
+        entranteNombre={entranteNombre}
+        entranteDni={entranteDni}
       />
     </div>
   )

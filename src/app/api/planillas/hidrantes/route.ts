@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Regla 1: duplicado por técnico + tipo + fecha + turno
-  const isDuplicate = await checkDuplicatePlanilla(user.id, 'hidrantes', fecha, turno)
+  // Regla 1: duplicado por técnico + tipo + turno
+  const isDuplicate = await checkDuplicatePlanilla(user.id, 'hidrantes', turnoActivo.id)
   if (isDuplicate) {
     return NextResponse.json(
       { error: 'Ya enviaste una planilla de hidrantes para este turno' },
@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
   const noItems = hayNo ? ' (con observaciones)' : ''
   await admin.from('libro_novedad').insert({
     turno_id: turnoActivo.id,
+    planilla_id: planilla.id,
     tipo: 'novedad',
     hora: new Date().toTimeString().slice(0, 5),
     descripcion: `Planilla de hidrantes enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`,

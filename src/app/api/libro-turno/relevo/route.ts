@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: turnoSaliente } = await supabaseAdmin()
     .from('libro_turno')
-    .select('id, estado, firma_relevo_url')
+    .select('id, estado, firma_relevo_url, cliente_id')
     .eq('id', turno_saliente_id)
     .single()
 
@@ -110,7 +110,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: nuevoTurno, error: insertErr } = await supabaseAdmin()
     .from('libro_turno')
-    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto' })
+    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null })
     .select()
     .single()
 
