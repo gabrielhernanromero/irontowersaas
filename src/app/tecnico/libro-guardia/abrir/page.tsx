@@ -27,22 +27,21 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
     .eq('id', user.id)
     .single()
 
-  const nombre = `${perfil?.nombre ?? ''} ${perfil?.apellido ?? ''}`.trim()
-  const dni = perfil?.dni ?? ''
+  // cliente_id viene del perfil del técnico — no puede elegir otro
+  const { data: perfilCompleto } = await supabaseAdmin()
+    .from('users')
+    .select('nombre, apellido, dni, cliente_id')
+    .eq('id', user.id)
+    .single()
 
-  const [{ data: clientes }, { data: turnoSaliente }] = await Promise.all([
-    supabaseAdmin()
-      .from('clientes')
-      .select('id, nombre_empresa')
-      .order('nombre_empresa', { ascending: true }),
-    searchParams.turno_id
-      ? supabaseAdmin()
-          .from('libro_turno')
-          .select('cliente_id')
-          .eq('id', searchParams.turno_id)
-          .single()
-      : Promise.resolve({ data: null }),
-  ])
+  const nombre = `${perfilCompleto?.nombre ?? ''} ${perfilCompleto?.apellido ?? ''}`.trim()
+  const dni = perfilCompleto?.dni ?? ''
+  const clienteIdFijo = perfilCompleto?.cliente_id ?? null
+
+  const { data: clientes } = await supabaseAdmin()
+    .from('clientes')
+    .select('id, nombre_empresa')
+    .order('nombre_empresa', { ascending: true })
 
   return (
     <AbrirGuardiaForm
@@ -51,7 +50,8 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
       turnoSalienteId={searchParams.turno_id}
       salienteNombre={searchParams.saliente_nombre}
       clientes={clientes ?? []}
-      defaultClienteId={turnoSaliente?.cliente_id ?? undefined}
+      defaultClienteId={clienteIdFijo ?? undefined}
+      clienteIdFijo={clienteIdFijo ?? undefined}
     />
   )
 }

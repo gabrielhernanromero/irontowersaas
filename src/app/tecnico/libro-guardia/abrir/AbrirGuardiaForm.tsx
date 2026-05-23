@@ -16,15 +16,16 @@ interface Props {
   salienteNombre?: string
   clientes: { id: string; nombre_empresa: string }[]
   defaultClienteId?: string
+  clienteIdFijo?: string  // si viene del perfil, el selector queda bloqueado
 }
 
-export default function AbrirGuardiaForm({ tecnicoNombre, tecnicoDni, turnoSalienteId, salienteNombre, clientes, defaultClienteId }: Props) {
+export default function AbrirGuardiaForm({ tecnicoNombre, tecnicoDni, turnoSalienteId, salienteNombre, clientes, defaultClienteId, clienteIdFijo }: Props) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [horario, setHorario] = useState(nowTime())
   const [turno, setTurno] = useState<'diurno' | 'nocturno'>(currentTurno())
-  const [clienteId, setClienteId] = useState<string>(defaultClienteId ?? clientes[0]?.id ?? '')
+  const [clienteId, setClienteId] = useState<string>(clienteIdFijo ?? defaultClienteId ?? clientes[0]?.id ?? '')
 
   async function handleIniciar() {
     setError(null)
@@ -104,7 +105,7 @@ export default function AbrirGuardiaForm({ tecnicoNombre, tecnicoDni, turnoSalie
         )}
       </div>
 
-      {/* Selector de puesto / cliente */}
+      {/* Puesto de trabajo */}
       {clientes.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Puesto de trabajo</p>
@@ -112,17 +113,26 @@ export default function AbrirGuardiaForm({ tecnicoNombre, tecnicoDni, turnoSalie
             <div className="w-10 h-10 rounded-full bg-brand-orange/10 flex items-center justify-center shrink-0">
               <Building2 size={18} className="text-brand-orange" />
             </div>
-            <select
-              id="cliente"
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg p-3 text-base min-h-[44px]"
-            >
-              <option value="">— Sin asignar —</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>{c.nombre_empresa}</option>
-              ))}
-            </select>
+            {clienteIdFijo ? (
+              // Cliente fijo del perfil — no editable
+              <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-3 min-h-[44px] flex items-center">
+                <span className="text-base font-medium text-brand-ink">
+                  {clientes.find((c) => c.id === clienteIdFijo)?.nombre_empresa ?? '—'}
+                </span>
+              </div>
+            ) : (
+              <select
+                id="cliente"
+                value={clienteId}
+                onChange={(e) => setClienteId(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-lg p-3 text-base min-h-[44px]"
+              >
+                <option value="">— Sin asignar —</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre_empresa}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
       )}

@@ -1,49 +1,94 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Clock, AlertTriangle, TriangleAlert } from 'lucide-react'
+import { X, Clock } from 'lucide-react'
 import type { LibroNovedad, Incidencia } from '@/types/database'
 import IncidenciaDetailSheet from '@/components/libro/IncidenciaDetailSheet'
 
 function formatHora(h: string | null) { return h ? h.slice(0, 5) : '—' }
 
 const TIPO_CONFIG = {
-  apertura: { label: 'Apertura de guardia',  color: 'text-emerald-600', dot: 'bg-emerald-500' },
-  novedad:  { label: 'Novedad',              color: 'text-amber-600',   dot: 'bg-amber-500'   },
-  cierre:   { label: 'Cierre de guardia',    color: 'text-brand-ink',   dot: 'bg-gray-500'    },
-  alerta:   { label: 'Alerta de inventario', color: 'text-red-600',     dot: 'bg-red-500'     },
+  apertura: { label: 'Apertura de guardia', color: 'text-emerald-600', dot: 'bg-emerald-500' },
+  novedad:  { label: 'Novedad',             color: 'text-amber-600',   dot: 'bg-amber-500'   },
+  cierre:   { label: 'Cierre de guardia',   color: 'text-brand-ink',   dot: 'bg-gray-500'    },
+  alerta:   { label: 'Alerta',              color: 'text-red-600',     dot: 'bg-red-500'     },
 }
 
-const SEVERIDAD_DOT: Record<string, string> = {
-  alto:  'bg-red-600 animate-pulse',
-  medio: 'bg-orange-500',
-  bajo:  'bg-amber-500',
+// ── Parseo estricto por regex ──────────────────────────────────────────────────
+
+type EstiloInventario = 'falla' | 'extravio' | 'seguimiento'
+
+interface ParsedNovedad {
+  tipo: string
+  equipo: string
+  detalle: string
+  estilo: EstiloInventario
 }
 
-const SEVERIDAD_BORDER: Record<string, string> = {
-  alto:  'border-l-red-500',
-  medio: 'border-l-amber-500',
-  bajo:  'border-l-yellow-400',
+const INVENTARIO_ESTILO: Record<EstiloInventario, {
+  dot: string; badge: string; card: string; borderLeft: string
+}> = {
+  falla: {
+    dot:        'bg-amber-500',
+    badge:      'px-2 py-0.5 text-xs font-bold rounded-md bg-orange-100 text-orange-800 border border-orange-200',
+    card:       'bg-orange-50/40 border-orange-200',
+    borderLeft: 'border-l-4 border-l-amber-400',
+  },
+  extravio: {
+    dot:        'bg-red-600 animate-pulse',
+    badge:      'px-2 py-0.5 text-xs font-bold rounded-md bg-red-100 text-red-800 border border-red-200',
+    card:       'bg-red-50/40 border-red-300',
+    borderLeft: 'border-l-4 border-l-red-500',
+  },
+  seguimiento: {
+    dot:        'bg-blue-500',
+    badge:      'px-2 py-0.5 text-xs font-bold rounded-md bg-blue-100 text-blue-800 border border-blue-200',
+    card:       'bg-blue-50/40 border-blue-200',
+    borderLeft: 'border-l-4 border-l-blue-400',
+  },
 }
 
-const SEVERIDAD_BG: Record<string, string> = {
-  alto:  'bg-red-50/30',
-  medio: 'bg-amber-50/30',
-  bajo:  'bg-yellow-50/30',
+function parsearNovedad(texto: string): ParsedNovedad | null {
+  const match = texto.match(/^\[(.*?)\]\s*(.*?):\s*(.*)$/)
+  if (!match) return null
+
+  const tipo   = match[1].trim()
+  const equipo = match[2].trim()
+  const detalle = match[3].trim()
+
+  const up = tipo.toUpperCase()
+  let estilo: EstiloInventario
+  if (up.includes('EXTRAV') || up.includes('FALTANTE') || up.includes('ALERTA')) {
+    estilo = 'extravio'
+  } else if (up.includes('DESPERFECTO') || up.includes('FALLA') || up.includes('DA') || up.includes('DAÑO')) {
+    estilo = 'falla'
+  } else if (up.includes('SEGUIMIENTO')) {
+    estilo = 'seguimiento'
+  } else {
+    return null
+  }
+
+  return { tipo, equipo, detalle, estilo }
 }
 
-const SEVERIDAD_BADGE: Record<string, { label: string; cls: string }> = {
-  alto:  { label: 'Incidencia Crítica',   cls: 'inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10' },
-  medio: { label: 'Incidencia — Media',   cls: 'inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/10' },
-  bajo:  { label: 'Incidencia — Baja',    cls: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-700 ring-1 ring-inset ring-yellow-600/10' },
+// ── Card de inventario ─────────────────────────────────────────────────────────
+
+function NovedadCard({ parsed }: { parsed: ParsedNovedad }) {
+  const est = INVENTARIO_ESTILO[parsed.estilo]
+  return (
+    <div className={`rounded-lg border p-3 mt-1 ${est.card}`}>
+      <div className="mb-2">
+        <span className={est.badge}>{parsed.tipo}</span>
+      </div>
+      <p className="text-sm font-semibold text-slate-900 leading-tight">{parsed.equipo}</p>
+      {parsed.detalle && (
+        <p className="text-sm text-slate-600 mt-1 leading-snug">{parsed.detalle}</p>
+      )}
+    </div>
+  )
 }
 
-const SEVERIDAD_CHIP: Record<string, string> = {
-  alto:  'bg-red-100 text-red-800 border-red-300',
-  medio: 'bg-orange-100 text-orange-800 border-orange-300',
-  bajo:  'bg-yellow-100 text-yellow-800 border-yellow-300',
-}
-const SEVERIDAD_LABEL: Record<string, string> = { alto: 'Alta', medio: 'Media', bajo: 'Baja' }
+// ── Props ──────────────────────────────────────────────────────────────────────
 
 interface Props {
   novedades: LibroNovedad[]
@@ -51,22 +96,27 @@ interface Props {
   turnoId?: string
 }
 
+// ── Componente principal ───────────────────────────────────────────────────────
+
 export default function NovedadesTimeline({ novedades, incidencias = [], turnoId }: Props) {
-  const [selected, setSelected] = useState<LibroNovedad | null>(null)
+  const [selected, setSelected]                     = useState<LibroNovedad | null>(null)
   const [selectedIncidencia, setSelectedIncidencia] = useState<Incidencia | null>(null)
+  const [incReadonly, setIncReadonly]               = useState(false)
 
   function handleNovedadClick(n: LibroNovedad) {
     const esSeguimiento = !!n.incidencia_id && n.descripcion.startsWith('Seguimiento:')
 
     if (n.incidencia_id && !esSeguimiento) {
-      // Entrada original de incidencia → abrir IncidenciaDetailSheet con datos completos
-      const inc = incidencias.find((i) => i.id === n.incidencia_id) ?? (n.incidencias as Incidencia | undefined) ?? null
+      const incActiva  = incidencias.find((i) => i.id === n.incidencia_id)
+      const incJoinada = n.incidencias as Incidencia | undefined
+      const inc        = incActiva ?? incJoinada ?? null
       if (inc) {
+        setIncReadonly(!incActiva && inc.estado === 'resuelto')
         setSelectedIncidencia(inc)
         return
       }
     }
-    // Novedad normal o seguimiento → sheet de detalle simple
+
     setSelected(n)
   }
 
@@ -76,13 +126,15 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
         <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-200" />
         <div className="flex flex-col gap-4">
           {novedades.map((n) => {
-            const cfg           = TIPO_CONFIG[n.tipo]
-            const esIncidencia  = !!n.incidencias
+            const cfg           = TIPO_CONFIG[n.tipo as keyof typeof TIPO_CONFIG] ?? TIPO_CONFIG.novedad
             const esSeguimiento = !!n.incidencia_id && n.descripcion.startsWith('Seguimiento:')
-            const sev           = n.incidencias?.severidad ?? 'bajo'
+            const parsed        = !esSeguimiento ? parsearNovedad(n.descripcion) : null
 
-            // ── SUB-EVENTO: seguimiento ──────────────────────────
+            // ── Seguimiento: sub-item indentado ──────────────────────────────
             if (esSeguimiento) {
+              const tituloInc = (n.incidencias as Incidencia | undefined)?.titulo
+                ?? incidencias.find(i => i.id === n.incidencia_id)?.titulo
+
               return (
                 <button
                   key={n.id}
@@ -91,15 +143,11 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                   className="flex gap-4 items-start pl-1 text-left w-full active:opacity-70 ml-4"
                 >
                   <div className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 bg-gray-400 ring-2 ring-white" />
-                  <div className="flex-1 rounded-xl border border-gray-200 shadow-sm p-2.5 overflow-hidden bg-slate-50">
+                  <div className="flex-1 rounded-xl border border-gray-200 shadow-sm p-2.5 bg-slate-50">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {n.incidencias?.titulo
-                        ? `${n.incidencias.titulo} — Seguimiento`
-                        : (incidencias.find(i => i.id === n.incidencia_id)?.titulo
-                          ? `${incidencias.find(i => i.id === n.incidencia_id)!.titulo} — Seguimiento`
-                          : 'Seguimiento')}
-                    </span>
+                        {tituloInc ? `${tituloInc} — Seguimiento` : 'Seguimiento'}
+                      </span>
                       <span className="text-xs text-gray-400 shrink-0">{formatHora(n.hora)}</span>
                     </div>
                     <p className="text-xs text-gray-600 line-clamp-2">
@@ -110,11 +158,8 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
               )
             }
 
-            // ── EVENTO NORMAL / INCIDENCIA ───────────────────────
-            const dot        = esIncidencia ? (SEVERIDAD_DOT[sev]    ?? 'bg-red-600') : cfg.dot
-            const borderLeft = esIncidencia ? `border-l-4 ${SEVERIDAD_BORDER[sev] ?? 'border-l-red-500'}` : ''
-            const bgCard     = esIncidencia ? (SEVERIDAD_BG[sev]     ?? 'bg-red-50/30') : 'bg-white'
-            const badge      = esIncidencia ? (SEVERIDAD_BADGE[sev]  ?? SEVERIDAD_BADGE.alto) : null
+            // ── Dot: color según parseo, default según tipo ──────────────────
+            const dot = parsed ? INVENTARIO_ESTILO[parsed.estilo].dot : cfg.dot
 
             return (
               <button
@@ -124,33 +169,27 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                 className="flex gap-4 items-start pl-1 text-left w-full active:opacity-70"
               >
                 <div className={`w-3.5 h-3.5 rounded-full shrink-0 mt-1 ${dot} ring-2 ring-white`} />
-                <div className={`flex-1 rounded-xl border shadow-sm p-3 overflow-hidden ${bgCard} ${borderLeft} ${
-                  esIncidencia ? 'border-gray-200' : 'border-gray-100'
+
+                <div className={`flex-1 rounded-xl border shadow-sm overflow-hidden p-3 ${
+                  parsed
+                    ? `${INVENTARIO_ESTILO[parsed.estilo].card} ${INVENTARIO_ESTILO[parsed.estilo].borderLeft}`
+                    : 'bg-white border-gray-100'
                 }`}>
-                  <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {esIncidencia ? (
-                        badge && <span className={badge.cls}>{badge.label}</span>
-                      ) : (
-                        <span className={`text-xs font-semibold uppercase tracking-wide ${cfg.color}`}>
-                          {cfg.label}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-400 shrink-0">{formatHora(n.hora)}</span>
+                  {/* Header: label de tipo + hora */}
+                  <div className="flex items-center justify-between gap-2">
+                    {!parsed && (
+                      <span className={`text-xs font-semibold uppercase tracking-wide ${cfg.color}`}>
+                        {cfg.label}
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400 shrink-0 ml-auto">{formatHora(n.hora)}</span>
                   </div>
 
-                  {esIncidencia && n.incidencias?.titulo && (
-                    <p className="text-sm font-bold text-gray-900 mb-1">{n.incidencias.titulo}</p>
-                  )}
-
-                  <p className="text-sm text-brand-ink line-clamp-2">{n.descripcion}</p>
-
-                  {esIncidencia && (
-                    <div className="flex items-center gap-1 mt-2">
-                      <AlertTriangle size={11} className="text-red-500 shrink-0" />
-                      <span className="text-xs text-red-600 font-medium">Persiste en el puesto</span>
-                    </div>
+                  {/* Cuerpo: card estructurada o texto plano */}
+                  {parsed ? (
+                    <NovedadCard parsed={parsed} />
+                  ) : (
+                    <p className="text-sm text-brand-ink mt-1 line-clamp-2">{n.descripcion}</p>
                   )}
                 </div>
               </button>
@@ -159,17 +198,17 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
         </div>
       </div>
 
-      {/* ── IncidenciaDetailSheet (incidencia activa) ─────────── */}
+      {/* ── IncidenciaDetailSheet ────────────────────────────────────────────── */}
       {selectedIncidencia && (
         <IncidenciaDetailSheet
           incidencia={selectedIncidencia}
-          turnoId={turnoId}
-          onClose={() => setSelectedIncidencia(null)}
-          onResolved={() => setSelectedIncidencia(null)}
+          turnoId={incReadonly ? undefined : turnoId}
+          onClose={() => { setSelectedIncidencia(null); setIncReadonly(false) }}
+          onResolved={() => { setSelectedIncidencia(null); setIncReadonly(false) }}
         />
       )}
 
-      {/* ── Bottom Sheet detalle simple (novedades / seguimientos) ── */}
+      {/* ── Bottom Sheet: detalle simple (apertura, cierre, novedad libre) ─── */}
       {selected && (
         <>
           <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSelected(null)} />
@@ -180,28 +219,13 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
               </div>
 
               <div className="px-4 pb-8">
+                {/* Header del sheet */}
                 <div className="flex items-center justify-between py-3 mb-4 border-b border-gray-100">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {selected.incidencias ? (
-                      <>
-                        <AlertTriangle size={16} className="text-red-500 shrink-0" />
-                        <span className="text-sm font-semibold text-red-700">Incidencia persistente</span>
-                        {selected.incidencias.severidad && (
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                            SEVERIDAD_CHIP[selected.incidencias.severidad]
-                          }`}>
-                            {SEVERIDAD_LABEL[selected.incidencias.severidad]}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className={`w-2.5 h-2.5 rounded-full ${TIPO_CONFIG[selected.tipo].dot}`} />
-                        <span className={`text-sm font-semibold ${TIPO_CONFIG[selected.tipo].color}`}>
-                          {TIPO_CONFIG[selected.tipo].label}
-                        </span>
-                      </>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${TIPO_CONFIG[selected.tipo as keyof typeof TIPO_CONFIG]?.dot ?? 'bg-gray-400'}`} />
+                    <span className={`text-sm font-semibold ${TIPO_CONFIG[selected.tipo as keyof typeof TIPO_CONFIG]?.color ?? 'text-gray-600'}`}>
+                      {TIPO_CONFIG[selected.tipo as keyof typeof TIPO_CONFIG]?.label ?? 'Novedad'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1 text-xs text-gray-400">
@@ -217,20 +241,15 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                   </div>
                 </div>
 
-                {selected.incidencias?.titulo && (
-                  <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-200">
-                    <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1">Título</p>
-                    <p className="text-base font-bold text-red-800">{selected.incidencias.titulo}</p>
-                    <div className="flex items-center gap-1 mt-2">
-                      <TriangleAlert size={12} className="text-red-400" />
-                      <p className="text-xs text-red-600">Esta incidencia persiste en el puesto hasta que sea resuelta.</p>
-                    </div>
-                  </div>
-                )}
-
+                {/* Descripción */}
                 <div className="mb-4">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Descripción</p>
-                  <p className="text-sm text-brand-ink">{selected.descripcion}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descripción</p>
+                  {(() => {
+                    const p = parsearNovedad(selected.descripcion)
+                    return p
+                      ? <NovedadCard parsed={p} />
+                      : <p className="text-sm text-brand-ink">{selected.descripcion}</p>
+                  })()}
                 </div>
 
                 {selected.riesgo_detectado && (

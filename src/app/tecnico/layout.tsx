@@ -1,6 +1,6 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import Link from 'next/link'
-import { Home, History, BookOpen } from 'lucide-react'
+import { Home, Package, BookOpen } from 'lucide-react'
 import { LogoutButton } from './LogoutButton'
 
 export default async function TecnicoLayout({ children }: { children: React.ReactNode }) {
@@ -13,8 +13,8 @@ export default async function TecnicoLayout({ children }: { children: React.Reac
       {/* Bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <div className="max-w-[430px] mx-auto flex">
-          <NavItem href="/tecnico/home" icon={<Home size={22} />} label="Inicio" />
-          <NavItem href="/tecnico/historial" icon={<History size={22} />} label="Historial" />
+          <NavItem href="/tecnico/home"      icon={<Home    size={22} />} label="Inicio"    />
+          <NavItem href="/tecnico/elementos" icon={<Package size={22} />} label="Elementos" />
           <NavItem href="/tecnico/libro-guardia" icon={<BookOpen size={22} />} label="Guardia" />
           <LogoutButton />
         </div>

@@ -47,7 +47,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     const [{ data: nov }, { data: inc }] = await Promise.all([
       supabaseServer()
         .from('libro_novedad')
-        .select('*, incidencias(id, titulo, severidad, estado)')
+        .select('*, incidencias(id, titulo, descripcion, severidad, estado, foto_url, created_at, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni))')
         .eq('turno_id', turnoAbierto.id)
         .order('created_at', { ascending: true }),
       // Incidencias abiertas en el puesto (cliente) del turno actual

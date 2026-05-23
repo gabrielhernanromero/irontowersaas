@@ -8,8 +8,6 @@ import {
   Droplets, FlameKindling, CheckCircle2, ChevronRight,
   BookOpen, AlertTriangle, CircleDot, Lock, UserCheck,
 } from 'lucide-react'
-import InventarioSection from '@/components/inventario/InventarioSection'
-import type { EstadoAdmin } from '@/types/database'
 
 function getTurnoActual(): 'diurno' | 'nocturno' {
   return new Date().getHours() < 18 ? 'diurno' : 'nocturno'
@@ -46,22 +44,6 @@ export default async function TecnicoHome() {
   const hidrantesEnviada = enviada('hidrantes')
   const extintoresEnviada = enviada('extintores')
   const turnoAbierto = !!turnoActivo
-
-  // Inventario del puesto (elementos asignados al cliente del técnico)
-  const clienteId = user?.cliente_id
-  const { data: elementosRaw } = clienteId
-    ? await supabaseAdmin()
-        .from('elementos_puesto')
-        .select('id, nombre, codigo_patrimonial, categoria, estado_admin, motivo_mantenimiento, incidencias!elemento_afectado_id(id, estado)')
-        .eq('cliente_id', clienteId)
-        .neq('estado_admin', 'inactivo')
-        .order('nombre')
-    : { data: [] }
-  const elementos = (elementosRaw ?? []) as {
-    id: string; nombre: string; codigo_patrimonial: string
-    categoria: string | null; estado_admin: EstadoAdmin; motivo_mantenimiento: string | null
-    incidencias?: { id: string; estado: string }[]
-  }[]
 
   return (
     <div className="flex flex-col gap-5 pt-2">
@@ -152,8 +134,6 @@ export default async function TecnicoHome() {
         </Link>
       </div>
 
-      {/* Inventario asignado al puesto */}
-      <InventarioSection elementos={elementos} turnoId={turnoActivo?.id ?? null} />
     </div>
   )
 }

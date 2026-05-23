@@ -27,7 +27,9 @@ export const RelevoInventarioSchema = z.object({
 export const ReporteFallaSchema = z.object({
   turnoId:         z.string().uuid(),
   elementoId:      z.string().uuid(),
+  tipo:            z.enum(['dañado', 'extraviado']),
   descripcionFalla: z.string().min(10, { message: 'Explicá el desperfecto con al menos 10 caracteres.' }),
+  fotoUrl:         z.string().optional(),
 })
 
 export type ItemControlInput      = z.infer<typeof ItemControlSchema>
