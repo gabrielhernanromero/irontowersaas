@@ -60,7 +60,7 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl shadow-xl p-8">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-brand-dark font-condensed">
-            Iron Tower OS
+            Iron Tower
           </h1>
           <p className="text-brand-muted text-sm mt-1">Ingresá con tu cuenta</p>
         </div>

@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Iron Tower OS',
+  title: 'Iron Tower',
   description: 'Sistema de gestión de operaciones de campo — Iron Tower',
 }
 

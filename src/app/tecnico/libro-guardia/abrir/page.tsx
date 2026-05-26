@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
@@ -10,7 +12,7 @@ interface Props {
 export default async function AbrirGuardiaPage({ searchParams }: Props) {
   const user = await requireRole('tecnico', 'admin')
 
-  // Si ya tiene turno abierto, redirigir directamente
+  // Si ya tiene turno abierto, redirigir
   const { data: turnoAbierto } = await supabaseAdmin()
     .from('libro_turno')
     .select('id')
@@ -20,23 +22,16 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
 
   if (turnoAbierto) redirect('/tecnico/libro-guardia')
 
-  // Perfil para pre-llenar nombre y DNI sin que el técnico tenga que escribirlos
+  // Perfil completo del técnico
   const { data: perfil } = await supabaseAdmin()
-    .from('users')
-    .select('nombre, apellido, dni')
-    .eq('id', user.id)
-    .single()
-
-  // cliente_id viene del perfil del técnico — no puede elegir otro
-  const { data: perfilCompleto } = await supabaseAdmin()
     .from('users')
     .select('nombre, apellido, dni, cliente_id')
     .eq('id', user.id)
     .single()
 
-  const nombre = `${perfilCompleto?.nombre ?? ''} ${perfilCompleto?.apellido ?? ''}`.trim()
-  const dni = perfilCompleto?.dni ?? ''
-  const clienteIdFijo = perfilCompleto?.cliente_id ?? null
+  const nombre      = `${perfil?.nombre ?? ''} ${perfil?.apellido ?? ''}`.trim()
+  const dni         = perfil?.dni ?? ''
+  const clienteIdFijo = perfil?.cliente_id ?? null
 
   const { data: clientes } = await supabaseAdmin()
     .from('clientes')

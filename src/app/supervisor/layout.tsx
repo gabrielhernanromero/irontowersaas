@@ -12,7 +12,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
       {/* Sidebar desktop */}
       <aside className="hidden md:flex flex-col w-56 bg-brand-ink text-white min-h-screen">
         <div className="p-5 border-b border-white/10">
-          <p className="font-condensed font-bold text-lg">Iron Tower OS</p>
+          <p className="font-condensed font-bold text-lg">Iron Tower</p>
           <p className="text-xs text-white/60 mt-1">
             {user?.nombre} {user?.apellido}
           </p>
@@ -44,7 +44,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top bar mobile */}
         <header className="md:hidden bg-brand-ink text-white px-4 py-3 flex items-center justify-between">
-          <p className="font-condensed font-bold">Iron Tower OS</p>
+          <p className="font-condensed font-bold">Iron Tower</p>
           <p className="text-sm text-white/70">{user?.nombre}</p>
         </header>
 

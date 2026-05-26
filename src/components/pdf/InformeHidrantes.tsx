@@ -146,7 +146,7 @@ export function InformeHidrantes({
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text>Documento generado por Iron Tower OS</Text>
+          <Text>Documento generado por Iron Tower</Text>
           <Text>{generadoEn}</Text>
         </View>
       </Page>
