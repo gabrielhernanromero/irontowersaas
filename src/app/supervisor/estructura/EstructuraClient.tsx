@@ -1,11 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Pencil, X, Loader2, Building2, Package, MapPin, Phone, Mail, Hash } from 'lucide-react'
+import { Plus, Pencil, X, Loader2, Building2, Package, MapPin, Phone, Mail, Hash, PowerOff, Power, Eye, EyeOff } from 'lucide-react'
 import type { Cliente, ElementoPuesto } from '@/types/database'
 
 type Tab = 'puestos' | 'elementos'
-
 type ElementoConPuesto = ElementoPuesto & { clientes: { id: string; nombre_empresa: string } | null }
 
 const ESTADO_BADGE: Record<string, string> = {
@@ -53,20 +52,16 @@ const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm foc
 // Modal Puesto
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalPuesto({
-  inicial,
-  onClose,
-  onSaved,
+  inicial, onClose, onSaved,
 }: {
-  inicial?: Cliente
-  onClose: () => void
-  onSaved: (p: Cliente) => void
+  inicial?: Cliente; onClose: () => void; onSaved: (p: Cliente) => void
 }) {
   const [form, setForm] = useState({
-    nombre_empresa:    inicial?.nombre_empresa   ?? '',
-    cuit:              inicial?.cuit             ?? '',
-    direccion:         inicial?.direccion        ?? '',
-    contacto_nombre:   inicial?.contacto_nombre  ?? '',
-    contacto_email:    inicial?.contacto_email   ?? '',
+    nombre_empresa:    inicial?.nombre_empresa    ?? '',
+    cuit:              inicial?.cuit              ?? '',
+    direccion:         inicial?.direccion         ?? '',
+    contacto_nombre:   inicial?.contacto_nombre   ?? '',
+    contacto_email:    inicial?.contacto_email    ?? '',
     contacto_telefono: inicial?.contacto_telefono ?? '',
   })
   const [loading, setLoading] = useState(false)
@@ -78,7 +73,7 @@ function ModalPuesto({
     e.preventDefault()
     setLoading(true); setError(null)
     try {
-      const res = await fetch('/api/supervisor/puestos', {
+      const res  = await fetch('/api/supervisor/puestos', {
         method:  inicial ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(inicial ? { ...form, id: inicial.id } : form),
@@ -87,7 +82,7 @@ function ModalPuesto({
       if (!res.ok) { setError(json.error ?? 'Error al guardar'); return }
       onSaved(json.puesto)
     } catch { setError('Error de conexión') }
-    finally  { setLoading(false) }
+    finally   { setLoading(false) }
   }
 
   return (
@@ -113,13 +108,9 @@ function ModalPuesto({
         <Field label="Email de contacto *">
           <input className={inputCls} type="email" value={form.contacto_email} onChange={e => set('contacto_email', e.target.value)} placeholder="jgarcia@empresa.com" required />
         </Field>
-
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-
         <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg text-sm hover:bg-gray-50">
-            Cancelar
-          </button>
+          <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
           <button type="submit" disabled={loading} className="flex-1 bg-brand-orange text-white font-semibold py-2.5 rounded-lg text-sm hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">
             {loading && <Loader2 size={16} className="animate-spin" />}
             {loading ? 'Guardando...' : 'Guardar'}
@@ -134,15 +125,9 @@ function ModalPuesto({
 // Modal Elemento
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalElemento({
-  inicial,
-  puestos,
-  onClose,
-  onSaved,
+  inicial, puestos, onClose, onSaved,
 }: {
-  inicial?: ElementoConPuesto
-  puestos: Cliente[]
-  onClose: () => void
-  onSaved: (e: ElementoConPuesto) => void
+  inicial?: ElementoConPuesto; puestos: Cliente[]; onClose: () => void; onSaved: (e: ElementoConPuesto) => void
 }) {
   const [form, setForm] = useState({
     nombre:             inicial?.nombre             ?? '',
@@ -161,7 +146,7 @@ function ModalElemento({
     e.preventDefault()
     setLoading(true); setError(null)
     try {
-      const res = await fetch('/api/supervisor/elementos', {
+      const res  = await fetch('/api/supervisor/elementos', {
         method:  inicial ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(inicial ? { ...form, id: inicial.id } : form),
@@ -170,7 +155,7 @@ function ModalElemento({
       if (!res.ok) { setError(json.error ?? 'Error al guardar'); return }
       onSaved(json.elemento)
     } catch { setError('Error de conexión') }
-    finally  { setLoading(false) }
+    finally   { setLoading(false) }
   }
 
   return (
@@ -190,7 +175,7 @@ function ModalElemento({
         <Field label="Puesto asignado *">
           <select className={inputCls} value={form.cliente_id} onChange={e => set('cliente_id', e.target.value)} required>
             <option value="">Seleccioná un puesto...</option>
-            {puestos.map(p => (
+            {puestos.filter(p => p.activo).map(p => (
               <option key={p.id} value={p.id}>{p.nombre_empresa}</option>
             ))}
           </select>
@@ -205,13 +190,9 @@ function ModalElemento({
         <Field label="Descripción">
           <textarea className={inputCls} value={form.descripcion ?? ''} onChange={e => set('descripcion', e.target.value)} rows={2} placeholder="Descripción opcional del equipo..." />
         </Field>
-
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-
         <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg text-sm hover:bg-gray-50">
-            Cancelar
-          </button>
+          <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
           <button type="submit" disabled={loading} className="flex-1 bg-brand-orange text-white font-semibold py-2.5 rounded-lg text-sm hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">
             {loading && <Loader2 size={16} className="animate-spin" />}
             {loading ? 'Guardando...' : 'Guardar'}
@@ -235,10 +216,15 @@ export default function EstructuraClient({
   const [tab, setTab]             = useState<Tab>('puestos')
   const [puestos, setPuestos]     = useState(initialPuestos)
   const [elementos, setElementos] = useState(initialElementos)
+  const [verInactivos, setVerInactivos] = useState(false)
+  const [toggling, setToggling]   = useState<string | null>(null)
 
-  // Modales
   const [modalPuesto,   setModalPuesto]   = useState<{ open: boolean; editando?: Cliente }>({ open: false })
   const [modalElemento, setModalElemento] = useState<{ open: boolean; editando?: ElementoConPuesto }>({ open: false })
+
+  // ── Puestos visibles según filtro ────────────────────────────────────────
+  const puestosVisibles  = verInactivos ? puestos : puestos.filter(p => p.activo)
+  const elementosVisibles = verInactivos ? elementos : elementos.filter(e => e.estado_admin !== 'inactivo')
 
   function onPuestoSaved(p: Cliente) {
     setPuestos(prev => {
@@ -255,6 +241,38 @@ export default function EstructuraClient({
     })
     setModalElemento({ open: false })
   }
+
+  // ── Toggle activo puesto ─────────────────────────────────────────────────
+  async function togglePuesto(p: Cliente) {
+    setToggling(p.id)
+    try {
+      const res  = await fetch('/api/supervisor/puestos', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: p.id, activo: !p.activo }),
+      })
+      const json = await res.json()
+      if (res.ok) setPuestos(prev => prev.map(x => x.id === p.id ? json.puesto : x))
+    } finally { setToggling(null) }
+  }
+
+  // ── Toggle activo elemento ───────────────────────────────────────────────
+  async function toggleElemento(el: ElementoConPuesto) {
+    const nuevoEstado = el.estado_admin === 'inactivo' ? 'activo' : 'inactivo'
+    setToggling(el.id)
+    try {
+      const res  = await fetch('/api/supervisor/elementos', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: el.id, estado_admin: nuevoEstado, nombre: el.nombre, codigo_patrimonial: el.codigo_patrimonial, cliente_id: el.cliente_id }),
+      })
+      const json = await res.json()
+      if (res.ok) setElementos(prev => prev.map(x => x.id === el.id ? json.elemento : x))
+    } finally { setToggling(null) }
+  }
+
+  const inactivosPuestos  = puestos.filter(p => !p.activo).length
+  const inactivosElementos = elementos.filter(e => e.estado_admin === 'inactivo').length
 
   return (
     <>
@@ -280,15 +298,29 @@ export default function EstructuraClient({
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Puestos de trabajo</h2>
-              <p className="text-sm text-gray-500">{puestos.length} puestos registrados</p>
+              <p className="text-sm text-gray-500">
+                {puestosVisibles.length} activos
+                {inactivosPuestos > 0 && ` · ${inactivosPuestos} inactivos`}
+              </p>
             </div>
-            <button
-              onClick={() => setModalPuesto({ open: true })}
-              className="flex items-center gap-2 bg-brand-orange text-white font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-orange-600 transition-colors"
-            >
-              <Plus size={16} />
-              Nuevo Puesto
-            </button>
+            <div className="flex items-center gap-3">
+              {inactivosPuestos > 0 && (
+                <button
+                  onClick={() => setVerInactivos(v => !v)}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  {verInactivos ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {verInactivos ? 'Ocultar inactivos' : 'Ver inactivos'}
+                </button>
+              )}
+              <button
+                onClick={() => setModalPuesto({ open: true })}
+                className="flex items-center gap-2 bg-brand-orange text-white font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-orange-600 transition-colors"
+              >
+                <Plus size={16} />
+                Nuevo Puesto
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -299,25 +331,24 @@ export default function EstructuraClient({
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dirección</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Contacto</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden xl:table-cell">CUIT</th>
-                  <th className="px-5 py-3.5 w-20"></th>
+                  <th className="px-5 py-3.5 w-32"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {puestos.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">
-                      No hay puestos registrados. Creá el primero.
-                    </td>
-                  </tr>
+                {puestosVisibles.length === 0 && (
+                  <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">No hay puestos registrados. Creá el primero.</td></tr>
                 )}
-                {puestos.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                {puestosVisibles.map(p => (
+                  <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${!p.activo ? 'opacity-50' : ''}`}>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-brand-orange/10 flex items-center justify-center shrink-0">
-                          <Building2 size={16} className="text-brand-orange" />
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${p.activo ? 'bg-brand-orange/10' : 'bg-gray-100'}`}>
+                          <Building2 size={16} className={p.activo ? 'text-brand-orange' : 'text-gray-400'} />
                         </div>
-                        <span className="font-semibold text-gray-900">{p.nombre_empresa}</span>
+                        <div>
+                          <span className="font-semibold text-gray-900">{p.nombre_empresa}</span>
+                          {!p.activo && <span className="ml-2 text-xs text-gray-400 font-medium">(inactivo)</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-gray-600">
@@ -328,30 +359,38 @@ export default function EstructuraClient({
                     </td>
                     <td className="px-5 py-4 text-gray-600 hidden lg:table-cell">
                       <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <Phone size={12} className="text-gray-400" />
-                          <span className="text-xs">{p.contacto_nombre}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Mail size={12} className="text-gray-400" />
-                          <span className="text-xs text-gray-400">{p.contacto_email}</span>
-                        </div>
+                        <div className="flex items-center gap-1.5"><Phone size={12} className="text-gray-400" /><span className="text-xs">{p.contacto_nombre}</span></div>
+                        <div className="flex items-center gap-1.5"><Mail size={12} className="text-gray-400" /><span className="text-xs text-gray-400">{p.contacto_email}</span></div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-gray-500 hidden xl:table-cell">
-                      <div className="flex items-center gap-1.5">
-                        <Hash size={12} className="text-gray-400" />
-                        <span className="text-xs font-mono">{p.cuit}</span>
-                      </div>
+                    <td className="px-5 py-4 hidden xl:table-cell">
+                      <div className="flex items-center gap-1.5"><Hash size={12} className="text-gray-400" /><span className="text-xs font-mono text-gray-500">{p.cuit}</span></div>
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => setModalPuesto({ open: true, editando: p })}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-brand-orange hover:text-orange-700 ml-auto"
-                      >
-                        <Pencil size={13} />
-                        Editar
-                      </button>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3 justify-end">
+                        <button
+                          onClick={() => setModalPuesto({ open: true, editando: p })}
+                          className="flex items-center gap-1 text-xs font-semibold text-brand-orange hover:text-orange-700"
+                        >
+                          <Pencil size={13} />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => togglePuesto(p)}
+                          disabled={toggling === p.id}
+                          className={`flex items-center gap-1 text-xs font-semibold transition-colors ${
+                            p.activo
+                              ? 'text-red-400 hover:text-red-600'
+                              : 'text-green-500 hover:text-green-700'
+                          }`}
+                        >
+                          {toggling === p.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : p.activo ? <PowerOff size={13} /> : <Power size={13} />
+                          }
+                          {p.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -367,15 +406,29 @@ export default function EstructuraClient({
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Inventario de elementos</h2>
-              <p className="text-sm text-gray-500">{elementos.length} elementos registrados</p>
+              <p className="text-sm text-gray-500">
+                {elementosVisibles.length} elementos
+                {inactivosElementos > 0 && ` · ${inactivosElementos} inactivos`}
+              </p>
             </div>
-            <button
-              onClick={() => setModalElemento({ open: true })}
-              className="flex items-center gap-2 bg-brand-orange text-white font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-orange-600 transition-colors"
-            >
-              <Plus size={16} />
-              Nuevo Elemento
-            </button>
+            <div className="flex items-center gap-3">
+              {inactivosElementos > 0 && (
+                <button
+                  onClick={() => setVerInactivos(v => !v)}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  {verInactivos ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {verInactivos ? 'Ocultar inactivos' : 'Ver inactivos'}
+                </button>
+              )}
+              <button
+                onClick={() => setModalElemento({ open: true })}
+                className="flex items-center gap-2 bg-brand-orange text-white font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-orange-600 transition-colors"
+              >
+                <Plus size={16} />
+                Nuevo Elemento
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -386,22 +439,18 @@ export default function EstructuraClient({
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Categoría</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Puesto Asignado</th>
-                  <th className="px-5 py-3.5 w-20"></th>
+                  <th className="px-5 py-3.5 w-32"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {elementos.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">
-                      No hay elementos registrados. Creá el primero.
-                    </td>
-                  </tr>
+                {elementosVisibles.length === 0 && (
+                  <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">No hay elementos registrados. Creá el primero.</td></tr>
                 )}
-                {elementos.map(el => (
-                  <tr key={el.id} className="hover:bg-gray-50 transition-colors">
+                {elementosVisibles.map(el => (
+                  <tr key={el.id} className={`hover:bg-gray-50 transition-colors ${el.estado_admin === 'inactivo' ? 'opacity-50' : ''}`}>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${el.estado_admin === 'inactivo' ? 'bg-gray-100' : 'bg-gray-100'}`}>
                           <Package size={15} className="text-gray-500" />
                         </div>
                         <div>
@@ -424,14 +473,31 @@ export default function EstructuraClient({
                         {el.clientes?.nombre_empresa ?? <span className="text-gray-300">Sin asignar</span>}
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => setModalElemento({ open: true, editando: el })}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-brand-orange hover:text-orange-700 ml-auto"
-                      >
-                        <Pencil size={13} />
-                        Editar
-                      </button>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3 justify-end">
+                        <button
+                          onClick={() => setModalElemento({ open: true, editando: el })}
+                          className="flex items-center gap-1 text-xs font-semibold text-brand-orange hover:text-orange-700"
+                        >
+                          <Pencil size={13} />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => toggleElemento(el)}
+                          disabled={toggling === el.id}
+                          className={`flex items-center gap-1 text-xs font-semibold transition-colors ${
+                            el.estado_admin !== 'inactivo'
+                              ? 'text-red-400 hover:text-red-600'
+                              : 'text-green-500 hover:text-green-700'
+                          }`}
+                        >
+                          {toggling === el.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : el.estado_admin !== 'inactivo' ? <PowerOff size={13} /> : <Power size={13} />
+                          }
+                          {el.estado_admin !== 'inactivo' ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -441,21 +507,11 @@ export default function EstructuraClient({
         </div>
       )}
 
-      {/* Modales */}
       {modalPuesto.open && (
-        <ModalPuesto
-          inicial={modalPuesto.editando}
-          onClose={() => setModalPuesto({ open: false })}
-          onSaved={onPuestoSaved}
-        />
+        <ModalPuesto inicial={modalPuesto.editando} onClose={() => setModalPuesto({ open: false })} onSaved={onPuestoSaved} />
       )}
       {modalElemento.open && (
-        <ModalElemento
-          inicial={modalElemento.editando}
-          puestos={puestos}
-          onClose={() => setModalElemento({ open: false })}
-          onSaved={onElementoSaved}
-        />
+        <ModalElemento inicial={modalElemento.editando} puestos={puestos} onClose={() => setModalElemento({ open: false })} onSaved={onElementoSaved} />
       )}
     </>
   )

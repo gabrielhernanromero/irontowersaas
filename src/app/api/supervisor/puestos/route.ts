@@ -3,16 +3,19 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
+const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, created_at'
+
 const PuestoSchema = z.object({
-  nombre_empresa:   z.string().min(1, 'Nombre del puesto requerido'),
-  cuit:             z.string().min(11, 'CUIT inválido').max(13),
-  direccion:        z.string().min(1, 'Dirección requerida'),
-  contacto_nombre:  z.string().min(1, 'Contacto requerido'),
-  contacto_email:   z.string().email('Email inválido'),
+  nombre_empresa:    z.string().min(1, 'Nombre del puesto requerido'),
+  cuit:              z.string().min(11, 'CUIT inválido').max(13),
+  direccion:         z.string().min(1, 'Dirección requerida'),
+  contacto_nombre:   z.string().min(1, 'Contacto requerido'),
+  contacto_email:    z.string().email('Email inválido'),
   contacto_telefono: z.string().min(1, 'Teléfono requerido'),
 })
 
-const UpdatePuestoSchema = PuestoSchema.extend({ id: z.string().uuid() })
+const UpdatePuestoSchema  = PuestoSchema.extend({ id: z.string().uuid() })
+const ToggleActivoSchema  = z.object({ id: z.string().uuid(), activo: z.boolean() })
 
 export async function GET() {
   try { await requireRole('supervisor', 'admin') } catch {
@@ -21,7 +24,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin()
     .from('clientes')
-    .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, created_at')
+    .select(SELECT)
     .order('nombre_empresa', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
-  const body = await req.json()
+  const body   = await req.json()
   const parsed = PuestoSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin()
     .from('clientes')
     .insert(parsed.data)
-    .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, created_at')
+    .select(SELECT)
     .single()
 
   if (error) {
@@ -61,18 +64,32 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
+
+  // Toggle activo (soft-delete / reactivar)
+  const toggle = ToggleActivoSchema.safeParse(body)
+  if (toggle.success) {
+    const { data, error } = await supabaseAdmin()
+      .from('clientes')
+      .update({ activo: toggle.data.activo })
+      .eq('id', toggle.data.id)
+      .select(SELECT)
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, puesto: data })
+  }
+
+  // Edición completa
   const parsed = UpdatePuestoSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
   const { id, ...fields } = parsed.data
-
   const { data, error } = await supabaseAdmin()
     .from('clientes')
     .update(fields)
     .eq('id', id)
-    .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, created_at')
+    .select(SELECT)
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

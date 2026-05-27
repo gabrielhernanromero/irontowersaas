@@ -32,6 +32,7 @@ export interface Cliente {
   contacto_nombre: string
   contacto_email: string
   contacto_telefono: string
+  activo: boolean
 }
 
 export interface Planilla {
