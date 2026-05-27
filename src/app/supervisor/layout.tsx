@@ -1,7 +1,7 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { getSession } from '@/lib/auth/getSession'
 import Link from 'next/link'
-import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Building2, LogOut, Layers } from 'lucide-react'
+import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Target, LogOut } from 'lucide-react'
 
 export default async function SupervisorLayout({ children }: { children: React.ReactNode }) {
   await requireRole('supervisor', 'admin')
@@ -23,8 +23,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
           <SideLink href="/supervisor/alertas" icon={<Bell size={18} />} label="Alertas" />
           <SideLink href="/supervisor/planillas" icon={<ClipboardList size={18} />} label="Planillas" />
           <SideLink href="/supervisor/informes" icon={<FileText size={18} />} label="Informes" />
-          <SideLink href="/supervisor/estructura" icon={<Layers size={18} />} label="Estructura" />
-          <SideLink href="/supervisor/empresas" icon={<Building2 size={18} />} label="Empresas" />
+          <SideLink href="/supervisor/clientes" icon={<Target size={18} />} label="Clientes" />
           <SideLink href="/supervisor/usuarios" icon={<Users size={18} />} label="Técnicos" />
         </nav>
 
@@ -58,7 +57,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
             <MobileLink href="/supervisor/alertas" icon={<Bell size={20} />} label="Alertas" />
             <MobileLink href="/supervisor/planillas" icon={<ClipboardList size={20} />} label="Planillas" />
             <MobileLink href="/supervisor/informes" icon={<FileText size={20} />} label="Informes" />
-            <MobileLink href="/supervisor/empresas" icon={<Building2 size={20} />} label="Empresas" />
+            <MobileLink href="/supervisor/clientes" icon={<Target size={20} />} label="Clientes" />
             <MobileLink href="/supervisor/usuarios" icon={<Users size={20} />} label="Técnicos" />
           </div>
         </nav>
