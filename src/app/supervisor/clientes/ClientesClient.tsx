@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Building2, Plus, ChevronDown, ChevronUp, Edit2,
   Users, Package, Info, Sun, Moon, Loader2, X,
-  ToggleLeft, ToggleRight, AlertCircle,
+  ToggleLeft, ToggleRight, AlertCircle, MapPin, QrCode, Printer,
 } from 'lucide-react'
+import QRCode from 'react-qr-code'
 import type { Cliente, ElementoPuesto, EstadoAdmin } from '@/types/database'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -20,7 +21,18 @@ interface TecnicoRow {
   cliente_id: string | null
 }
 
-type Tab = 'info' | 'elementos' | 'tecnicos'
+type Tab = 'info' | 'elementos' | 'tecnicos' | 'rondas'
+
+interface PuntoControl {
+  id: string
+  cliente_id: string
+  nombre: string
+  descripcion: string | null
+  ubicacion: string | null
+  codigo_qr: string
+  orden: number
+  activo: boolean
+}
 
 interface Props {
   initialClientes: Cliente[]
@@ -231,12 +243,12 @@ export default function ClientesClient({ initialClientes, initialElementos, init
               {isOpen && (
                 <div className="border-t border-gray-100">
                   {/* Tabs */}
-                  <div className="flex gap-0 border-b border-gray-100 px-2">
-                    {(['info', 'elementos', 'tecnicos'] as Tab[]).map(t => (
+                  <div className="flex gap-0 border-b border-gray-100 px-2 overflow-x-auto">
+                    {(['info', 'elementos', 'tecnicos', 'rondas'] as Tab[]).map(t => (
                       <button
                         key={t}
                         onClick={() => setActiveTab(prev => ({ ...prev, [cliente.id]: t }))}
-                        className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                           tab === t
                             ? 'border-brand-orange text-brand-orange'
                             : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -245,11 +257,11 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                         {t === 'info'      && <Info    size={13} />}
                         {t === 'elementos' && <Package size={13} />}
                         {t === 'tecnicos'  && <Users   size={13} />}
-                        {t === 'info'
-                          ? 'Info'
-                          : t === 'elementos'
-                            ? `Elementos (${elsCliente.length})`
-                            : `Técnicos (${tecsCliente.length})`}
+                        {t === 'rondas'    && <QrCode  size={13} />}
+                        {t === 'info'      ? 'Info'
+                          : t === 'elementos' ? `Elementos (${elsCliente.length})`
+                          : t === 'tecnicos'  ? `Técnicos (${tecsCliente.length})`
+                          : 'Puntos de control'}
                       </button>
                     ))}
                   </div>
@@ -316,6 +328,11 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {/* ── Rondas / Puntos de control ── */}
+                    {tab === 'rondas' && (
+                      <PuntosControlTab clienteId={cliente.id} />
                     )}
 
                     {/* ── Técnicos ── */}
@@ -722,6 +739,184 @@ function ElementoModal({
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+// ── PuntosControlTab ──────────────────────────────────────────────────────────
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+
+function PuntosControlTab({ clienteId }: { clienteId: string }) {
+  const [puntos,     setPuntos]     = useState<PuntoControl[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [showForm,   setShowForm]   = useState(false)
+  const [editing,    setEditing]    = useState<PuntoControl | null>(null)
+  const [qrVisible,  setQrVisible]  = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error,      setError]      = useState<string | null>(null)
+  const [form, setForm] = useState({ nombre: '', ubicacion: '', descripcion: '', orden: '0' })
+
+  // Cargar al montar
+  useEffect(() => {
+    fetch(`/api/supervisor/puntos-control?cliente_id=${clienteId}`)
+      .then(r => r.json())
+      .then(j => { setPuntos(j.puntos ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteId])
+
+  function openNew() {
+    setEditing(null)
+    setForm({ nombre: '', ubicacion: '', descripcion: '', orden: String(puntos.length) })
+    setShowForm(true)
+  }
+
+  function openEdit(p: PuntoControl) {
+    setEditing(p)
+    setForm({ nombre: p.nombre, ubicacion: p.ubicacion ?? '', descripcion: p.descripcion ?? '', orden: String(p.orden) })
+    setShowForm(true)
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSubmitting(true)
+    try {
+      const payload = editing
+        ? { id: editing.id, nombre: form.nombre, ubicacion: form.ubicacion || undefined, descripcion: form.descripcion || undefined, orden: parseInt(form.orden) || 0 }
+        : { cliente_id: clienteId, nombre: form.nombre, ubicacion: form.ubicacion || undefined, descripcion: form.descripcion || undefined, orden: parseInt(form.orden) || 0 }
+      const res  = await fetch('/api/supervisor/puntos-control', {
+        method: editing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Error'); return }
+      setPuntos(prev => editing
+        ? prev.map(p => p.id === json.punto.id ? json.punto : p)
+        : [...prev, json.punto].sort((a, b) => a.orden - b.orden)
+      )
+      setShowForm(false)
+    } catch { setError('Error de conexión') }
+    finally  { setSubmitting(false) }
+  }
+
+  async function toggleActivo(id: string, activo: boolean) {
+    const res = await fetch('/api/supervisor/puntos-control', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, activo }),
+    })
+    if (res.ok) setPuntos(prev => prev.map(p => p.id === id ? { ...p, activo } : p))
+  }
+
+  const qrUrl = (codigo: string) => `${APP_URL}/ronda/scan/${codigo}`
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-8">
+      <Loader2 size={20} className="animate-spin text-gray-300" />
+    </div>
+  )
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Puntos de control</p>
+        <button onClick={openNew} className="flex items-center gap-1 text-xs text-brand-orange font-semibold hover:underline">
+          <Plus size={13} /> Agregar punto
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSave} className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
+          <p className="text-sm font-semibold text-brand-ink">{editing ? 'Editar punto' : 'Nuevo punto de control'}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Nombre *</label>
+              <input value={form.nombre} onChange={e => setForm(p => ({...p, nombre: e.target.value}))}
+                className="w-full border border-gray-300 rounded-lg p-2 text-sm" placeholder="Portón principal" required />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Ubicación</label>
+              <input value={form.ubicacion} onChange={e => setForm(p => ({...p, ubicacion: e.target.value}))}
+                className="w-full border border-gray-300 rounded-lg p-2 text-sm" placeholder="Sector A" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Orden</label>
+              <input type="number" min="0" value={form.orden} onChange={e => setForm(p => ({...p, orden: e.target.value}))}
+                className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+            </div>
+          </div>
+          {error && <p className="text-red-600 text-xs">{error}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={submitting}
+              className="bg-brand-orange text-white text-xs font-semibold px-4 py-2 rounded-lg disabled:opacity-60">
+              {submitting ? 'Guardando...' : editing ? 'Guardar' : 'Crear'}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)}
+              className="text-xs text-gray-500 px-3 py-2 border border-gray-200 rounded-lg">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {puntos.length === 0 ? (
+        <p className="text-sm text-gray-400 italic">Sin puntos de control. Agregá el primero.</p>
+      ) : (
+        <div className="space-y-2">
+          {puntos.map(p => (
+            <div key={p.id} className={`rounded-xl border p-3 transition-opacity ${!p.activo ? 'opacity-50 bg-gray-50 border-gray-100' : 'bg-white border-gray-100'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-300">#{p.orden + 1}</span>
+                    <p className="text-sm font-semibold text-brand-ink">{p.nombre}</p>
+                    {!p.activo && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Inactivo</span>}
+                  </div>
+                  {p.ubicacion && (
+                    <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                      <MapPin size={10} /> {p.ubicacion}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => setQrVisible(qrVisible === p.id ? null : p.id)}
+                    className={`p-1.5 rounded-lg transition-colors ${qrVisible === p.id ? 'text-brand-orange bg-orange-50' : 'text-gray-400 hover:text-brand-orange hover:bg-orange-50'}`}
+                    title="Ver QR">
+                    <QrCode size={13} />
+                  </button>
+                  <button onClick={() => openEdit(p)}
+                    className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors">
+                    <Edit2 size={12} />
+                  </button>
+                  <button onClick={() => toggleActivo(p.id, !p.activo)}
+                    className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors">
+                    {p.activo ? <ToggleRight size={15} className="text-green-500" /> : <ToggleLeft size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {qrVisible === p.id && (
+                <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col items-center gap-2">
+                  <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                    <QRCode value={qrUrl(p.codigo_qr)} size={140} />
+                  </div>
+                  <p className="text-xs text-gray-400 font-mono text-center">{p.nombre}</p>
+                  <a
+                    href={`/supervisor/puntos-control/${p.id}/print?codigo=${p.codigo_qr}&nombre=${encodeURIComponent(p.nombre)}&ubicacion=${encodeURIComponent(p.ubicacion ?? '')}`}
+                    target="_blank"
+                    className="flex items-center gap-1.5 text-xs text-brand-orange font-semibold hover:underline"
+                  >
+                    <Printer size={12} /> Imprimir etiqueta
+                  </a>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

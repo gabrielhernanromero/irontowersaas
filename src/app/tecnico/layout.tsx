@@ -1,6 +1,6 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import Link from 'next/link'
-import { Home, Package, BookOpen } from 'lucide-react'
+import { Home, Package, BookOpen, QrCode } from 'lucide-react'
 import { LogoutButton } from './LogoutButton'
 
 export default async function TecnicoLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +16,7 @@ export default async function TecnicoLayout({ children }: { children: React.Reac
           <NavItem href="/tecnico/home"      icon={<Home    size={22} />} label="Inicio"    />
           <NavItem href="/tecnico/elementos" icon={<Package size={22} />} label="Elementos" />
           <NavItem href="/tecnico/libro-guardia" icon={<BookOpen size={22} />} label="Guardia" />
+          <NavItem href="/tecnico/ronda"        icon={<QrCode   size={22} />} label="Rondas"  />
           <LogoutButton />
         </div>
       </nav>
