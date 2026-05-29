@@ -425,12 +425,14 @@ function ClienteModal({
   onClose: () => void
 }) {
   const [form, setForm] = useState({
-    nombre_empresa:    cliente?.nombre_empresa    ?? '',
-    cuit:              cliente?.cuit              ?? '',
-    direccion:         cliente?.direccion         ?? '',
-    contacto_nombre:   cliente?.contacto_nombre   ?? '',
-    contacto_email:    cliente?.contacto_email    ?? '',
-    contacto_telefono: cliente?.contacto_telefono ?? '',
+    nombre_empresa:           cliente?.nombre_empresa           ?? '',
+    cuit:                     cliente?.cuit                     ?? '',
+    direccion:                cliente?.direccion                ?? '',
+    contacto_nombre:          cliente?.contacto_nombre          ?? '',
+    contacto_email:           cliente?.contacto_email           ?? '',
+    contacto_telefono:        cliente?.contacto_telefono        ?? '',
+    frecuencia_ronda_minutos: String(cliente?.frecuencia_ronda_minutos ?? ''),
+    aviso_ronda_minutos:      String(cliente?.aviso_ronda_minutos      ?? '10'),
   })
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
@@ -445,7 +447,17 @@ function ClienteModal({
     setError(null)
     setSubmitting(true)
     try {
-      const payload = cliente ? { id: cliente.id, ...form } : form
+      const payload = {
+        ...(cliente ? { id: cliente.id } : {}),
+        nombre_empresa:           form.nombre_empresa,
+        cuit:                     form.cuit,
+        direccion:                form.direccion,
+        contacto_nombre:          form.contacto_nombre,
+        contacto_email:           form.contacto_email,
+        contacto_telefono:        form.contacto_telefono,
+        frecuencia_ronda_minutos: form.frecuencia_ronda_minutos ? parseInt(form.frecuencia_ronda_minutos) : null,
+        aviso_ronda_minutos:      parseInt(form.aviso_ronda_minutos) || 10,
+      }
       const res = await fetch('/api/supervisor/puestos', {
         method: cliente ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -549,6 +561,47 @@ function ClienteModal({
                 placeholder="011-4000-0000"
                 required
               />
+            </div>
+          </div>
+
+          {/* ── Configuración de rondas ── */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+              Configuración de rondas
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Frecuencia</label>
+                <select
+                  value={form.frecuencia_ronda_minutos}
+                  onChange={e => setForm(p => ({ ...p, frecuencia_ronda_minutos: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
+                >
+                  <option value="">Sin programar</option>
+                  <option value="30">Cada 30 min</option>
+                  <option value="60">Cada 1 hora</option>
+                  <option value="90">Cada 1h 30min</option>
+                  <option value="120">Cada 2 horas</option>
+                  <option value="180">Cada 3 horas</option>
+                  <option value="240">Cada 4 horas</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Cada cuánto debe hacer una ronda</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Avisar técnico</label>
+                <select
+                  value={form.aviso_ronda_minutos}
+                  onChange={e => setForm(p => ({ ...p, aviso_ronda_minutos: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
+                  disabled={!form.frecuencia_ronda_minutos}
+                >
+                  <option value="5">5 min antes</option>
+                  <option value="10">10 min antes</option>
+                  <option value="15">15 min antes</option>
+                  <option value="20">20 min antes</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Notificación previa al técnico</p>
+              </div>
             </div>
           </div>
 

@@ -1,22 +1,28 @@
 import { requireRole } from '@/lib/auth/requireRole'
+import { getSession } from '@/lib/auth/getSession'
 import Link from 'next/link'
 import { Home, Package, BookOpen, QrCode } from 'lucide-react'
 import { LogoutButton } from './LogoutButton'
+import RondaAlertBanner from '@/components/tecnico/RondaAlertBanner'
 
 export default async function TecnicoLayout({ children }: { children: React.ReactNode }) {
   await requireRole('tecnico', 'admin')
+  const { user } = await getSession()
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Banner de notificación de ronda — Realtime */}
+      {user && <RondaAlertBanner tecnicoId={user.id} />}
+
       <main className="max-w-[430px] mx-auto pb-20 px-4 pt-4">{children}</main>
 
       {/* Bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <div className="max-w-[430px] mx-auto flex">
-          <NavItem href="/tecnico/home"      icon={<Home    size={22} />} label="Inicio"    />
-          <NavItem href="/tecnico/elementos" icon={<Package size={22} />} label="Elementos" />
-          <NavItem href="/tecnico/libro-guardia" icon={<BookOpen size={22} />} label="Guardia" />
-          <NavItem href="/tecnico/ronda"        icon={<QrCode   size={22} />} label="Rondas"  />
+          <NavItem href="/tecnico/home"          icon={<Home    size={22} />} label="Inicio"    />
+          <NavItem href="/tecnico/elementos"     icon={<Package size={22} />} label="Elementos" />
+          <NavItem href="/tecnico/libro-guardia" icon={<BookOpen size={22} />} label="Guardia"  />
+          <NavItem href="/tecnico/ronda"         icon={<QrCode   size={22} />} label="Rondas"   />
           <LogoutButton />
         </div>
       </nav>

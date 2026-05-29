@@ -1,7 +1,7 @@
 export type Rol = 'admin' | 'supervisor' | 'tecnico' | 'cliente'
 export type TipoPlanilla = 'hidrantes' | 'extintores'
 export type Turno = 'diurno' | 'nocturno'
-export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence'
+export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
 export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
@@ -33,6 +33,8 @@ export interface Cliente {
   contacto_email: string
   contacto_telefono: string
   activo: boolean
+  frecuencia_ronda_minutos: number | null
+  aviso_ronda_minutos: number
 }
 
 export interface Planilla {
