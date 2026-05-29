@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   Building2, Plus, ChevronDown, ChevronUp, Edit2,
   Users, Package, Info, Sun, Moon, Loader2, X,
-  ToggleLeft, ToggleRight, AlertCircle, MapPin, QrCode, Printer,
+  ToggleLeft, ToggleRight, AlertCircle, MapPin, QrCode, Printer, Bell,
 } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import type { Cliente, ElementoPuesto, EstadoAdmin } from '@/types/database'
@@ -270,12 +270,39 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                   <div className="p-5">
                     {/* ── Info ── */}
                     {tab === 'info' && (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-                        <InfoField label="Dirección"  value={cliente.direccion}          />
-                        <InfoField label="Contacto"   value={cliente.contacto_nombre}    />
-                        <InfoField label="Email"      value={cliente.contacto_email}     />
-                        <InfoField label="Teléfono"   value={cliente.contacto_telefono}  />
-                        <InfoField label="CUIT"       value={cliente.cuit}               />
+                      <div className="space-y-5">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+                          <InfoField label="Dirección"  value={cliente.direccion}          />
+                          <InfoField label="Contacto"   value={cliente.contacto_nombre}    />
+                          <InfoField label="Email"      value={cliente.contacto_email}     />
+                          <InfoField label="Teléfono"   value={cliente.contacto_telefono}  />
+                          <InfoField label="CUIT"       value={cliente.cuit}               />
+                        </div>
+
+                        {/* Configuración de rondas */}
+                        <div className="border-t border-gray-100 pt-4">
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                            Configuración de rondas
+                          </p>
+                          {cliente.frecuencia_ronda_minutos ? (
+                            <div className="flex items-center gap-4 flex-wrap">
+                              <div className="flex items-center gap-2 bg-brand-orange/8 border border-brand-orange/20 rounded-xl px-3 py-2">
+                                <QrCode size={14} className="text-brand-orange" />
+                                <span className="text-sm font-semibold text-brand-ink">
+                                  {cliente.frecuencia_ronda_minutos < 60
+                                    ? `Cada ${cliente.frecuencia_ronda_minutos} min`
+                                    : `Cada ${cliente.frecuencia_ronda_minutos / 60}h`}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <Bell size={13} className="text-gray-400" />
+                                Aviso {cliente.aviso_ronda_minutos} min antes
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-400 italic">Sin programar</p>
+                          )}
+                        </div>
                       </div>
                     )}
 
