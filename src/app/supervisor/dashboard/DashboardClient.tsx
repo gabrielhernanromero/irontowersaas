@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Shield, AlertTriangle, MessageSquare, Bell,
-  ChevronRight, Clock, MapPin, Package,
+  ChevronRight, Clock, MapPin, AlertCircle,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import ClienteSelector from './components/ClienteSelector'
@@ -114,6 +114,38 @@ const FEED_DOT: Record<string, string> = {
   novedad:  'bg-blue-500',
   alerta:   'bg-red-500',
   cierre:   'bg-gray-400',
+}
+
+const CAT_CLS: Record<string, string> = {
+  RONDA:      'bg-green-100  text-green-700',
+  INCIDENCIA: 'bg-red-100    text-red-700',
+  CONTROL:    'bg-blue-100   text-blue-700',
+  SISTEMA:    'bg-purple-100 text-purple-700',
+  FALLA:      'bg-orange-100 text-orange-700',
+  NOVEDAD:    'bg-sky-100    text-sky-700',
+  ALERTA:     'bg-red-100    text-red-700',
+  APERTURA:   'bg-emerald-100 text-emerald-700',
+  CIERRE:     'bg-gray-100   text-gray-600',
+}
+
+function parsearCategoria(descripcion: string, tipo: string): { label: string; cls: string } {
+  const match = descripcion.match(/^\[([^\]]+)\]/)
+  if (match) {
+    const cat = match[1].toUpperCase()
+    return { label: cat, cls: CAT_CLS[cat] ?? 'bg-gray-100 text-gray-600' }
+  }
+  const label = tipo.toUpperCase()
+  return { label, cls: CAT_CLS[label] ?? 'bg-gray-100 text-gray-600' }
+}
+
+function estadoActividad(tipo: string): { label: string; cls: string; dot: string } {
+  const MAP: Record<string, { label: string; cls: string; dot: string }> = {
+    apertura: { label: 'INICIADO',   cls: 'text-emerald-600', dot: 'bg-emerald-500' },
+    cierre:   { label: 'CERRADO',    cls: 'text-gray-400',    dot: 'bg-gray-400'    },
+    alerta:   { label: 'EN CURSO',   cls: 'text-amber-600',   dot: 'bg-amber-400'   },
+    novedad:  { label: 'REGISTRADO', cls: 'text-blue-600',    dot: 'bg-blue-400'    },
+  }
+  return MAP[tipo] ?? { label: 'REGISTRADO', cls: 'text-gray-500', dot: 'bg-gray-400' }
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -303,6 +335,18 @@ export default function DashboardClient({
         />
       </div>
 
+      {/* ── Banner relevo pendiente ── */}
+      {turnos.some(t => t.estado === 'pendiente_relevo') && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <AlertCircle size={16} className="text-amber-500 shrink-0" />
+          <p className="text-sm font-semibold text-amber-700">
+            {turnos.filter(t => t.estado === 'pendiente_relevo').length === 1
+              ? '1 turno pendiente de relevo'
+              : `${turnos.filter(t => t.estado === 'pendiente_relevo').length} turnos pendientes de relevo`}
+          </p>
+        </div>
+      )}
+
       {/* ── KPI row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
@@ -367,7 +411,7 @@ export default function DashboardClient({
                 >
                   <div className="flex items-start gap-3">
                     {/* Pulse dot */}
-                    <div className="shrink-0 mt-1">
+                    <div className="shrink-0 mt-1.5">
                       <span className="relative flex h-3 w-3">
                         {!isPendiente && (
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
@@ -377,39 +421,47 @@ export default function DashboardClient({
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-bold text-brand-ink">{turno.tecnico_nombre}</p>
-                        <div className="flex items-center gap-2">
-                          {isPendiente && (
-                            <span className="text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
-                              Relevo
+                      <div className="flex items-start justify-between gap-3">
+                        {/* Left: info */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-brand-ink">{turno.tecnico_nombre}</p>
+                            {isPendiente && (
+                              <span className="text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+                                Relevo pendiente
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-3 mt-1 flex-wrap">
+                            {turno.clientes && (
+                              <span className="flex items-center gap-1 text-xs text-gray-500">
+                                <MapPin size={11} className="text-gray-400" />
+                                {turno.clientes.nombre_empresa}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                              <Clock size={11} className="text-gray-400" />
+                              {turno.horario_inicio} · {turno.turno === 'diurno' ? 'Diurno' : 'Nocturno'}
                             </span>
+                            <span className="text-xs text-gray-400">
+                              {turno.novedades.length} novedad{turno.novedades.length !== 1 ? 'es' : ''}
+                            </span>
+                          </div>
+
+                          {lastNov && (
+                            <p className="text-xs text-gray-500 mt-1.5 line-clamp-1 italic">
+                              &ldquo;{lastNov.descripcion}&rdquo;
+                            </p>
                           )}
+                        </div>
+
+                        {/* Right: timer + chevron */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <LiveTimer inicio={turno.horario_inicio} />
                           <ChevronRight size={15} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        {turno.clientes && (
-                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <MapPin size={11} className="text-gray-400" />
-                            {turno.clientes.nombre_empresa}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1 text-xs text-gray-500">
-                          <Clock size={11} className="text-gray-400" />
-                          desde {turno.horario_inicio}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {turno.turno === 'diurno' ? 'Diurno' : 'Nocturno'}
-                        </span>
-                      </div>
-
-                      {lastNov && (
-                        <p className="text-xs text-gray-500 mt-2 line-clamp-1 italic">
-                          &ldquo;{lastNov.descripcion}&rdquo;
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -474,36 +526,67 @@ export default function DashboardClient({
               <p className="text-sm text-gray-400">Sin actividad registrada hoy</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {novedadesFiltradas.map((nov, i) => {
-                const turno  = nov.libro_turno
-                const dot    = FEED_DOT[nov.tipo] ?? 'bg-gray-400'
-                const nombre = turno?.tecnico_nombre ?? '—'
-                const cli    = turno?.clientes?.nombre_empresa
+            <>
+              {/* Table header */}
+              <div className="grid grid-cols-[72px_140px_1fr_130px] px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                {['HORA', 'CATEGORÍA', 'DETALLE / OBSERVACIÓN', 'ESTADO'].map(h => (
+                  <span key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wide last:text-right">
+                    {h}
+                  </span>
+                ))}
+              </div>
 
-                return (
-                  <div key={nov.id} className={`flex gap-3.5 px-4 py-3.5 ${i === 0 ? 'bg-gray-50/50' : ''}`}>
-                    {/* Avatar */}
-                    <div className="w-8 h-8 rounded-full bg-brand-ink flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-white">{iniciales(nombre)}</span>
-                    </div>
+              {/* Rows */}
+              <div className="divide-y divide-gray-50">
+                {novedadesFiltradas.map((nov, i) => {
+                  const turno  = nov.libro_turno
+                  const cat    = parsearCategoria(nov.descripcion, nov.tipo)
+                  const estado = estadoActividad(nov.tipo)
+                  const nombre = turno?.tecnico_nombre ?? '—'
+                  const cli    = turno?.clientes?.nombre_empresa
+                  const detalle = nov.descripcion.replace(/^\[[^\]]+\]\s*/, '')
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-800">{nombre}</span>
-                        {cli && <span className="text-xs text-gray-400">· {cli}</span>}
-                        <span className="flex items-center gap-1 text-xs text-gray-400 ml-auto">
-                          <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-                          {timeAgo(nov.created_at)}
+                  return (
+                    <div
+                      key={nov.id}
+                      className={`grid grid-cols-[72px_140px_1fr_130px] px-4 py-3 items-center transition-colors ${
+                        i === 0 ? 'bg-blue-50/20' : 'hover:bg-gray-50/50'
+                      }`}
+                    >
+                      {/* Hora */}
+                      <span className="font-mono text-sm text-gray-600 font-medium tabular-nums">
+                        {nov.hora}
+                      </span>
+
+                      {/* Categoría */}
+                      <div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${cat.cls}`}>
+                          {cat.label}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{nov.descripcion}</p>
+
+                      {/* Detalle */}
+                      <div className="min-w-0 pr-4">
+                        <p className="text-sm text-gray-700 line-clamp-1">
+                          {detalle || nov.descripcion}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {nombre}{cli ? ` · ${cli}` : ''}
+                        </p>
+                      </div>
+
+                      {/* Estado */}
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${estado.dot}`} />
+                        <span className={`text-xs font-bold tracking-wide ${estado.cls}`}>
+                          {estado.label}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -618,5 +701,39 @@ function LiveBadge() {
       </span>
       EN VIVO
     </span>
+  )
+}
+
+function LiveTimer({ inicio }: { inicio: string }) {
+  const [elapsed, setElapsed] = useState('--:--:--')
+
+  useEffect(() => {
+    function calc() {
+      const [h, m] = inicio.split(':').map(Number)
+      const now   = new Date()
+      const start = new Date(now)
+      start.setHours(h, m, 0, 0)
+      // Si el horario de inicio es "futuro", el turno empezó ayer
+      if (start.getTime() > now.getTime()) start.setDate(start.getDate() - 1)
+      const diff = Math.max(0, Math.floor((now.getTime() - start.getTime()) / 1000))
+      const hh   = Math.floor(diff / 3600)
+      const mm   = Math.floor((diff % 3600) / 60)
+      const ss   = diff % 60
+      setElapsed(
+        `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+      )
+    }
+    calc()
+    const id = setInterval(calc, 1000)
+    return () => clearInterval(id)
+  }, [inicio])
+
+  return (
+    <div className="text-right">
+      <p className="font-mono text-base font-black text-emerald-600 tabular-nums leading-none tracking-tight">
+        {elapsed}
+      </p>
+      <p className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wide">en guardia</p>
+    </div>
   )
 }
