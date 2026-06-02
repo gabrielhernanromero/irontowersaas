@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { QrCode, Play, MapPin, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
+import { QrCode, Play, MapPin, CheckCircle, Loader2, AlertCircle, ShieldOff } from 'lucide-react'
 
 interface Turno {
   id: string
@@ -24,9 +24,11 @@ interface RondaActiva {
 interface Props {
   turno: Turno | null
   rondaActiva: RondaActiva | null
+  frecuenciaConfigurada: boolean
+  totalPuntosActivos: number
 }
 
-export default function RondaIniciarClient({ turno, rondaActiva }: Props) {
+export default function RondaIniciarClient({ turno, rondaActiva, frecuenciaConfigurada, totalPuntosActivos }: Props) {
   const router    = useRouter()
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -55,6 +57,45 @@ export default function RondaIniciarClient({ turno, rondaActiva }: Props) {
         <AlertCircle size={40} className="text-gray-200 mb-4" />
         <p className="font-bold text-gray-600 text-lg">Sin guardia activa</p>
         <p className="text-sm text-gray-400 mt-2">Necesitás tener un turno abierto para hacer una ronda.</p>
+      </div>
+    )
+  }
+
+  // Ronda no configurada por el supervisor
+  if (!frecuenciaConfigurada || totalPuntosActivos === 0) {
+    const sinFrecuencia  = !frecuenciaConfigurada
+    const sinPuntos      = totalPuntosActivos === 0
+
+    const titulo  = sinFrecuencia && sinPuntos
+      ? 'Rondas no habilitadas'
+      : sinPuntos
+        ? 'Sin puntos de control'
+        : 'Sin frecuencia configurada'
+
+    const mensaje = sinFrecuencia && sinPuntos
+      ? 'El supervisor no habilitó las rondas para este puesto. Contactá al supervisor.'
+      : sinPuntos
+        ? 'El supervisor aún no cargó los puntos de control para este puesto.'
+        : 'El supervisor no configuró la frecuencia de rondas para este puesto.'
+
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-black text-brand-ink">Rondas</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {turno?.clientes?.nombre_empresa ?? 'Puesto asignado'}
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center text-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+            <ShieldOff size={28} className="text-gray-400" />
+          </div>
+          <div>
+            <p className="font-bold text-gray-700 text-lg">{titulo}</p>
+            <p className="text-sm text-gray-400 mt-2 leading-relaxed">{mensaje}</p>
+          </div>
+        </div>
       </div>
     )
   }

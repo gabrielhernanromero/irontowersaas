@@ -11,7 +11,7 @@ export async function POST(
 
   const { data: ronda } = await supabaseAdmin()
     .from('rondas')
-    .select('id, tecnico_id, completa')
+    .select('id, tecnico_id, completa, turno_id, numero_ronda, puntos_escaneados, total_puntos')
     .eq('id', params.id)
     .single()
 
@@ -27,5 +27,23 @@ export async function POST(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Novedad de cierre en el libro de guardia (completado manual)
+  if (ronda.turno_id) {
+    const hora = new Date().toLocaleTimeString('es-AR', {
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Argentina/Buenos_Aires',
+    })
+    await supabaseAdmin()
+      .from('libro_novedad')
+      .insert({
+        turno_id:    ronda.turno_id,
+        tecnico_id:  user.id,
+        tipo:        'novedad',
+        hora,
+        descripcion: `Ronda #${ronda.numero_ronda} finalizada — ${ronda.puntos_escaneados}/${ronda.total_puntos} puntos verificados`,
+      })
+  }
+
   return NextResponse.json({ ok: true, ronda: data })
 }

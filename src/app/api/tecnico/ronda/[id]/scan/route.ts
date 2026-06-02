@@ -24,7 +24,7 @@ export async function POST(
   // Verificar que la ronda pertenece al técnico y está activa
   const { data: ronda } = await supabaseAdmin()
     .from('rondas')
-    .select('id, tecnico_id, cliente_id, total_puntos, puntos_escaneados, completa, hora_fin')
+    .select('id, tecnico_id, cliente_id, total_puntos, puntos_escaneados, completa, hora_fin, turno_id, numero_ronda')
     .eq('id', params.id)
     .single()
 
@@ -83,6 +83,23 @@ export async function POST(
       hora_fin:          esCompleta ? new Date().toISOString() : null,
     })
     .eq('id', params.id)
+
+  // Novedad de cierre cuando la ronda se auto-completa al escanear el último punto
+  if (esCompleta && ronda.turno_id) {
+    const hora = new Date().toLocaleTimeString('es-AR', {
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Argentina/Buenos_Aires',
+    })
+    await supabaseAdmin()
+      .from('libro_novedad')
+      .insert({
+        turno_id:    ronda.turno_id,
+        tecnico_id:  user.id,
+        tipo:        'novedad',
+        hora,
+        descripcion: `Ronda #${ronda.numero_ronda} finalizada — ${nuevosEscaneados}/${ronda.total_puntos} puntos verificados`,
+      })
+  }
 
   return NextResponse.json({
     ok:            true,
