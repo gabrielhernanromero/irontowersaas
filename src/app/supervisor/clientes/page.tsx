@@ -12,6 +12,7 @@ interface TecnicoRow {
   apellido: string
   dni: string | null
   turno_habitual: string | null
+  rol_habitual: 'encargado' | 'apoyo' | null
   activo: boolean
   cliente_id: string | null
 }
@@ -34,7 +35,7 @@ export default async function ClientesPage() {
       .order('nombre', { ascending: true }),
     supabaseAdmin()
       .from('users')
-      .select('id, nombre, apellido, dni, turno_habitual, activo, cliente_id')
+      .select('id, nombre, apellido, dni, turno_habitual, rol_habitual, activo, cliente_id')
       .eq('rol', 'tecnico')
       .order('apellido', { ascending: true }),
   ])

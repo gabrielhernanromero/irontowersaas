@@ -41,6 +41,20 @@ export async function POST(req: NextRequest) {
   const parsed = CreateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
 
+  // Validar orden único para este cliente
+  if (parsed.data.orden !== undefined) {
+    const { data: dup } = await supabaseAdmin()
+      .from('puntos_control')
+      .select('id, nombre')
+      .eq('cliente_id', parsed.data.cliente_id)
+      .eq('orden', parsed.data.orden)
+      .maybeSingle()
+    if (dup) return NextResponse.json(
+      { error: `El orden ${parsed.data.orden} ya está asignado al punto "${dup.nombre}"` },
+      { status: 409 }
+    )
+  }
+
   const { data, error } = await supabaseAdmin()
     .from('puntos_control')
     .insert(parsed.data)
@@ -74,6 +88,22 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
 
   const { id, ...fields } = parsed.data
+
+  // Validar orden único al editar (excluir el propio punto)
+  if (fields.orden !== undefined && fields.cliente_id) {
+    const { data: dup } = await supabaseAdmin()
+      .from('puntos_control')
+      .select('id, nombre')
+      .eq('cliente_id', fields.cliente_id)
+      .eq('orden', fields.orden)
+      .neq('id', id!)
+      .maybeSingle()
+    if (dup) return NextResponse.json(
+      { error: `El orden ${fields.orden} ya está asignado al punto "${dup.nombre}"` },
+      { status: 409 }
+    )
+  }
+
   const { data, error } = await supabaseAdmin()
     .from('puntos_control')
     .update(fields)
@@ -83,4 +113,22 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, punto: data })
+}
+
+export async function DELETE(req: NextRequest) {
+  try { await requireRole('supervisor', 'admin') } catch {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 })
+
+  const { error } = await supabaseAdmin()
+    .from('puntos_control')
+    .delete()
+    .eq('id', id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }

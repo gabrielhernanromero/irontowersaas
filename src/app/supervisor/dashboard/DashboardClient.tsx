@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Shield, AlertTriangle, MessageSquare, Bell,
-  ChevronRight, Clock, MapPin, AlertCircle,
+  ChevronRight, Clock, MapPin, AlertCircle, Siren, X,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import ClienteSelector from './components/ClienteSelector'
@@ -170,6 +170,50 @@ export default function DashboardClient({
   const [turnoSheet,      setTurnoSheet]      = useState<string | null>(null)
   const [incidenciaSheet, setIncidenciaSheet] = useState<IncidenciaActiva | null>(null)
 
+  // Alerta crítica nivel ALTO
+  const [alertaAlto, setAlertaAlto] = useState<IncidenciaActiva | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const dispararAlertaAlto = useCallback((inc: IncidenciaActiva) => {
+    setAlertaAlto(inc)
+    // Reproducir sonido de alarma usando Web Audio API (sin archivo externo)
+    try {
+      const ctx = new AudioContext()
+      const oscillator = ctx.createOscillator()
+      const gainNode   = ctx.createGain()
+      oscillator.connect(gainNode)
+      gainNode.connect(ctx.destination)
+      oscillator.type = 'sawtooth'
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime)
+      oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5)
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
+      oscillator.start(ctx.currentTime)
+      oscillator.stop(ctx.currentTime + 0.8)
+      // Repetir 3 veces
+      setTimeout(() => {
+        const o2 = ctx.createOscillator(); const g2 = ctx.createGain()
+        o2.connect(g2); g2.connect(ctx.destination)
+        o2.type = 'sawtooth'; o2.frequency.setValueAtTime(880, ctx.currentTime)
+        o2.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5)
+        g2.gain.setValueAtTime(0.3, ctx.currentTime)
+        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
+        o2.start(); o2.stop(ctx.currentTime + 0.8)
+      }, 900)
+      setTimeout(() => {
+        const o3 = ctx.createOscillator(); const g3 = ctx.createGain()
+        o3.connect(g3); g3.connect(ctx.destination)
+        o3.type = 'sawtooth'; o3.frequency.setValueAtTime(880, ctx.currentTime)
+        o3.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5)
+        g3.gain.setValueAtTime(0.3, ctx.currentTime)
+        g3.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
+        o3.start(); o3.stop(ctx.currentTime + 0.8)
+      }, 1800)
+    } catch {
+      // AudioContext bloqueado (autoplay policy) — solo visual
+    }
+  }, [])
+
   // Ref for Realtime callbacks to see latest state without stale closures
   const turnosRef = useRef(turnos)
   useEffect(() => { turnosRef.current = turnos }, [turnos])
@@ -243,6 +287,10 @@ export default function DashboardClient({
           if (inc.estado === 'abierto') {
             setIncidencias(prev => [inc, ...prev])
             setResumen(prev => ({ ...prev, incidenciasNuevasHoy: prev.incidenciasNuevasHoy + 1 }))
+            // Alerta crítica inmediata para nivel ALTO (independiente del flujo de aprobación)
+            if (inc.severidad === 'alto') {
+              dispararAlertaAlto(inc)
+            }
           }
         }
       )
@@ -321,6 +369,48 @@ export default function DashboardClient({
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
+
+      {/* ── Modal alerta crítica nivel ALTO ── */}
+      {alertaAlto && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border-4 border-red-500">
+            {/* Cabecera roja pulsante */}
+            <div className="bg-red-600 px-5 py-4 flex items-center gap-3 animate-pulse">
+              <Siren size={28} className="text-white shrink-0" />
+              <div>
+                <p className="text-white font-black text-lg uppercase tracking-wide">
+                  ALERTA CRÍTICA
+                </p>
+                <p className="text-red-200 text-xs">Nivel ALTO — acción inmediata requerida</p>
+              </div>
+            </div>
+            {/* Contenido */}
+            <div className="px-5 py-4 space-y-3">
+              <p className="font-bold text-gray-900 text-base">{alertaAlto.titulo}</p>
+              <p className="text-sm text-gray-600">{alertaAlto.descripcion}</p>
+              {alertaAlto.clientes && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 rounded-lg p-2">
+                  <MapPin size={13} />
+                  {alertaAlto.clientes.nombre_empresa}
+                </div>
+              )}
+              <p className="text-xs text-gray-400">
+                Registrada {timeAgo(alertaAlto.created_at)}
+              </p>
+            </div>
+            {/* Botón dismiss */}
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setAlertaAlto(null)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-colors min-h-[48px]"
+              >
+                <X size={16} />
+                Entendido — registrar atención
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">

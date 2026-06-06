@@ -9,6 +9,7 @@ export const AbrirTurnoSchema = z.object({
   tecnico_dni: z.string().min(7, 'DNI inválido').max(10, 'DNI inválido'),
   horario_inicio: z.string().regex(hora, 'Formato HH:MM'),
   cliente_id: z.string().uuid().optional(),
+  esquema_id: z.string().uuid().optional(),
   // Relevo del turno anterior (opcional — si hay turno cerrado sin relevo)
   turno_saliente_id: z.string().uuid().optional(),
   relevo_firma_dataurl: z.string().optional(),

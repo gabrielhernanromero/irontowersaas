@@ -16,6 +16,7 @@ export interface User {
   rol: Rol
   activo: boolean
   turno_habitual: Turno | null
+  rol_habitual: 'encargado' | 'apoyo' | null
   cliente_id: string | null
   created_at: string
 }
@@ -101,6 +102,7 @@ export interface LibroTurno {
   relevo_dni: string | null
   hash_novedades: string | null
   cliente_id: string | null
+  esquema_id: string | null
   created_at: string
   novedades?: LibroNovedad[]
 }
@@ -119,8 +121,52 @@ export interface Incidencia {
   tecnico_detector_id: string | null
   tecnico_imputado_id: string | null
   turno_imputado_id: string | null
+  // Flujo de aprobación del encargado (agregado en migración turnos_bicefalo)
+  requiere_aprobacion: boolean
+  estado_aprobacion: 'pendiente_revision' | 'aprobada' | 'rechazada'
+  aprobada_por: string | null
+  aprobada_at: string | null
   created_at: string
   libro_turno?: { tecnico_nombre: string; tecnico_dni: string } | null
+}
+
+export interface EsquemaCobertura {
+  id: string
+  cliente_id: string
+  nombre: string
+  hora_inicio: string  // "HH:MM:SS"
+  hora_fin: string
+  activo: boolean
+  created_at: string
+  asignaciones?: AsignacionPersistente[]
+}
+
+export interface AsignacionPersistente {
+  id: string
+  esquema_id: string
+  usuario_id: string
+  rol_turno: 'encargado' | 'apoyo'
+  created_at: string
+  usuario?: Pick<User, 'id' | 'nombre' | 'apellido' | 'dni'>
+}
+
+// Excepción diaria (reemplaza a la asignación persistente para un día concreto)
+export interface AsignacionTurno {
+  id: string
+  esquema_id: string
+  usuario_id: string
+  rol_turno: 'encargado' | 'apoyo'
+  fecha: string
+  created_by: string
+  created_at: string
+}
+
+export interface ParticipacionTurno {
+  id: string
+  turno_id: string
+  usuario_id: string
+  rol_turno: 'apoyo'
+  joined_at: string
 }
 
 export interface ElementoPuesto {
