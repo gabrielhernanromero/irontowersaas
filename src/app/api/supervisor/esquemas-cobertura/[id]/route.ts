@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
-const HoraRx = /^\d{2}:\d{2}(:\d{2})?$/
+const HoraRx = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/
 
 const UpdateSchema = z.object({
   nombre:      z.string().min(1).max(100).optional(),

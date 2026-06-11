@@ -6,8 +6,8 @@ import { z } from 'zod'
 const CreateElementoSchema = z.object({
   nombre:             z.string().min(1, 'Nombre requerido'),
   codigo_patrimonial: z.string().min(1, 'Código patrimonial requerido'),
-  categoria:          z.string().optional(),
-  descripcion:        z.string().optional(),
+  categoria:          z.string().nullable().optional(),
+  descripcion:        z.string().nullable().optional(),
   cliente_id:         z.string().uuid('Puesto requerido'),
   estado_admin:       z.enum(['activo', 'en_mantenimiento', 'inactivo']).default('activo'),
 })
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ error: 'Ya existe un elemento con ese código patrimonial' }, { status: 409 })
+      return NextResponse.json({ error: 'El código patrimonial ya está en uso en este puesto. Cada elemento debe tener un código único por cliente.' }, { status: 409 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

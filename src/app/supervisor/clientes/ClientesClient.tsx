@@ -56,6 +56,8 @@ export default function ClientesClient({ initialClientes, initialElementos, init
   const [clientes,  setClientes]  = useState(initialClientes)
   const [elementos, setElementos] = useState(initialElementos)
   const [tecnicos,  setTecnicos]  = useState(initialTecnicos)
+  // Esquemas por cliente — se populan cuando CoberturaTab los carga/modifica
+  const [esquemasPorCliente, setEsquemasPorCliente] = useState<Record<string, EsquemaRow[]>>({})
 
   const [expanded,      setExpanded]      = useState<string | null>(null)
   const [activeTab,     setActiveTab]     = useState<Record<string, Tab>>({})
@@ -294,39 +296,12 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                   <div className="p-5">
                     {/* ── Info ── */}
                     {tab === 'info' && (
-                      <div className="space-y-5">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-                          <InfoField label="Dirección"  value={cliente.direccion}          />
-                          <InfoField label="Contacto"   value={cliente.contacto_nombre}    />
-                          <InfoField label="Email"      value={cliente.contacto_email}     />
-                          <InfoField label="Teléfono"   value={cliente.contacto_telefono}  />
-                          <InfoField label="CUIT"       value={cliente.cuit}               />
-                        </div>
-
-                        {/* Configuración de rondas */}
-                        <div className="border-t border-gray-100 pt-4">
-                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                            Configuración de rondas
-                          </p>
-                          {cliente.frecuencia_ronda_minutos ? (
-                            <div className="flex items-center gap-4 flex-wrap">
-                              <div className="flex items-center gap-2 bg-brand-orange/8 border border-brand-orange/20 rounded-xl px-3 py-2">
-                                <QrCode size={14} className="text-brand-orange" />
-                                <span className="text-sm font-semibold text-brand-ink">
-                                  {cliente.frecuencia_ronda_minutos < 60
-                                    ? `Cada ${cliente.frecuencia_ronda_minutos} min`
-                                    : `Cada ${cliente.frecuencia_ronda_minutos / 60}h`}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                <Bell size={13} className="text-gray-400" />
-                                Aviso {cliente.aviso_ronda_minutos} min antes
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-gray-400 italic">Sin programar</p>
-                          )}
-                        </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+                        <InfoField label="Dirección"  value={cliente.direccion}          />
+                        <InfoField label="Contacto"   value={cliente.contacto_nombre}    />
+                        <InfoField label="Email"      value={cliente.contacto_email}     />
+                        <InfoField label="Teléfono"   value={cliente.contacto_telefono}  />
+                        <InfoField label="CUIT"       value={cliente.cuit}               />
                       </div>
                     )}
 
@@ -409,7 +384,11 @@ export default function ClientesClient({ initialClientes, initialElementos, init
 
                     {/* ── Turnos y Personal ── */}
                     {tab === 'cobertura' && (
-                      <CoberturaTab clienteId={cliente.id} allTecnicos={tecnicos} />
+                      <CoberturaTab
+                        clienteId={cliente.id}
+                        allTecnicos={tecnicos}
+                        onEsquemasChange={esqs => setEsquemasPorCliente(prev => ({ ...prev, [cliente.id]: esqs }))}
+                      />
                     )}
                   </div>
                 </div>
@@ -1107,6 +1086,20 @@ function PuntosControlTab({ clienteId, frecuenciaMinutos, avisoMinutos, onRondas
   )
 }
 
+// ── Selector de hora (00:00 – 24:00, intervalos de 30 min) ───────────────────
+function HoraSelect({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const opciones: string[] = []
+  for (let h = 0; h <= 24; h++) {
+    opciones.push(`${String(h).padStart(2, '0')}:00`)
+    if (h < 24) opciones.push(`${String(h).padStart(2, '0')}:30`)
+  }
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} className={className}>
+      {opciones.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  )
+}
+
 // ── CoberturaTab ──────────────────────────────────────────────────────────────
 
 interface EsquemaRow {
@@ -1114,6 +1107,7 @@ interface EsquemaRow {
   nombre: string
   hora_inicio: string
   hora_fin: string
+  fecha_desde: string | null
   activo: boolean
   asignaciones: {
     id: string
@@ -1122,11 +1116,15 @@ interface EsquemaRow {
   }[]
 }
 
-function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnicos: TecnicoRow[] }) {
+function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
+  clienteId: string
+  allTecnicos: TecnicoRow[]
+  onEsquemasChange?: (esqs: EsquemaRow[]) => void
+}) {
   const [esquemas,         setEsquemas]         = useState<EsquemaRow[]>([])
   const [loading,          setLoading]          = useState(true)
   const [error,            setError]            = useState<string | null>(null)
-  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string } | null>(null)
+  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string } | null>(null)
   const [guardandoEsquema, setGuardandoEsquema] = useState(false)
   const [errorEsquema,     setErrorEsquema]     = useState<string | null>(null)
   const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string } | null>(null)
@@ -1134,6 +1132,11 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
   const [asignandoEn,      setAsignandoEn]      = useState<{ esquema_id: string; rol: 'encargado' | 'apoyo' } | null>(null)
   const [selectedTecnico,  setSelectedTecnico]  = useState('')
   const [guardandoAsig,    setGuardandoAsig]    = useState(false)
+
+  function actualizarEsquemas(esqs: EsquemaRow[]) {
+    setEsquemas(esqs)
+    onEsquemasChange?.(esqs)
+  }
 
   useEffect(() => { cargar() }, [clienteId])   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1143,7 +1146,7 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
       const res  = await fetch(`/api/supervisor/esquemas-cobertura?cliente_id=${clienteId}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setEsquemas(data.esquemas ?? [])
+      actualizarEsquemas(data.esquemas ?? [])
     } catch (e) { setError((e as Error).message) }
     finally     { setLoading(false) }
   }
@@ -1154,11 +1157,15 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
     try {
       const res  = await fetch('/api/supervisor/esquemas-cobertura', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cliente_id: clienteId, ...crearForm }),
+        body: JSON.stringify({
+          cliente_id: clienteId,
+          ...crearForm,
+          fecha_desde: crearForm.fecha_desde || new Date().toISOString().slice(0, 10),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setEsquemas(prev => [...prev, data.esquema].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio)))
+      actualizarEsquemas([...esquemas, data.esquema].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio)))
       setCrearForm(null)
     } catch (e) { setErrorEsquema((e as Error).message) }
     finally     { setGuardandoEsquema(false) }
@@ -1175,7 +1182,8 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setEsquemas(prev => prev.map(e => e.id === id ? { ...e, ...data.esquema } : e))
+      const updated = esquemas.map(e => e.id === id ? { ...e, ...data.esquema } : e)
+      actualizarEsquemas(updated)
       setEditandoEsquema(null)
     } catch (e) { setError((e as Error).message) }
     finally     { setGuardandoEdit(false) }
@@ -1184,7 +1192,7 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
   async function eliminarEsquema(id: string, nombre: string) {
     if (!confirm(`¿Eliminar "${nombre}"? Se perderán todas las asignaciones permanentes.`)) return
     const res = await fetch(`/api/supervisor/esquemas-cobertura/${id}`, { method: 'DELETE' })
-    if (res.ok) setEsquemas(prev => prev.filter(e => e.id !== id))
+    if (res.ok) actualizarEsquemas(esquemas.filter(e => e.id !== id))
     else        setError('Error al eliminar el esquema')
   }
 
@@ -1198,7 +1206,7 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setEsquemas(prev => prev.map(e => e.id === esquema_id
+      actualizarEsquemas(esquemas.map(e => e.id === esquema_id
         ? { ...e, asignaciones: [...e.asignaciones, data.asignacion] } : e
       ))
       setAsignandoEn(null); setSelectedTecnico('')
@@ -1209,7 +1217,7 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
   async function quitarAsignacion(esquema_id: string, asignacion_id: string) {
     const res = await fetch(`/api/supervisor/asignaciones-persistentes?id=${asignacion_id}`, { method: 'DELETE' })
     if (res.ok) {
-      setEsquemas(prev => prev.map(e => e.id === esquema_id
+      actualizarEsquemas(esquemas.map(e => e.id === esquema_id
         ? { ...e, asignaciones: e.asignaciones.filter(a => a.id !== asignacion_id) } : e
       ))
     } else { setError('Error al quitar la asignación') }
@@ -1257,12 +1265,12 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
                     placeholder="Nombre del turno"
                   />
                   <div className="flex items-center gap-2 flex-wrap">
-                    <input type="time" value={editandoEsquema.hora_inicio}
-                      onChange={e => setEditandoEsquema(p => p ? { ...p, hora_inicio: e.target.value } : p)}
+                    <HoraSelect value={editandoEsquema.hora_inicio}
+                      onChange={v => setEditandoEsquema(p => p ? { ...p, hora_inicio: v } : p)}
                       className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
                     <span className="text-gray-400">→</span>
-                    <input type="time" value={editandoEsquema.hora_fin}
-                      onChange={e => setEditandoEsquema(p => p ? { ...p, hora_fin: e.target.value } : p)}
+                    <HoraSelect value={editandoEsquema.hora_fin}
+                      onChange={v => setEditandoEsquema(p => p ? { ...p, hora_fin: v } : p)}
                       className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
                     <button onClick={guardarEdicion} disabled={guardandoEdit}
                       className="bg-brand-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60 flex items-center gap-1">
@@ -1281,6 +1289,11 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
                     <span className="ml-2 text-xs text-gray-400 font-mono">
                       {fmtT(esquema.hora_inicio)} → {fmtT(esquema.hora_fin)}
                     </span>
+                    {esquema.fecha_desde && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        · desde {new Date(esquema.fecha_desde + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -1393,17 +1406,23 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
           />
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Inicio</label>
-              <input type="time" value={crearForm.hora_inicio}
-                onChange={e => setCrearForm(p => p ? { ...p, hora_inicio: e.target.value } : p)}
+              <label className="text-xs text-gray-500 mb-1 block">Hora inicio</label>
+              <HoraSelect value={crearForm.hora_inicio}
+                onChange={v => setCrearForm(p => p ? { ...p, hora_inicio: v } : p)}
                 className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
             </div>
             <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Fin</label>
-              <input type="time" value={crearForm.hora_fin}
-                onChange={e => setCrearForm(p => p ? { ...p, hora_fin: e.target.value } : p)}
+              <label className="text-xs text-gray-500 mb-1 block">Hora fin</label>
+              <HoraSelect value={crearForm.hora_fin}
+                onChange={v => setCrearForm(p => p ? { ...p, hora_fin: v } : p)}
                 className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
             </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Fecha de inicio del turno</label>
+            <input type="date" value={crearForm.fecha_desde}
+              onChange={e => setCrearForm(p => p ? { ...p, fecha_desde: e.target.value } : p)}
+              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
           </div>
           {errorEsquema && <p className="text-red-600 text-xs">{errorEsquema}</p>}
           <div className="flex gap-2">
@@ -1419,7 +1438,7 @@ function CoberturaTab({ clienteId, allTecnicos }: { clienteId: string; allTecnic
         </div>
       ) : (
         <button
-          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00' })}
+          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10) })}
           className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-orange/40 hover:text-brand-orange transition-colors">
           <Plus size={16} /> Agregar bloque horario
         </button>

@@ -3,13 +3,15 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
-const HoraRx = /^\d{2}:\d{2}(:\d{2})?$/
+// Acepta HH:MM de 00:00 a 24:00
+const HoraRx = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/
 
 const CreateSchema = z.object({
   cliente_id:  z.string().uuid(),
   nombre:      z.string().min(1, 'Nombre requerido').max(100),
   hora_inicio: z.string().regex(HoraRx, 'Formato HH:MM'),
   hora_fin:    z.string().regex(HoraRx, 'Formato HH:MM'),
+  fecha_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD').optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -23,7 +25,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin()
     .from('esquemas_cobertura')
     .select(`
-      id, nombre, hora_inicio, hora_fin, activo, created_at,
+      id, nombre, hora_inicio, hora_fin, fecha_desde, activo, created_at,
       asignaciones:asignaciones_persistentes (
         id, rol_turno,
         usuario:usuario_id ( id, nombre, apellido, dni )
@@ -45,15 +47,39 @@ export async function POST(req: NextRequest) {
   const parsed = CreateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
 
-  const { hora_inicio, hora_fin } = parsed.data
+  const { cliente_id, nombre, hora_inicio, hora_fin } = parsed.data
+
   if (hora_inicio === hora_fin) {
-    return NextResponse.json({ error: 'hora_inicio y hora_fin no pueden ser iguales' }, { status: 400 })
+    return NextResponse.json({ error: 'La hora de inicio y fin no pueden ser iguales.' }, { status: 400 })
+  }
+
+  // Verificar duplicado: mismo nombre en el mismo cliente
+  const { data: existeNombre } = await supabaseAdmin()
+    .from('esquemas_cobertura')
+    .select('id')
+    .eq('cliente_id', cliente_id)
+    .ilike('nombre', nombre.trim())
+    .maybeSingle()
+  if (existeNombre) {
+    return NextResponse.json({ error: `Ya existe un turno llamado "${nombre}" en este puesto. Usá un nombre diferente para distinguirlos.` }, { status: 409 })
+  }
+
+  // Verificar duplicado: misma franja horaria en el mismo cliente
+  const { data: existeHorario } = await supabaseAdmin()
+    .from('esquemas_cobertura')
+    .select('id, nombre')
+    .eq('cliente_id', cliente_id)
+    .eq('hora_inicio', hora_inicio)
+    .eq('hora_fin', hora_fin)
+    .maybeSingle()
+  if (existeHorario) {
+    return NextResponse.json({ error: `Ya existe el turno "${existeHorario.nombre}" con la misma franja horaria (${hora_inicio.slice(0,5)} – ${hora_fin.slice(0,5)}). Cada turno debe tener un horario distinto.` }, { status: 409 })
   }
 
   const { data, error } = await supabaseAdmin()
     .from('esquemas_cobertura')
     .insert(parsed.data)
-    .select('id, nombre, hora_inicio, hora_fin, activo, created_at')
+    .select('id, nombre, hora_inicio, hora_fin, fecha_desde, activo, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
