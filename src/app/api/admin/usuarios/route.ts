@@ -58,11 +58,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Crear usuario en Supabase Auth
+  // Crear usuario en Supabase Auth — user_metadata.rol es leído por el login para el redirect
   const { data: authData, error: authError } = await supabaseAdmin().auth.admin.createUser({
     email,
     password,
     email_confirm: true,
+    user_metadata: { rol: 'tecnico', nombre, apellido },
   })
 
   if (authError) {
