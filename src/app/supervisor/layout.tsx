@@ -10,7 +10,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar desktop */}
-      <aside className="hidden md:flex flex-col w-56 bg-brand-ink text-white min-h-screen">
+      <aside className="hidden md:flex print:hidden flex-col w-56 bg-brand-ink text-white min-h-screen">
         <div className="p-5 border-b border-white/10">
           <p className="font-condensed font-bold text-lg">Iron Tower</p>
           <p className="text-xs text-white/60 mt-1">
@@ -45,7 +45,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
       {/* Main */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top bar mobile */}
-        <header className="md:hidden bg-brand-ink text-white px-4 py-3 flex items-center justify-between">
+        <header className="md:hidden print:hidden bg-brand-ink text-white px-4 py-3 flex items-center justify-between">
           <p className="font-condensed font-bold">Iron Tower</p>
           <p className="text-sm text-white/70">{user?.nombre}</p>
         </header>
@@ -53,7 +53,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
         <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto">{children}</main>
 
         {/* Bottom nav mobile */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+        <nav className="md:hidden print:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
           <div className="flex">
             <MobileLink href="/supervisor/dashboard" icon={<LayoutDashboard size={20} />} label="Dashboard" />
             <MobileLink href="/supervisor/alertas" icon={<Bell size={20} />} label="Alertas" />

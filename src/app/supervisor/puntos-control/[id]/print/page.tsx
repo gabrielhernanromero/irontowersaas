@@ -44,7 +44,6 @@ export default function PrintQrPage() {
         {/* Instrucción */}
         <div className="mt-2 bg-gray-50 rounded-xl px-6 py-3 text-center print:bg-transparent">
           <p className="text-xs text-gray-400">Escaneá este código durante tu ronda</p>
-          <p className="text-xs text-gray-300 mt-0.5 font-mono break-all">{codigo.slice(0, 16)}...</p>
         </div>
 
         {/* Footer */}
