@@ -4,5 +4,5 @@ import { supabaseServer } from '@/lib/supabase/server'
 export async function POST(req: NextRequest) {
   await supabaseServer().auth.signOut()
   const origin = req.nextUrl.origin
-  return NextResponse.redirect(new URL('/login', origin))
+  return NextResponse.redirect(new URL('/login', origin), { status: 303 })
 }
