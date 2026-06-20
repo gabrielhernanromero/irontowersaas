@@ -1113,27 +1113,52 @@ function diasLabel(dias: number[]): string {
   return sorted.map(d => DIAS_LABEL[d]).join(', ')
 }
 
+const PRESETS_DIAS = [
+  { label: 'Todos',    dias: [0,1,2,3,4,5,6] },
+  { label: 'Lun–Vie',  dias: [1,2,3,4,5] },
+  { label: 'Fin de semana', dias: [0,6] },
+]
+
 function DiasSemanaSelector({ value, onChange }: { value: number[]; onChange: (d: number[]) => void }) {
   function toggle(dia: number) {
     if (value.includes(dia)) {
-      if (value.length === 1) return // al menos un día
+      if (value.length === 1) return
       onChange(value.filter(d => d !== dia))
     } else {
       onChange([...value, dia].sort((a, b) => a - b))
     }
   }
+  function isPreset(dias: number[]) {
+    return dias.length === value.length && dias.every(d => value.includes(d))
+  }
   return (
-    <div className="flex gap-1">
-      {DIAS_LABEL.map((label, dia) => (
-        <button key={dia} type="button" onClick={() => toggle(dia)}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-            value.includes(dia)
-              ? 'bg-brand-orange text-white'
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}>
-          {label}
-        </button>
-      ))}
+    <div className="space-y-2">
+      {/* Presets rápidos */}
+      <div className="flex gap-1.5">
+        {PRESETS_DIAS.map(p => (
+          <button key={p.label} type="button" onClick={() => onChange(p.dias)}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
+              isPreset(p.dias)
+                ? 'bg-brand-orange/10 border-brand-orange text-brand-orange'
+                : 'border-gray-200 text-gray-500 hover:border-gray-300'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      {/* Selector individual */}
+      <div className="flex gap-1">
+        {DIAS_LABEL.map((label, dia) => (
+          <button key={dia} type="button" onClick={() => toggle(dia)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              value.includes(dia)
+                ? 'bg-brand-orange text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}>
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1144,6 +1169,7 @@ interface EsquemaRow {
   hora_inicio: string
   hora_fin: string
   fecha_desde: string | null
+  fecha_hasta: string | null
   activo: boolean
   dias_semana: number[]
   asignaciones: {
@@ -1161,10 +1187,10 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
   const [esquemas,         setEsquemas]         = useState<EsquemaRow[]>([])
   const [loading,          setLoading]          = useState(true)
   const [error,            setError]            = useState<string | null>(null)
-  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string; dias_semana: number[] } | null>(null)
+  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string; fecha_hasta: string; dias_semana: number[] } | null>(null)
   const [guardandoEsquema, setGuardandoEsquema] = useState(false)
   const [errorEsquema,     setErrorEsquema]     = useState<string | null>(null)
-  const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string; dias_semana: number[] } | null>(null)
+  const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string; dias_semana: number[]; fecha_desde: string; fecha_hasta: string } | null>(null)
   const [guardandoEdit,    setGuardandoEdit]    = useState(false)
   const [asignandoEn,      setAsignandoEn]      = useState<{ esquema_id: string; rol: 'encargado' | 'apoyo' } | null>(null)
   const [selectedTecnico,  setSelectedTecnico]  = useState('')
@@ -1198,6 +1224,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
           cliente_id: clienteId,
           ...crearForm,
           fecha_desde: crearForm.fecha_desde || new Date().toISOString().slice(0, 10),
+          fecha_hasta: crearForm.fecha_hasta || null,
         }),
       })
       const data = await res.json()
@@ -1215,7 +1242,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
       const { id, ...fields } = editandoEsquema
       const res  = await fetch(`/api/supervisor/esquemas-cobertura/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fields),
+        body: JSON.stringify({ ...fields, fecha_hasta: fields.fecha_hasta || null }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -1301,20 +1328,48 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                     className="w-full text-sm font-semibold border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
                     placeholder="Nombre del turno"
                   />
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <HoraSelect value={editandoEsquema.hora_inicio}
-                        onChange={v => setEditandoEsquema(p => p ? { ...p, hora_inicio: v } : p)}
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
-                      <span className="text-gray-400">→</span>
-                      <HoraSelect value={editandoEsquema.hora_fin}
-                        onChange={v => setEditandoEsquema(p => p ? { ...p, hora_fin: v } : p)}
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                  <div className="space-y-3">
+                    {/* Horario */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400 mb-1 block">Entrada</label>
+                        <HoraSelect value={editandoEsquema.hora_inicio}
+                          onChange={v => setEditandoEsquema(p => p ? { ...p, hora_inicio: v } : p)}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                      </div>
+                      <span className="text-gray-400 pt-5">→</span>
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400 mb-1 block">Salida</label>
+                        <HoraSelect value={editandoEsquema.hora_fin}
+                          onChange={v => setEditandoEsquema(p => p ? { ...p, hora_fin: v } : p)}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                      </div>
                     </div>
-                    <DiasSemanaSelector
-                      value={editandoEsquema.dias_semana}
-                      onChange={v => setEditandoEsquema(p => p ? { ...p, dias_semana: v } : p)}
-                    />
+                    {/* Días */}
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1.5 block">Días</label>
+                      <DiasSemanaSelector
+                        value={editandoEsquema.dias_semana}
+                        onChange={v => setEditandoEsquema(p => p ? { ...p, dias_semana: v } : p)}
+                      />
+                    </div>
+                    {/* Vigencia */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400 mb-1 block">Desde</label>
+                        <input type="date" value={editandoEsquema.fecha_desde}
+                          onChange={e => setEditandoEsquema(p => p ? { ...p, fecha_desde: e.target.value } : p)}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                      </div>
+                      <span className="text-gray-400 pt-5">→</span>
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400 mb-1 block">Hasta <span className="text-gray-300">(opc.)</span></label>
+                        <input type="date" value={editandoEsquema.fecha_hasta}
+                          onChange={e => setEditandoEsquema(p => p ? { ...p, fecha_hasta: e.target.value } : p)}
+                          min={editandoEsquema.fecha_desde}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <button onClick={guardarEdicion} disabled={guardandoEdit}
                         className="bg-brand-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60 flex items-center gap-1">
@@ -1339,13 +1394,16 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                     </span>
                     {esquema.fecha_desde && (
                       <span className="ml-2 text-xs text-gray-400">
-                        · desde {new Date(esquema.fecha_desde + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        · {new Date(esquema.fecha_desde + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        {esquema.fecha_hasta
+                          ? ` → ${new Date(esquema.fecha_hasta + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                          : ' → permanente'}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setEditandoEsquema({ id: esquema.id, nombre: esquema.nombre, hora_inicio: fmtT(esquema.hora_inicio), hora_fin: fmtT(esquema.hora_fin), dias_semana: esquema.dias_semana ?? [0,1,2,3,4,5,6] })}
+                      onClick={() => setEditandoEsquema({ id: esquema.id, nombre: esquema.nombre, hora_inicio: fmtT(esquema.hora_inicio), hora_fin: fmtT(esquema.hora_fin), dias_semana: esquema.dias_semana ?? [0,1,2,3,4,5,6], fecha_desde: esquema.fecha_desde ?? '', fecha_hasta: esquema.fecha_hasta ?? '' })}
                       className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors">
                       <Edit2 size={13} />
                     </button>
@@ -1444,46 +1502,76 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
 
       {/* Crear nuevo esquema */}
       {crearForm ? (
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-brand-ink">Nuevo bloque horario</p>
-          <input
-            value={crearForm.nombre}
-            onChange={e => setCrearForm(p => p ? { ...p, nombre: e.target.value } : p)}
-            className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
-            placeholder="Ej: Turno Mañana, Guardia 24hs…"
-          />
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Hora inicio</label>
-              <HoraSelect value={crearForm.hora_inicio}
-                onChange={v => setCrearForm(p => p ? { ...p, hora_inicio: v } : p)}
-                className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Hora fin</label>
-              <HoraSelect value={crearForm.hora_fin}
-                onChange={v => setCrearForm(p => p ? { ...p, hora_fin: v } : p)}
-                className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+          <p className="text-sm font-semibold text-brand-ink">Nuevo turno de guardia</p>
+
+          {/* Nombre */}
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block font-medium">Nombre del turno</label>
+            <input
+              value={crearForm.nombre}
+              onChange={e => setCrearForm(p => p ? { ...p, nombre: e.target.value } : p)}
+              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
+              placeholder="Ej: Turno Mañana, Guardia Nocturna, 24 hs…"
+            />
+          </div>
+
+          {/* Horario */}
+          <div>
+            <label className="text-xs text-gray-500 mb-1.5 block font-medium">Horario</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 mb-1 block">Entrada</label>
+                <HoraSelect value={crearForm.hora_inicio}
+                  onChange={v => setCrearForm(p => p ? { ...p, hora_inicio: v } : p)}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+              </div>
+              <span className="text-gray-400 pt-5">→</span>
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 mb-1 block">Salida</label>
+                <HoraSelect value={crearForm.hora_fin}
+                  onChange={v => setCrearForm(p => p ? { ...p, hora_fin: v } : p)}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+              </div>
             </div>
           </div>
+
+          {/* Días */}
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Días de la semana</label>
+            <label className="text-xs text-gray-500 mb-1.5 block font-medium">Días de la semana</label>
             <DiasSemanaSelector
               value={crearForm.dias_semana}
               onChange={v => setCrearForm(p => p ? { ...p, dias_semana: v } : p)}
             />
           </div>
+
+          {/* Vigencia */}
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Fecha de inicio del turno</label>
-            <input type="date" value={crearForm.fecha_desde}
-              onChange={e => setCrearForm(p => p ? { ...p, fecha_desde: e.target.value } : p)}
-              className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+            <label className="text-xs text-gray-500 mb-1.5 block font-medium">Vigencia</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 mb-1 block">Desde</label>
+                <input type="date" value={crearForm.fecha_desde}
+                  onChange={e => setCrearForm(p => p ? { ...p, fecha_desde: e.target.value } : p)}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+              </div>
+              <span className="text-gray-400 pt-5">→</span>
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 mb-1 block">Hasta <span className="font-normal text-gray-400">(opcional)</span></label>
+                <input type="date" value={crearForm.fecha_hasta}
+                  onChange={e => setCrearForm(p => p ? { ...p, fecha_hasta: e.target.value } : p)}
+                  min={crearForm.fecha_desde}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Sin fecha de fin = turno permanente</p>
           </div>
+
           {errorEsquema && <p className="text-red-600 text-xs">{errorEsquema}</p>}
           <div className="flex gap-2">
             <button onClick={crearEsquema} disabled={guardandoEsquema || !crearForm.nombre.trim()}
               className="bg-brand-orange text-white text-xs font-semibold px-4 py-2 rounded-lg disabled:opacity-60">
-              {guardandoEsquema ? 'Creando...' : 'Crear bloque'}
+              {guardandoEsquema ? 'Creando...' : 'Crear turno'}
             </button>
             <button onClick={() => { setCrearForm(null); setErrorEsquema(null) }}
               className="text-xs text-gray-500 px-3 py-2 border border-gray-200 rounded-lg">
@@ -1493,7 +1581,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
         </div>
       ) : (
         <button
-          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10), dias_semana: [0,1,2,3,4,5,6] })}
+          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10), fecha_hasta: '', dias_semana: [0,1,2,3,4,5,6] })}
           className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-orange/40 hover:text-brand-orange transition-colors">
           <Plus size={16} /> Agregar bloque horario
         </button>
