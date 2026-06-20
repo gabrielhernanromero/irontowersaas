@@ -20,8 +20,8 @@ export default function PrintQrPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-8 print:p-0">
-      <div className="flex flex-col items-center gap-4 print:gap-3">
+    <div className="min-h-screen bg-white flex items-center justify-center p-8 print:p-0 print:min-h-0 print:h-screen print:overflow-hidden">
+      <div className="flex flex-col items-center gap-4 print:gap-2">
         {/* Logo + header */}
         <div className="text-center mb-2">
           <p className="font-condensed font-black text-2xl text-brand-ink tracking-tight">IRON TOWER</p>
@@ -45,11 +45,6 @@ export default function PrintQrPage() {
         <div className="mt-2 bg-gray-50 rounded-xl px-6 py-3 text-center print:bg-transparent">
           <p className="text-xs text-gray-400">Escaneá este código durante tu ronda</p>
         </div>
-
-        {/* Footer */}
-        <p className="text-[10px] text-gray-300 mt-4 print:mt-2">
-          Iron Tower OS — Documento de uso interno
-        </p>
 
         {/* Print button (hidden when printing) */}
         <button
