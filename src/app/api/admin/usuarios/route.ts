@@ -75,10 +75,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: authError.message }, { status: 500 })
   }
 
-  // El trigger on_auth_user_created ya insertó una fila parcial → upsert con datos completos
+  // Insertar perfil en public.users
   const { error: profileError } = await supabaseAdmin()
     .from('users')
-    .upsert({
+    .insert({
       id: authData.user.id,
       email,
       nombre,
@@ -87,10 +87,16 @@ export async function POST(req: NextRequest) {
       rol: 'tecnico',
       activo: true,
       cliente_id: cliente_id ?? null,
-    }, { onConflict: 'id' })
+    })
 
   if (profileError) {
     await supabaseAdmin().auth.admin.deleteUser(authData.user.id)
+    if (profileError.code === '23505' && profileError.message.includes('dni')) {
+      return NextResponse.json(
+        { error: 'Ya existe un técnico con ese DNI.', field: 'dni' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
 
