@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
       id, turno_id, tecnico_id, cliente_id, numero_ronda,
       hora_inicio, hora_fin, total_puntos, puntos_escaneados, completa, created_at,
       clientes(id, nombre_empresa),
-      ronda_scans(id, punto_control_id, escaneado_at, foto_url,
+      tecnico:users!tecnico_id(id, nombre, apellido),
+      ronda_scans(id, punto_control_id, escaneado_at, novedad_id, foto_url,
         puntos_control(id, nombre, ubicacion)
       )
     `)

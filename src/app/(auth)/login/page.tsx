@@ -50,9 +50,13 @@ export default function LoginPage() {
   }
 
   const TEST_USERS = [
-    { label: 'Técnico A',   sub: 'Juan',    email: 'tecnico@irontower.com',   password: 'tecnico123', color: 'bg-blue-50 border-blue-200 text-blue-800' },
-    { label: 'Técnico B',   sub: 'Carlos',  email: 'tecnico2@irontower.com',  password: 'tecnico456', color: 'bg-blue-50 border-blue-200 text-blue-800' },
-    { label: 'Supervisor',  sub: 'Gabriel', email: 'supervisor@irontower.com', password: 'super123',  color: 'bg-purple-50 border-purple-200 text-purple-800' },
+    { label: 'Supervisor',  sub: 'Roberto López',    email: 'supervisor@irontower.com',       password: 'super123',   color: 'bg-purple-50 border-purple-200 text-purple-800' },
+    { label: 'Martín',      sub: 'Álvarez',          email: 'martin.alvarez@irontower.com',   password: 'IronTec1!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+    { label: 'Laura',       sub: 'Benítez',          email: 'laura.benitez@irontower.com',    password: 'IronTec2!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+    { label: 'Diego',       sub: 'Castillo',         email: 'diego.castillo@irontower.com',   password: 'IronTec3!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+    { label: 'Sofía',       sub: 'Díaz',             email: 'sofia.diaz@irontower.com',       password: 'IronTec4!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+    { label: 'Pablo',       sub: 'García',           email: 'pablo.garcia@irontower.com',     password: 'IronTec5!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+    { label: 'Natalia',     sub: 'Herrera',          email: 'natalia.herrera@irontower.com',  password: 'IronTec6!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
   ]
 
   return (

@@ -16,8 +16,13 @@ const PuestoSchema = z.object({
   aviso_ronda_minutos:      z.number().int().min(1).max(60).optional(),
 })
 
-const UpdatePuestoSchema = PuestoSchema.extend({ id: z.string().uuid() })
-const ToggleActivoSchema  = z.object({ id: z.string().uuid(), activo: z.boolean() })
+const UpdatePuestoSchema   = PuestoSchema.extend({ id: z.string().uuid() })
+const ToggleActivoSchema   = z.object({ id: z.string().uuid(), activo: z.boolean() })
+const FrecuenciaSchema     = z.object({
+  id:                       z.string().uuid(),
+  frecuencia_ronda_minutos: z.number().int().positive().nullable(),
+  aviso_ronda_minutos:      z.number().int().min(1).max(120).optional(),
+})
 
 export async function GET() {
   try { await requireRole('supervisor', 'admin') } catch {
@@ -74,6 +79,20 @@ export async function PATCH(req: NextRequest) {
       .from('clientes')
       .update({ activo: toggle.data.activo })
       .eq('id', toggle.data.id)
+      .select(SELECT)
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, puesto: data })
+  }
+
+  // Actualización de frecuencia de rondas
+  const frec = FrecuenciaSchema.safeParse(body)
+  if (frec.success) {
+    const { id, ...fields } = frec.data
+    const { data, error } = await supabaseAdmin()
+      .from('clientes')
+      .update(fields)
+      .eq('id', id)
       .select(SELECT)
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -4,12 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
 const CreateUsuarioSchema = z.object({
-  nombre: z.string().min(1, 'Nombre requerido'),
-  apellido: z.string().min(1, 'Apellido requerido'),
-  dni: z.string().min(7, 'DNI inválido').max(9),
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
-  turno_habitual: z.enum(['diurno', 'nocturno']),
+  nombre:     z.string().min(1, 'Nombre requerido'),
+  apellido:   z.string().min(1, 'Apellido requerido'),
+  dni:        z.string().regex(/^\d{7,8}$/, 'El DNI debe tener 7 u 8 dígitos numéricos'),
+  email:      z.string().email('El email no tiene un formato válido (ej: nombre@dominio.com)'),
+  password:   z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   cliente_id: z.string().uuid('Empresa inválida').optional(),
 })
 
@@ -44,7 +43,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const { nombre, apellido, dni, email, password, turno_habitual, cliente_id } = parsed.data
+  const { nombre, apellido, dni, email, password, cliente_id } = parsed.data
+
+  // Verificar DNI duplicado
+  const { data: existeDNI } = await supabaseAdmin()
+    .from('users')
+    .select('id')
+    .eq('dni', dni)
+    .maybeSingle()
+  if (existeDNI) {
+    return NextResponse.json(
+      { error: 'Ya existe un técnico con ese DNI. Revisá el número ingresado.', field: 'dni' },
+      { status: 409 }
+    )
+  }
 
   // Crear usuario en Supabase Auth
   const { data: authData, error: authError } = await supabaseAdmin().auth.admin.createUser({
@@ -55,7 +67,10 @@ export async function POST(req: NextRequest) {
 
   if (authError) {
     if (authError.message.includes('already registered')) {
-      return NextResponse.json({ error: 'Ya existe un usuario con ese email' }, { status: 409 })
+      return NextResponse.json(
+        { error: 'Ya existe un usuario con ese email. Usá otro o recuperá el acceso.', field: 'email' },
+        { status: 409 }
+      )
     }
     return NextResponse.json({ error: authError.message }, { status: 500 })
   }
@@ -71,13 +86,17 @@ export async function POST(req: NextRequest) {
       dni,
       rol: 'tecnico',
       activo: true,
-      turno_habitual,
       cliente_id: cliente_id ?? null,
     })
 
   if (profileError) {
-    // Rollback: borrar el usuario de Auth si falló el perfil
     await supabaseAdmin().auth.admin.deleteUser(authData.user.id)
+    if (profileError.code === '23505') {
+      return NextResponse.json(
+        { error: 'Ya existe un técnico con ese DNI o email.', field: 'dni' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
 

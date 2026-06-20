@@ -4,13 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
 const PatchSchema = z.object({
-  nombre:         z.string().min(1).optional(),
-  apellido:       z.string().min(1).optional(),
-  dni:            z.string().min(7).max(9).optional(),
-  turno_habitual: z.enum(['diurno', 'nocturno']).optional(),
-  rol_habitual:   z.enum(['encargado', 'apoyo']).nullable().optional(),
-  cliente_id:     z.string().uuid().nullable().optional(),
-  activo:         z.boolean().optional(),
+  nombre:     z.string().min(1).optional(),
+  apellido:   z.string().min(1).optional(),
+  dni:        z.string().regex(/^\d{7,8}$/).optional(),
+  cliente_id: z.string().uuid().nullable().optional(),
+  activo:     z.boolean().optional(),
 })
 
 export async function PATCH(

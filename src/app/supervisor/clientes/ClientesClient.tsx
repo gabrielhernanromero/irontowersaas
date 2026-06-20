@@ -1102,6 +1102,42 @@ function HoraSelect({ value, onChange, className }: { value: string; onChange: (
 
 // ── CoberturaTab ──────────────────────────────────────────────────────────────
 
+const DIAS_LABEL = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá']
+
+function diasLabel(dias: number[]): string {
+  const sorted = [...dias].sort()
+  if (sorted.length === 7) return 'Todos los días'
+  if (sorted.join() === '1,2,3,4,5') return 'Lun – Vie'
+  if (sorted.join() === '0,6') return 'Fines de semana'
+  if (sorted.join() === '1,2,3,4,5,6') return 'Lun – Sáb'
+  return sorted.map(d => DIAS_LABEL[d]).join(', ')
+}
+
+function DiasSemanaSelector({ value, onChange }: { value: number[]; onChange: (d: number[]) => void }) {
+  function toggle(dia: number) {
+    if (value.includes(dia)) {
+      if (value.length === 1) return // al menos un día
+      onChange(value.filter(d => d !== dia))
+    } else {
+      onChange([...value, dia].sort((a, b) => a - b))
+    }
+  }
+  return (
+    <div className="flex gap-1">
+      {DIAS_LABEL.map((label, dia) => (
+        <button key={dia} type="button" onClick={() => toggle(dia)}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            value.includes(dia)
+              ? 'bg-brand-orange text-white'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 interface EsquemaRow {
   id: string
   nombre: string
@@ -1109,6 +1145,7 @@ interface EsquemaRow {
   hora_fin: string
   fecha_desde: string | null
   activo: boolean
+  dias_semana: number[]
   asignaciones: {
     id: string
     rol_turno: 'encargado' | 'apoyo'
@@ -1124,10 +1161,10 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
   const [esquemas,         setEsquemas]         = useState<EsquemaRow[]>([])
   const [loading,          setLoading]          = useState(true)
   const [error,            setError]            = useState<string | null>(null)
-  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string } | null>(null)
+  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string; dias_semana: number[] } | null>(null)
   const [guardandoEsquema, setGuardandoEsquema] = useState(false)
   const [errorEsquema,     setErrorEsquema]     = useState<string | null>(null)
-  const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string } | null>(null)
+  const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string; dias_semana: number[] } | null>(null)
   const [guardandoEdit,    setGuardandoEdit]    = useState(false)
   const [asignandoEn,      setAsignandoEn]      = useState<{ esquema_id: string; rol: 'encargado' | 'apoyo' } | null>(null)
   const [selectedTecnico,  setSelectedTecnico]  = useState('')
@@ -1264,22 +1301,30 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                     className="w-full text-sm font-semibold border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
                     placeholder="Nombre del turno"
                   />
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <HoraSelect value={editandoEsquema.hora_inicio}
-                      onChange={v => setEditandoEsquema(p => p ? { ...p, hora_inicio: v } : p)}
-                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
-                    <span className="text-gray-400">→</span>
-                    <HoraSelect value={editandoEsquema.hora_fin}
-                      onChange={v => setEditandoEsquema(p => p ? { ...p, hora_fin: v } : p)}
-                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
-                    <button onClick={guardarEdicion} disabled={guardandoEdit}
-                      className="bg-brand-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60 flex items-center gap-1">
-                      {guardandoEdit ? <Loader2 size={12} className="animate-spin" /> : 'Guardar'}
-                    </button>
-                    <button onClick={() => setEditandoEsquema(null)}
-                      className="text-xs text-gray-500 px-2 py-1.5 border border-gray-200 rounded-lg">
-                      Cancelar
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <HoraSelect value={editandoEsquema.hora_inicio}
+                        onChange={v => setEditandoEsquema(p => p ? { ...p, hora_inicio: v } : p)}
+                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                      <span className="text-gray-400">→</span>
+                      <HoraSelect value={editandoEsquema.hora_fin}
+                        onChange={v => setEditandoEsquema(p => p ? { ...p, hora_fin: v } : p)}
+                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
+                    </div>
+                    <DiasSemanaSelector
+                      value={editandoEsquema.dias_semana}
+                      onChange={v => setEditandoEsquema(p => p ? { ...p, dias_semana: v } : p)}
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={guardarEdicion} disabled={guardandoEdit}
+                        className="bg-brand-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60 flex items-center gap-1">
+                        {guardandoEdit ? <Loader2 size={12} className="animate-spin" /> : 'Guardar'}
+                      </button>
+                      <button onClick={() => setEditandoEsquema(null)}
+                        className="text-xs text-gray-500 px-2 py-1.5 border border-gray-200 rounded-lg">
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1289,6 +1334,9 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                     <span className="ml-2 text-xs text-gray-400 font-mono">
                       {fmtT(esquema.hora_inicio)} → {fmtT(esquema.hora_fin)}
                     </span>
+                    <span className="ml-2 text-xs text-brand-orange font-medium">
+                      {diasLabel(esquema.dias_semana ?? [0,1,2,3,4,5,6])}
+                    </span>
                     {esquema.fecha_desde && (
                       <span className="ml-2 text-xs text-gray-400">
                         · desde {new Date(esquema.fecha_desde + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -1297,7 +1345,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setEditandoEsquema({ id: esquema.id, nombre: esquema.nombre, hora_inicio: fmtT(esquema.hora_inicio), hora_fin: fmtT(esquema.hora_fin) })}
+                      onClick={() => setEditandoEsquema({ id: esquema.id, nombre: esquema.nombre, hora_inicio: fmtT(esquema.hora_inicio), hora_fin: fmtT(esquema.hora_fin), dias_semana: esquema.dias_semana ?? [0,1,2,3,4,5,6] })}
                       className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors">
                       <Edit2 size={13} />
                     </button>
@@ -1419,6 +1467,13 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
             </div>
           </div>
           <div>
+            <label className="text-xs text-gray-500 mb-1 block">Días de la semana</label>
+            <DiasSemanaSelector
+              value={crearForm.dias_semana}
+              onChange={v => setCrearForm(p => p ? { ...p, dias_semana: v } : p)}
+            />
+          </div>
+          <div>
             <label className="text-xs text-gray-500 mb-1 block">Fecha de inicio del turno</label>
             <input type="date" value={crearForm.fecha_desde}
               onChange={e => setCrearForm(p => p ? { ...p, fecha_desde: e.target.value } : p)}
@@ -1438,7 +1493,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
         </div>
       ) : (
         <button
-          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10) })}
+          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10), dias_semana: [0,1,2,3,4,5,6] })}
           className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-orange/40 hover:text-brand-orange transition-colors">
           <Plus size={16} /> Agregar bloque horario
         </button>

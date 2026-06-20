@@ -10,6 +10,7 @@ const UpdateSchema = z.object({
   hora_inicio: z.string().regex(HoraRx).optional(),
   hora_fin:    z.string().regex(HoraRx).optional(),
   activo:      z.boolean().optional(),
+  dias_semana: z.array(z.number().int().min(0).max(6)).min(1).optional(),
 })
 
 export async function PATCH(

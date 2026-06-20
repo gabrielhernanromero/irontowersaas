@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  UserPlus, X, Eye, EyeOff, CheckCircle2, Sun, Moon,
-  Copy, Check, Building2, Edit2, ToggleLeft, ToggleRight,
-  ShieldCheck, Users, Loader2,
+  UserPlus, X, Eye, EyeOff, CheckCircle2,
+  Copy, Check, Building2, Edit2, ToggleLeft, ToggleRight, Loader2, Search,
 } from 'lucide-react'
 import type { Cliente, UserConEmpresa } from '@/types/database'
 
@@ -37,13 +36,10 @@ function validateEditar(d: EditForm) {
 
 interface CreateForm {
   nombre: string; apellido: string; dni: string; email: string
-  password: string; turno_habitual: 'diurno' | 'nocturno'
-  rol_habitual: '' | 'encargado' | 'apoyo'; cliente_id: string
+  password: string; cliente_id: string
 }
 interface EditForm {
-  nombre: string; apellido: string; dni: string
-  turno_habitual: 'diurno' | 'nocturno'
-  rol_habitual: '' | 'encargado' | 'apoyo'; cliente_id: string
+  nombre: string; apellido: string; dni: string; cliente_id: string
 }
 
 interface Props {
@@ -68,18 +64,18 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
   const [creado,      setCreado]      = useState<{ nombre: string; email: string; password: string } | null>(null)
   const [copied,      setCopied]      = useState(false)
   const [toggling,    setToggling]    = useState<string | null>(null)
+  const [busqueda,    setBusqueda]    = useState('')
+  const [filtroCliente, setFiltroCliente] = useState('')
 
   // Create form state
   const [createForm, setCreateForm] = useState<CreateForm>({
-    nombre: '', apellido: '', dni: '', email: '', password: '',
-    turno_habitual: 'diurno', rol_habitual: '', cliente_id: '',
+    nombre: '', apellido: '', dni: '', email: '', password: '', cliente_id: '',
   })
   const [createErrors, setCreateErrors] = useState<Partial<Record<keyof CreateForm, string>>>({})
 
   // Edit form state
   const [editForm, setEditForm] = useState<EditForm>({
-    nombre: '', apellido: '', dni: '', turno_habitual: 'diurno',
-    rol_habitual: '', cliente_id: '',
+    nombre: '', apellido: '', dni: '', cliente_id: '',
   })
   const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditForm, string>>>({})
 
@@ -96,38 +92,31 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nombre:         createForm.nombre,
-          apellido:       createForm.apellido,
-          dni:            createForm.dni.replace(/\D/g, ''),
-          email:          createForm.email,
-          password:       createForm.password,
-          turno_habitual: createForm.turno_habitual,
-          cliente_id:     createForm.cliente_id || undefined,
+          nombre:     createForm.nombre,
+          apellido:   createForm.apellido,
+          dni:        createForm.dni.replace(/\D/g, ''),
+          email:      createForm.email,
+          password:   createForm.password,
+          cliente_id: createForm.cliente_id || undefined,
         }),
       })
       const json = await res.json()
-      if (!res.ok) { setApiError(json.error ?? 'Error al crear el técnico'); return }
-
-      // Update rol_habitual if set
-      if (createForm.rol_habitual) {
-        await fetch(`/api/admin/usuarios/${json.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rol_habitual: createForm.rol_habitual }),
-        })
+      if (!res.ok) {
+        if (json.field) setCreateErrors(p => ({ ...p, [json.field]: json.error }))
+        else setApiError(json.error ?? 'Error al crear el técnico')
+        return
       }
 
       const empresa = empresas.find(e => e.id === createForm.cliente_id) ?? null
       setCreado({ nombre: `${createForm.nombre} ${createForm.apellido}`, email: createForm.email, password: createForm.password })
       setShowCreate(false)
-      setCreateForm({ nombre: '', apellido: '', dni: '', email: '', password: '', turno_habitual: 'diurno', rol_habitual: '', cliente_id: '' })
+      setCreateForm({ nombre: '', apellido: '', dni: '', email: '', password: '', cliente_id: '' })
       setCreateErrors({})
       router.refresh()
       setTecnicos(prev => [...prev, {
         id: json.id, nombre: createForm.nombre, apellido: createForm.apellido,
         dni: createForm.dni, email: createForm.email, rol: 'tecnico' as const,
-        activo: true, turno_habitual: createForm.turno_habitual,
-        rol_habitual: createForm.rol_habitual || null,
+        activo: true, turno_habitual: null, rol_habitual: null,
         cliente_id: createForm.cliente_id || null, created_at: new Date().toISOString(),
         clientes: empresa ? { id: empresa.id, nombre_empresa: empresa.nombre_empresa } : null,
       }].sort((a, b) => a.apellido.localeCompare(b.apellido)))
@@ -140,8 +129,6 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
     setEditing(t)
     setEditForm({
       nombre: t.nombre, apellido: t.apellido, dni: t.dni ?? '',
-      turno_habitual: t.turno_habitual ?? 'diurno',
-      rol_habitual: (t.rol_habitual ?? '') as '' | 'encargado' | 'apoyo',
       cliente_id: t.cliente_id ?? '',
     })
     setEditErrors({})
@@ -161,16 +148,18 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nombre:         editForm.nombre,
-          apellido:       editForm.apellido,
-          dni:            editForm.dni.replace(/\D/g, ''),
-          turno_habitual: editForm.turno_habitual,
-          rol_habitual:   editForm.rol_habitual || null,
-          cliente_id:     editForm.cliente_id || null,
+          nombre:     editForm.nombre,
+          apellido:   editForm.apellido,
+          dni:        editForm.dni.replace(/\D/g, ''),
+          cliente_id: editForm.cliente_id || null,
         }),
       })
       const json = await res.json()
-      if (!res.ok) { setApiError(json.error ?? 'Error al guardar'); return }
+      if (!res.ok) {
+        if (json.field) setEditErrors(p => ({ ...p, [json.field]: json.error }))
+        else setApiError(json.error ?? 'Error al guardar')
+        return
+      }
 
       const empresa = empresas.find(e => e.id === editForm.cliente_id) ?? null
       setTecnicos(prev => prev.map(t => t.id === editing.id
@@ -202,8 +191,18 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const activos   = tecnicos.filter(t => t.activo)
-  const inactivos = tecnicos.filter(t => !t.activo)
+  const filtrados = tecnicos.filter(t => {
+    const q = busqueda.toLowerCase().trim()
+    const coincide = !q ||
+      t.nombre.toLowerCase().includes(q) ||
+      t.apellido.toLowerCase().includes(q) ||
+      (t.dni ?? '').includes(q) ||
+      t.email.toLowerCase().includes(q)
+    const porCliente = !filtroCliente || t.cliente_id === filtroCliente
+    return coincide && porCliente
+  })
+  const activos   = filtrados.filter(t => t.activo)
+  const inactivos = filtrados.filter(t => !t.activo)
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -287,13 +286,38 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
         />
       )}
 
+      {/* ── Buscador y filtro ── */}
+      {!showCreate && !editing && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre, apellido, DNI o email…"
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
+            />
+          </div>
+          <select
+            value={filtroCliente}
+            onChange={e => setFiltroCliente(e.target.value)}
+            className="sm:w-52 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30 bg-white"
+          >
+            <option value="">Todos los objetivos</option>
+            {empresas.map(e => (
+              <option key={e.id} value={e.id}>{e.nombre_empresa}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* ── Tabla activos ── */}
       <TecnicosTable
         tecnicos={activos}
         toggling={toggling}
         onEdit={openEdit}
         onToggle={toggleActivo}
-        emptyMessage="No hay técnicos activos todavía."
+        emptyMessage={busqueda || filtroCliente ? 'Sin resultados para esa búsqueda.' : 'No hay técnicos activos todavía.'}
       />
 
       {/* ── Tabla inactivos ── */}
@@ -393,44 +417,6 @@ function TecnicoForm({
             </div>
           )}
 
-          {/* Turno habitual */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Turno habitual</label>
-            <div className="flex gap-2">
-              {(['diurno', 'nocturno'] as const).map(t => (
-                <button key={t} type="button"
-                  onClick={() => onChange('turno_habitual', t)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                    form.turno_habitual === t
-                      ? 'bg-brand-orange text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}>
-                  {t === 'diurno' ? <><Sun size={13} /> Diurno</> : <><Moon size={13} /> Nocturno</>}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Rol habitual */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Rol habitual</label>
-            <div className="flex gap-2">
-              {[
-                { val: 'encargado', label: 'Encargado', icon: <ShieldCheck size={13} /> },
-                { val: 'apoyo',     label: 'Apoyo',     icon: <Users size={13} /> },
-              ].map(({ val, label, icon }) => (
-                <button key={val} type="button"
-                  onClick={() => onChange('rol_habitual', form.rol_habitual === val ? '' : val)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                    form.rol_habitual === val
-                      ? val === 'encargado' ? 'bg-brand-orange text-white' : 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}>
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Empresa */}
@@ -519,7 +505,6 @@ function TecnicosTable({
             <th className="text-left px-4 py-3 font-semibold text-gray-600">Técnico</th>
             <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Objetivo</th>
             <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">DNI</th>
-            <th className="text-left px-4 py-3 font-semibold text-gray-600">Turno / Rol</th>
             <th className="text-left px-4 py-3 font-semibold text-gray-600">Estado</th>
             <th className="px-4 py-3" />
           </tr>
@@ -542,28 +527,6 @@ function TecnicosTable({
                 )}
               </td>
               <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{t.dni ?? '—'}</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  {t.turno_habitual && (
-                    <span className="flex items-center gap-1 text-xs font-medium">
-                      {t.turno_habitual === 'diurno'
-                        ? <><Sun size={11} className="text-amber-500" /> Diurno</>
-                        : <><Moon size={11} className="text-indigo-500" /> Nocturno</>}
-                    </span>
-                  )}
-                  {t.rol_habitual && (
-                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded-full w-fit ${
-                      t.rol_habitual === 'encargado'
-                        ? 'bg-brand-orange/10 text-brand-orange'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {t.rol_habitual === 'encargado'
-                        ? <><ShieldCheck size={9} /> Encargado</>
-                        : <><Users size={9} /> Apoyo</>}
-                    </span>
-                  )}
-                </div>
-              </td>
               <td className="px-4 py-3">
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                   t.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
