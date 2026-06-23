@@ -4,8 +4,9 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   CheckCircle, XCircle, Clock, ChevronDown, ChevronUp,
   Building2, QrCode, RefreshCw, User, AlertTriangle,
-  MapPin, Bell, Route, Camera, AlertCircle,
+  MapPin, Bell, Route, Camera, AlertCircle, Download,
 } from 'lucide-react'
+import { downloadCsv } from '@/lib/exportCsv'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,24 @@ export default function RondasSupervisorClient({ initialRondas, clientes, tecnic
 
   const filtradas = tab === 'hoy' ? rondasHoy : rondasHist
 
+  // ── Export CSV ───────────────────────────────────────────────────────────────
+  function exportarCsv() {
+    const rows = rondasHist.map(r => ({
+      Fecha:         r.hora_inicio.slice(0, 10),
+      'Hora inicio': formatHora(r.hora_inicio),
+      'Hora fin':    r.hora_fin ? formatHora(r.hora_fin) : '',
+      Duración:      duracion(r.hora_inicio, r.hora_fin),
+      Cliente:       r.clientes?.nombre_empresa ?? '',
+      Técnico:       r.tecnico ? `${r.tecnico.apellido}, ${r.tecnico.nombre}` : '',
+      'Ronda Nº':    r.numero_ronda,
+      Estado:        estadoRonda(r) === 'completa' ? 'Completa' : estadoRonda(r) === 'en_curso' ? 'En curso' : 'Incompleta',
+      'Puntos escaneados': r.puntos_escaneados,
+      'Total puntos':      r.total_puntos,
+      '% Cumplimiento':    pct(r.puntos_escaneados, r.total_puntos),
+    }))
+    downloadCsv(rows, 'rondas')
+  }
+
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const total       = filtradas.length
@@ -388,6 +407,15 @@ export default function RondasSupervisorClient({ initialRondas, clientes, tecnic
             <option value="incompleta">Incompletas</option>
             <option value="en_curso">En curso</option>
           </select>
+
+          <button
+            onClick={exportarCsv}
+            disabled={rondasHist.length === 0}
+            className="flex items-center gap-2 text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white shadow-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ml-auto"
+          >
+            <Download size={13} />
+            Exportar CSV
+          </button>
         </div>
       )}
 

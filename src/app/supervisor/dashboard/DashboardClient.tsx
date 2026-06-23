@@ -4,8 +4,10 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Shield, AlertTriangle, MessageSquare, Bell,
   ChevronRight, Clock, MapPin, AlertCircle, Siren, X,
+  ClipboardCheck, Users, CheckCircle2, TrendingUp, Download,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import { downloadCsv } from '@/lib/exportCsv'
 import ClienteSelector from './components/ClienteSelector'
 import TurnoSheet      from './components/TurnoSheet'
 import IncidenciaSheet from './components/IncidenciaSheet'
@@ -63,6 +65,10 @@ interface ResumenDia {
   turnosCerrados: number
   novedadesHoy: number
   incidenciasNuevasHoy: number
+  rondasHoy: number
+  rondasCompletas: number
+  cumplimientoPromedio: number | null
+  tecnicosActivos: number
 }
 
 interface Props {
@@ -366,6 +372,21 @@ export default function DashboardClient({
     setIncidencias(prev => prev.filter(i => i.id !== id))
   }
 
+  function exportarIncidencias() {
+    const rows = incidenciasFiltradas.map(inc => ({
+      Fecha:      inc.created_at.slice(0, 10),
+      Hora:       new Date(inc.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      Cliente:    inc.clientes?.nombre_empresa ?? '',
+      Título:     inc.titulo,
+      Descripción:inc.descripcion,
+      Severidad:  inc.severidad ?? '',
+      Estado:     inc.estado,
+      Elemento:   inc.elemento?.nombre ?? '',
+      'Cód. Patrimonial': inc.elemento?.codigo_patrimonial ?? '',
+    }))
+    downloadCsv(rows, 'incidencias')
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -437,7 +458,7 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* ── KPI row ── */}
+      {/* ── KPI row — operativo en tiempo real ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           value={kpis.turnos}
@@ -448,6 +469,14 @@ export default function DashboardClient({
           live
         />
         <KpiCard
+          value={resumen.tecnicosActivos}
+          label="Técnicos en guardia"
+          icon={Users}
+          accentClass="text-blue-600"
+          iconBg="bg-blue-50"
+          live
+        />
+        <KpiCard
           value={kpis.incidencias}
           label="Incidencias abiertas"
           icon={AlertTriangle}
@@ -455,18 +484,41 @@ export default function DashboardClient({
           iconBg="bg-red-50"
         />
         <KpiCard
-          value={kpis.novedades}
+          value={kpis.alertas}
+          label="Alertas sin leer"
+          icon={Bell}
+          accentClass="text-amber-500"
+          iconBg="bg-amber-50"
+        />
+      </div>
+
+      {/* ── KPI row — resumen del día ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          value={resumen.novedadesHoy}
           label="Novedades hoy"
           icon={MessageSquare}
           accentClass="text-brand-orange"
           iconBg="bg-brand-orange/10"
         />
         <KpiCard
-          value={kpis.alertas}
-          label="Alertas sin leer"
-          icon={Bell}
-          accentClass="text-amber-500"
-          iconBg="bg-amber-50"
+          value={resumen.turnosCerrados}
+          label="Guardias cerradas hoy"
+          icon={CheckCircle2}
+          accentClass="text-gray-500"
+          iconBg="bg-gray-100"
+        />
+        <KpiCard
+          value={resumen.rondasHoy}
+          label={`Rondas hoy (${resumen.rondasCompletas} completas)`}
+          icon={ClipboardCheck}
+          accentClass="text-purple-600"
+          iconBg="bg-purple-50"
+        />
+        <KpiCardPct
+          value={resumen.cumplimientoPromedio}
+          label="Cumplimiento rondas"
+          icon={TrendingUp}
         />
       </div>
 
@@ -562,7 +614,19 @@ export default function DashboardClient({
 
         {/* ── Incidencias (1/3) ── */}
         <div className="space-y-3">
-          <SectionLabel>Incidencias abiertas</SectionLabel>
+          <div className="flex items-center justify-between">
+            <SectionLabel>Incidencias abiertas</SectionLabel>
+            {incidenciasFiltradas.length > 0 && (
+              <button
+                onClick={exportarIncidencias}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                title="Exportar CSV"
+              >
+                <Download size={12} />
+                CSV
+              </button>
+            )}
+          </div>
 
           {incidenciasFiltradas.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
@@ -570,7 +634,7 @@ export default function DashboardClient({
               <p className="text-sm text-gray-400">Sin incidencias abiertas</p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden divide-y divide-gray-50 dark:divide-gray-700">
               {incidenciasFiltradas.map(inc => {
                 const s = SEV[inc.severidad ?? 'bajo']
                 return (
@@ -609,7 +673,7 @@ export default function DashboardClient({
           <LiveBadge />
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
           {novedadesFiltradas.length === 0 ? (
             <div className="p-8 text-center">
               <MessageSquare size={24} className="mx-auto mb-2 text-gray-200" />
@@ -737,7 +801,7 @@ function KpiCard({
   live?: boolean
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
         <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon size={17} className={accentClass} />
@@ -750,7 +814,30 @@ function KpiCard({
         )}
       </div>
       <p className={`text-4xl font-black ${accentClass}`}>{value}</p>
-      <p className="text-sm text-gray-500 mt-1 leading-tight">{label}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-tight">{label}</p>
+    </div>
+  )
+}
+
+function KpiCardPct({
+  value, label, icon: Icon,
+}: {
+  value: number | null
+  label: string
+  icon: React.ElementType
+}) {
+  const color = value === null ? 'text-gray-400' : value >= 90 ? 'text-emerald-600' : value >= 70 ? 'text-amber-500' : 'text-red-500'
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-9 h-9 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center">
+          <Icon size={17} className={color} />
+        </div>
+      </div>
+      <p className={`text-4xl font-black ${color}`}>
+        {value === null ? '—' : `${value}%`}
+      </p>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-tight">{label}</p>
     </div>
   )
 }
@@ -764,11 +851,11 @@ function ResumenCard({
   color: string
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 flex items-center gap-4">
       <Icon size={20} className={`${color} shrink-0`} />
       <div>
         <p className={`text-2xl font-black ${color}`}>{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
       </div>
     </div>
   )
@@ -777,7 +864,7 @@ function ResumenCard({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{children}</p>
+      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{children}</p>
     </div>
   )
 }

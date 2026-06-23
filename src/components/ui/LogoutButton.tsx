@@ -1,12 +1,9 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 
-export function LogoutButton() {
-  const router = useRouter()
-
+export default function LogoutButton() {
   async function handleLogout() {
     sessionStorage.setItem('logout_intencional', '1')
     await supabase().auth.signOut()
@@ -16,10 +13,10 @@ export function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="flex-1 flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] text-brand-ink hover:text-red-500 transition-colors"
+      className="flex items-center gap-2 text-white/60 hover:text-white text-sm w-full p-2 rounded transition-colors"
     >
-      <LogOut size={22} />
-      <span className="text-xs">Salir</span>
+      <LogOut size={16} />
+      Cerrar sesión
     </button>
   )
 }

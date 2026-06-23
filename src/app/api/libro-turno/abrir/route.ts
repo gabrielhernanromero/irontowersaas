@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { AbrirTurnoSchema } from '@/lib/validations/libroTurno'
+import { findEsquemaActivo } from '@/lib/esquemas/validarVentana'
 
 async function uploadFirma(dataUrl: string, userId: string, prefix: string): Promise<string> {
   const base64 = dataUrl.split(',')[1]
@@ -41,6 +42,31 @@ export async function POST(req: NextRequest) {
 
   if (turnoAbierto) {
     return NextResponse.json({ error: 'Ya tenés un turno abierto. Cerralo antes de iniciar uno nuevo.' }, { status: 409 })
+  }
+
+  // Validar ventana horaria contra los esquemas configurados para el cliente
+  const { data: perfil } = await supabaseAdmin()
+    .from('users')
+    .select('cliente_id')
+    .eq('id', user.id)
+    .single()
+
+  if (perfil?.cliente_id) {
+    const { data: esquemas } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('nombre, hora_inicio, hora_fin, dias_semana, fecha_desde, fecha_hasta')
+      .eq('cliente_id', perfil.cliente_id)
+      .eq('activo', true)
+
+    if (esquemas && esquemas.length > 0) {
+      const match = findEsquemaActivo(esquemas)
+      if (!match) {
+        return NextResponse.json(
+          { error: 'No estás dentro del horario programado. Podés iniciar hasta 30 minutos antes del comienzo de tu turno.' },
+          { status: 403 }
+        )
+      }
+    }
   }
 
   // Firmar relevo del turno saliente si corresponde

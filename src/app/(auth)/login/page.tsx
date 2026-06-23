@@ -25,28 +25,9 @@ export default function LoginPage() {
       return
     }
 
-    // Leer el usuario ya autenticado para obtener su rol
-    const { data: { user } } = await supabase().auth.getUser()
-    const rol = user?.user_metadata?.rol as string | undefined
-
-    if (!rol) {
-      setError('No se pudo determinar el rol del usuario. Contactá al administrador.')
-      setLoading(false)
-      return
-    }
-
-    const redirectTo =
-      rol === 'tecnico' ? '/tecnico/home'
-      : rol === 'supervisor' || rol === 'admin' ? '/supervisor/dashboard'
-      : null
-
-    if (!redirectTo) {
-      setError(`Rol "${rol}" no reconocido.`)
-      setLoading(false)
-      return
-    }
-
-    window.location.href = redirectTo
+    const res = await fetch('/api/auth/role-redirect')
+    const { redirectTo } = await res.json()
+    window.location.href = redirectTo ?? '/login'
   }
 
   const TEST_USERS = [
@@ -58,6 +39,19 @@ export default function LoginPage() {
     { label: 'Pablo',       sub: 'García',           email: 'pablo.garcia@irontower.com',     password: 'IronTec5!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
     { label: 'Natalia',     sub: 'Herrera',          email: 'natalia.herrera@irontower.com',  password: 'IronTec6!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
   ]
+
+  async function loginDirecto(email: string, password: string) {
+    setError(null)
+    setLoading(true)
+    // Cerrar sesión previa si existe
+    await supabase().auth.signOut()
+    const { error: authError } = await supabase().auth.signInWithPassword({ email, password })
+    if (authError) { setError('Email o contraseña incorrectos'); setLoading(false); return }
+    // Pedir al servidor el redirect según el rol (evita problemas de RLS en client)
+    const res = await fetch('/api/auth/role-redirect')
+    const { redirectTo } = await res.json()
+    window.location.href = redirectTo ?? '/login'
+  }
 
   return (
     <div className="w-full max-w-sm">
@@ -77,8 +71,9 @@ export default function LoginPage() {
               <button
                 key={u.email}
                 type="button"
-                onClick={() => { setEmail(u.email); setPassword(u.password) }}
-                className={`flex items-center justify-between border rounded-lg px-3 py-2 text-left transition-opacity active:opacity-70 min-h-[44px] ${u.color}`}
+                disabled={loading}
+                onClick={() => loginDirecto(u.email, u.password)}
+                className={`flex items-center justify-between border rounded-lg px-3 py-2 text-left transition-opacity active:opacity-70 min-h-[44px] disabled:opacity-50 ${u.color}`}
               >
                 <div>
                   <p className="text-xs font-bold">{u.label} — {u.sub}</p>
