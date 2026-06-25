@@ -11,6 +11,8 @@ export default function GuardiaAlertsReader({ turnoId }: { turnoId: string }) {
       body: JSON.stringify({ turno_id: turnoId }),
     }).then(() => {
       window.dispatchEvent(new Event('guardia-alertas-read'))
+    }).catch(() => {
+      // operación de fondo — ignorar errores de red
     })
   }, [turnoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
