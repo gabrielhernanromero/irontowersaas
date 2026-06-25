@@ -50,9 +50,31 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!turno) return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 })
-  if (turno.tecnico_id !== user.id) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   if (!['abierto', 'pendiente_relevo'].includes(turno.estado)) {
     return NextResponse.json({ error: 'El turno no está activo' }, { status: 409 })
+  }
+
+  // El usuario debe ser el tecnico_id del turno (encargado/interino) o un participante (apoyo)
+  if (turno.tecnico_id !== user.id) {
+    const { data: participacion } = await supabaseAdmin()
+      .from('participaciones_turno')
+      .select('id')
+      .eq('turno_id', turno_id)
+      .eq('usuario_id', user.id)
+      .maybeSingle()
+    if (!participacion) return NextResponse.json({ error: 'Sin permisos para este turno' }, { status: 403 })
+  }
+
+  // Prevenir dos rondas simultáneas en el mismo turno
+  const { data: rondaEnCurso } = await supabaseAdmin()
+    .from('rondas')
+    .select('id')
+    .eq('turno_id', turno_id)
+    .is('hora_fin', null)
+    .eq('completa', false)
+    .maybeSingle()
+  if (rondaEnCurso) {
+    return NextResponse.json({ error: 'Ya hay una ronda en curso para este turno. Esperá a que termine.' }, { status: 409 })
   }
 
   // Contar número de ronda del turno

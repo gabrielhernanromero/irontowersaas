@@ -57,6 +57,7 @@ export const CerrarTurnoSchema = z.object({
   turno_id: z.string().uuid(),
   horario_fin: z.string().regex(hora, 'Formato HH:MM'),
   firma_cierre_dataurl: z.string().min(1, 'Tu firma es obligatoria para cerrar el turno'),
+  motivo_cierre_anticipado: z.string().optional(),
 })
 
 export const RelevoPSchema = z.object({

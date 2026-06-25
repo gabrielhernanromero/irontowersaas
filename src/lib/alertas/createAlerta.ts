@@ -4,9 +4,16 @@ import type { TipoAlerta } from '@/types/database'
 export async function alertarSupervisores(
   tipo: TipoAlerta,
   mensaje: string,
-  planillaId?: string
+  planillaIdOrOptions?: string | { planillaId?: string; turnoId?: string }
 ): Promise<void> {
   const admin = supabaseAdmin()
+
+  const planillaId = typeof planillaIdOrOptions === 'string'
+    ? planillaIdOrOptions
+    : planillaIdOrOptions?.planillaId
+  const turnoId = typeof planillaIdOrOptions === 'object'
+    ? planillaIdOrOptions?.turnoId
+    : undefined
 
   const { data: supervisores, error: fetchErr } = await admin
     .from('users')
@@ -23,6 +30,7 @@ export async function alertarSupervisores(
     leida: false,
     destinatario_id: s.id,
     planilla_id: planillaId ?? null,
+    turno_id: turnoId ?? null,
   }))
 
   const { error: insertErr } = await admin.from('alertas').insert(alertas)

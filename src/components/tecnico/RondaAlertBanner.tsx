@@ -31,6 +31,23 @@ export default function RondaAlertBanner({ tecnicoId }: Props) {
   useEffect(() => {
     const client = supabase()
 
+    // Cargar alertas no leídas existentes al montar (para cuando el cron disparó antes de que el técnico abriera la app)
+    client
+      .from('alertas')
+      .select('id, tipo, mensaje')
+      .eq('destinatario_id', tecnicoId)
+      .eq('leida', false)
+      .in('tipo', ['ronda_proxima', 'ronda_vencida', 'ausencia_encargado'])
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        for (const a of (data ?? [])) {
+          const alerta = { id: a.id, tipo: a.tipo as TipoBanner, mensaje: a.mensaje }
+          if (a.tipo === 'ronda_proxima')      setAlertaProxima(prev => prev ?? alerta)
+          else if (a.tipo === 'ronda_vencida') setAlertaVencida(prev => prev ?? alerta)
+          else if (a.tipo === 'ausencia_encargado') setAlertaAusencia(prev => prev ?? alerta)
+        }
+      })
+
     const channel = client
       .channel(`tecnico-alerta-${tecnicoId}`)
       .on(

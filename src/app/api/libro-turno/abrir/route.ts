@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { AbrirTurnoSchema } from '@/lib/validations/libroTurno'
 import { findEsquemaActivo } from '@/lib/esquemas/validarVentana'
+import { getArgTime } from '@/lib/cobertura/timeUtils'
 
 async function uploadFirma(dataUrl: string, userId: string, prefix: string): Promise<string> {
   const base64 = dataUrl.split(',')[1]
@@ -56,16 +57,63 @@ export async function POST(req: NextRequest) {
     if (perfil?.cliente_id) {
       const { data: esquemas } = await supabaseAdmin()
         .from('esquemas_cobertura')
-        .select('nombre, hora_inicio, hora_fin, dias_semana, fecha_desde, fecha_hasta')
+        .select('id, nombre, hora_inicio, hora_fin, dias_semana, fecha_desde, fecha_hasta')
         .eq('cliente_id', perfil.cliente_id)
         .eq('activo', true)
 
       if (esquemas && esquemas.length > 0) {
-        const match = findEsquemaActivo(esquemas)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const match = findEsquemaActivo(esquemas as any) as (typeof esquemas[0]) | null
         if (!match) {
           return NextResponse.json(
             { error: 'No estás dentro del horario programado. Podés iniciar hasta 30 minutos antes del comienzo de tu turno.' },
             { status: 403 }
+          )
+        }
+
+        // Verificar que el usuario es el encargado asignado a este esquema
+        const { hoy, ayer } = getArgTime()
+
+        const { data: excepcion } = await supabaseAdmin()
+          .from('asignaciones_turno')
+          .select('rol_turno')
+          .eq('esquema_id', match.id)
+          .eq('usuario_id', user.id)
+          .in('fecha', [hoy, ayer])
+          .maybeSingle()
+
+        let rolAsignado: string | null = excepcion?.rol_turno ?? null
+
+        if (!rolAsignado) {
+          const { data: persistente } = await supabaseAdmin()
+            .from('asignaciones_persistentes')
+            .select('rol_turno')
+            .eq('esquema_id', match.id)
+            .eq('usuario_id', user.id)
+            .maybeSingle()
+          rolAsignado = persistente?.rol_turno ?? null
+        }
+
+        if (rolAsignado !== 'encargado') {
+          return NextResponse.json(
+            { error: 'No estás asignado como encargado para este turno.' },
+            { status: 403 }
+          )
+        }
+
+        // Verificar que no haya ya un interino activo para este esquema
+        const { data: interinoActivo } = await supabaseAdmin()
+          .from('libro_turno')
+          .select('id, tecnico_nombre')
+          .eq('esquema_id', match.id)
+          .eq('estado', 'abierto')
+          .eq('interino', true)
+          .maybeSingle()
+
+        if (interinoActivo) {
+          return NextResponse.json(
+            { error: `Ya hay un encargado interino activo para este turno (${interinoActivo.tecnico_nombre}). Dirigite al Libro de Guardia para registrar tu llegada tardía.` },
+            { status: 409 }
           )
         }
       }

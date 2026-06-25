@@ -9,7 +9,8 @@ import {
   Lock, ChevronRight, UserCheck, CircleDot, AlertTriangle,
   ShieldAlert, Users, ShieldCheck,
 } from 'lucide-react'
-import { getArgTime, isWithinWindow, deriveTurno } from '@/lib/cobertura/timeUtils'
+import { getArgTime, deriveTurno } from '@/lib/cobertura/timeUtils'
+import { findEsquemaActivo } from '@/lib/esquemas/validarVentana'
 import type { Incidencia, LibroTurno, LibroNovedad } from '@/types/database'
 import NovedadesTimeline from './NovedadesTimeline'
 import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
@@ -34,7 +35,7 @@ interface Props {
 export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   const user = await requireRole('tecnico', 'admin')
 
-  const { hoy, ayer, hours, minutes } = getArgTime()
+  const { hoy, ayer } = getArgTime()
 
   // ── 0. Perfil del usuario (para obtener cliente_id) ──────────────────────────
   const { data: userProfile } = await supabaseAdmin()
@@ -79,11 +80,13 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     // Buscar esquemas activos con ventana abierta ahora
     const { data: esquemas } = await supabaseAdmin()
       .from('esquemas_cobertura')
-      .select('id, nombre, hora_inicio, hora_fin, cliente_id')
+      .select('id, nombre, hora_inicio, hora_fin, cliente_id, dias_semana, fecha_desde, fecha_hasta')
       .eq('cliente_id', clienteId)
       .eq('activo', true)
 
-    const esquema = (esquemas ?? []).find(e => isWithinWindow(e.hora_inicio, e.hora_fin, hours, minutes))
+    // findEsquemaActivo valida hora, día de semana y rango de fechas (a diferencia de isWithinWindow)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const esquema = findEsquemaActivo((esquemas ?? []) as any) as any
 
     if (esquema) {
       // 3a. Excepción del día (check hoy y ayer para turnos nocturnos)
@@ -116,13 +119,13 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   }
 
   // ── 4. Para encargado asignado: ¿hay un turno previo sin cerrar que bloquee? ─
-  let turnoBlockeante: { tecnico_nombre: string; folio_numero: number } | null = null
+  let turnoBlockeante: { tecnico_nombre: string; folio_numero: number; interino: boolean } | null = null
   if (asignacionHoy?.rol_turno === 'encargado' && !turnoEncargado && asignacionHoy.cliente_id) {
     const esquemaId      = asignacionHoy.esquema_id
     const derivedTurno_  = deriveTurno('08:00') // fallback
     const { data: bloq } = await supabaseAdmin()
       .from('libro_turno')
-      .select('tecnico_nombre, folio_numero, estado')
+      .select('tecnico_nombre, folio_numero, estado, interino')
       .eq('cliente_id', asignacionHoy.cliente_id)
       .neq('tecnico_id', user.id)
       .in('estado', ['abierto', 'pendiente_relevo'])
@@ -132,8 +135,12 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-    turnoBlockeante = bloq ?? null
+    turnoBlockeante = bloq ? { ...bloq, interino: bloq.interino ?? false } : null
   }
+
+  // Distinguir: interino activo (apoyo cubriendo) vs turno previo sin cerrar
+  const interinoActivo  = turnoBlockeante?.interino === true  ? turnoBlockeante : null
+  const turnoPrevNoCerrado = turnoBlockeante?.interino !== true && turnoBlockeante ? turnoBlockeante : null
 
   // ── 5. Datos del turno activo (encargado o apoyo) ─────────────────────────────
   const turnoActivo: LibroTurno | null = (turnoEncargado as LibroTurno | null) ?? turnoApoyo
@@ -416,19 +423,39 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
             </div>
           )}
 
-          {/* ── ESTADO C: Encargado bloqueado (turno previo no cerrado) ────── */}
-          {turnoBlockeante && (
+          {/* ── ESTADO C: Turno previo sin cerrar (encargado bloqueado) ───── */}
+          {turnoPrevNoCerrado && (
             <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <ShieldAlert size={20} className="text-red-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-red-800 text-sm">Turno anterior no cerrado</p>
                   <p className="text-xs text-red-700 mt-1">
-                    El turno de <strong>{turnoBlockeante.tecnico_nombre}</strong> (folio #{turnoBlockeante.folio_numero})
+                    El turno de <strong>{turnoPrevNoCerrado.tecnico_nombre}</strong> (folio #{turnoPrevNoCerrado.folio_numero})
                     aún no fue cerrado. No podés abrir un nuevo turno hasta que el encargado saliente cierre el suyo.
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── ESTADO C2: Interino activo — encargado original llegó tarde ── */}
+          {interinoActivo && asignacionHoy?.esquema_id && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
+              <div className="flex items-start gap-3 mb-4">
+                <ShieldAlert size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-800 text-sm">Tu turno fue abierto por el encargado interino</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Como llegaste tarde, <strong>{interinoActivo.tecnico_nombre}</strong> abrió el turno como interino
+                    y es responsable hasta el cierre. Podés incorporarte como apoyo para colaborar en el turno.
+                  </p>
+                </div>
+              </div>
+              <JoinTurnoButton
+                esquemaId={asignacionHoy.esquema_id}
+                tarde
+              />
             </div>
           )}
 

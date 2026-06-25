@@ -6,9 +6,10 @@ import { Users, Loader2, AlertCircle } from 'lucide-react'
 
 interface Props {
   esquemaId: string
+  tarde?: boolean  // true = encargado que llega tarde
 }
 
-export default function JoinTurnoButton({ esquemaId }: Props) {
+export default function JoinTurnoButton({ esquemaId, tarde = false }: Props) {
   const router = useRouter()
   const [cargando, setCargando] = useState(false)
   const [error, setError]       = useState('')
@@ -20,7 +21,7 @@ export default function JoinTurnoButton({ esquemaId }: Props) {
       const res = await fetch('/api/libro-turno/join', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ esquema_id: esquemaId }),
+        body:    JSON.stringify({ esquema_id: esquemaId, tarde }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -35,6 +36,11 @@ export default function JoinTurnoButton({ esquemaId }: Props) {
     }
   }
 
+  const label    = tarde ? 'Registrar llegada e incorporarme' : 'Unirme al turno activo'
+  const colorCls = tarde
+    ? 'bg-amber-500 hover:bg-amber-600'
+    : 'bg-blue-600 hover:bg-blue-700'
+
   return (
     <div className="flex flex-col gap-2">
       {error && (
@@ -46,10 +52,10 @@ export default function JoinTurnoButton({ esquemaId }: Props) {
       <button
         onClick={handleJoin}
         disabled={cargando}
-        className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-sm min-h-[48px] disabled:opacity-60"
+        className={`flex items-center justify-center gap-2 w-full ${colorCls} text-white font-bold py-3 rounded-xl text-sm min-h-[48px] disabled:opacity-60`}
       >
         {cargando ? <Loader2 size={18} className="animate-spin" /> : <Users size={18} />}
-        {cargando ? 'Buscando turno…' : 'Unirme al turno activo'}
+        {cargando ? 'Procesando…' : label}
       </button>
     </div>
   )

@@ -24,11 +24,12 @@ interface RondaActiva {
 interface Props {
   turno: Turno | null
   rondaActiva: RondaActiva | null
+  rondaEnCurso: boolean  // true = otro participante del turno está haciendo una ronda
   frecuenciaConfigurada: boolean
   totalPuntosActivos: number
 }
 
-export default function RondaIniciarClient({ turno, rondaActiva, frecuenciaConfigurada, totalPuntosActivos }: Props) {
+export default function RondaIniciarClient({ turno, rondaActiva, rondaEnCurso, frecuenciaConfigurada, totalPuntosActivos }: Props) {
   const router    = useRouter()
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -144,6 +145,25 @@ export default function RondaIniciarClient({ turno, rondaActiva, frecuenciaConfi
             <QrCode size={22} />
             Continuar ronda
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Ronda en curso por otro participante del turno
+  if (rondaEnCurso) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-black text-brand-ink">Rondas</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{turno.clientes?.nombre_empresa ?? 'Puesto asignado'}</p>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex flex-col items-center text-center gap-3">
+          <QrCode size={36} className="text-amber-500" />
+          <p className="font-bold text-amber-800">Ronda en curso</p>
+          <p className="text-sm text-amber-700">
+            Hay una ronda siendo realizada por otro técnico del turno. Esperá a que termine para iniciar la siguiente.
+          </p>
         </div>
       </div>
     )
