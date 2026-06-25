@@ -9,7 +9,11 @@ import {
   X, Clock, AlertTriangle, TriangleAlert, ClipboardList, Eye,
   CheckCircle,
 } from 'lucide-react'
-import FirmaCanvas from '@/components/signature/FirmaCanvas'
+import dynamic from 'next/dynamic'
+const FirmaCanvas = dynamic(() => import('@/components/signature/FirmaCanvas'), {
+  ssr: false,
+  loading: () => <div className="h-[170px] bg-gray-100 rounded-lg animate-pulse" />,
+})
 import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
 import RelevoInventarioChecklist, { type ControlItem } from '@/components/inventario/RelevoInventarioChecklist'
 import { RelevoPSchema, type RelevoPInput } from '@/lib/validations/libroTurno'
@@ -38,10 +42,11 @@ function todayDate() { return new Date().toISOString().split('T')[0] }
 function currentTurno(): 'diurno' | 'nocturno' { return new Date().getHours() < 18 ? 'diurno' : 'nocturno' }
 
 const TIPO_CONFIG = {
-  apertura: { label: 'Apertura', color: 'text-green-600', dot: 'bg-green-500' },
-  novedad:  { label: 'Novedad',  color: 'text-amber-600', dot: 'bg-amber-500' },
-  cierre:   { label: 'Cierre',   color: 'text-gray-600',  dot: 'bg-gray-500'  },
-  alerta:   { label: 'Alerta',   color: 'text-red-600',   dot: 'bg-red-500'   },
+  apertura: { label: 'Apertura', color: 'text-green-600',  dot: 'bg-green-500'  },
+  novedad:  { label: 'Novedad',  color: 'text-amber-600',  dot: 'bg-amber-500'  },
+  cierre:   { label: 'Cierre',   color: 'text-gray-600',   dot: 'bg-gray-500'   },
+  alerta:   { label: 'Alerta',   color: 'text-red-600',    dot: 'bg-red-500'    },
+  sistema:  { label: 'Sistema',  color: 'text-violet-600', dot: 'bg-violet-500' },
 }
 
 const SEVERIDAD_CONFIG = {

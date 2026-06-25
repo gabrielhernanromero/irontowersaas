@@ -7,7 +7,12 @@ import AbrirGuardiaForm from './AbrirGuardiaForm'
 import { findEsquemaActivo } from '@/lib/esquemas/validarVentana'
 
 interface Props {
-  searchParams: { turno_id?: string; saliente_nombre?: string }
+  searchParams: { turno_id?: string; saliente_nombre?: string; interino?: string }
+}
+
+interface PersonalApoyo {
+  usuario_id: string
+  nombre: string
 }
 
 function turnoDesdeHora(hora: string): 'diurno' | 'nocturno' {
@@ -47,30 +52,45 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
     .order('nombre_empresa', { ascending: true })
 
   // ── Buscar el esquema de cobertura activo para este momento ─────────────────
-  let esquemaActivo: { nombre: string; hora_inicio: string; hora_fin: string } | null = null
+  let esquemaActivo: { id: string; nombre: string; hora_inicio: string; hora_fin: string } | null = null
   let turnoConfig: 'diurno' | 'nocturno' | null = null
   let validacionBloqueada = false
+  let personalApoyo: PersonalApoyo[] = []
 
   if (clienteIdFijo) {
-    const { data: esquemas } = await supabaseAdmin()
+    const { data: esquemasRaw } = await supabaseAdmin()
       .from('esquemas_cobertura')
-      .select('nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+      .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
       .eq('cliente_id', clienteIdFijo)
       .eq('activo', true)
 
-    if (esquemas && esquemas.length > 0) {
-      const encontrado = findEsquemaActivo(esquemas)
+    if (esquemasRaw && esquemasRaw.length > 0) {
+      const encontrado = findEsquemaActivo(esquemasRaw as any) as (typeof esquemasRaw[0]) | null
 
       if (encontrado) {
         esquemaActivo = {
+          id:          encontrado.id,
           nombre:      encontrado.nombre,
           hora_inicio: encontrado.hora_inicio,
           hora_fin:    encontrado.hora_fin,
         }
         turnoConfig = turnoDesdeHora(encontrado.hora_inicio)
+
+        // Personal de apoyo pre-configurado para el esquema activo
+        const { data: asignaciones } = await supabaseAdmin()
+          .from('asignaciones_persistentes')
+          .select('usuario:usuario_id(id, nombre, apellido)')
+          .eq('esquema_id', encontrado.id)
+          .eq('rol_turno', 'apoyo')
+
+        personalApoyo = (asignaciones ?? [])
+          .map((a: any) => a.usuario)
+          .filter(Boolean)
+          .map((u: any) => ({ usuario_id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim() }))
       } else {
         // Hay esquemas configurados pero ninguno corresponde a este momento → bloquear
-        validacionBloqueada = true
+        // Excepto si es modo interino (apoyo abriendo porque el encargado no se presentó)
+        if (searchParams.interino !== '1') validacionBloqueada = true
       }
     }
     // Si el cliente no tiene esquemas configurados → no bloqueamos (sin configuración = sin restricción)
@@ -79,6 +99,18 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
   // Fallback: usar turno_habitual del perfil si no hay esquema activo
   if (!turnoConfig && perfil?.turno_habitual) {
     turnoConfig = perfil.turno_habitual
+  }
+
+  // ── Elementos asignados al puesto ───────────────────────────────────────────
+  let elementos: { id: string; nombre: string; codigo_patrimonial: string; categoria: string | null }[] = []
+  if (clienteIdFijo) {
+    const { data: elems } = await supabaseAdmin()
+      .from('elementos_puesto')
+      .select('id, nombre, codigo_patrimonial, categoria')
+      .eq('cliente_id', clienteIdFijo)
+      .eq('estado_admin', 'activo')
+      .order('nombre', { ascending: true })
+    elementos = elems ?? []
   }
 
   return (
@@ -93,6 +125,9 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
       esquema={esquemaActivo}
       turnoConfig={turnoConfig}
       validacionBloqueada={validacionBloqueada}
+      elementos={elementos}
+      personalApoyo={personalApoyo}
+      interino={searchParams.interino === '1'}
     />
   )
 }

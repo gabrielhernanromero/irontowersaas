@@ -5,7 +5,11 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { Lock, XCircle } from 'lucide-react'
-import FirmaCanvas from '@/components/signature/FirmaCanvas'
+import dynamic from 'next/dynamic'
+const FirmaCanvas = dynamic(() => import('@/components/signature/FirmaCanvas'), {
+  ssr: false,
+  loading: () => <div className="h-[170px] bg-gray-100 rounded-lg animate-pulse" />,
+})
 import { CerrarTurnoSchema, type CerrarTurnoInput } from '@/lib/validations/libroTurno'
 
 function nowTime() { return new Date().toTimeString().slice(0, 5) }

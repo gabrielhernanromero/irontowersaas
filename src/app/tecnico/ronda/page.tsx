@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { getSession } from '@/lib/auth/getSession'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import RondaIniciarClient from './RondaIniciarClient'
+import RondaAlertsReader from './RondaAlertsReader'
 
 export default async function RondaPage() {
   await requireRole('tecnico', 'admin')
@@ -24,7 +25,7 @@ export default async function RondaPage() {
   let totalPuntosActivos    = 0
 
   if (turno?.cliente_id) {
-    const cliente = turno.clientes as { frecuencia_ronda_minutos: number | null } | null
+    const cliente = turno.clientes as unknown as { frecuencia_ronda_minutos: number | null } | null
     frecuenciaConfigurada = !!cliente?.frecuencia_ronda_minutos
 
     const { count } = await supabaseAdmin()
@@ -47,13 +48,16 @@ export default async function RondaPage() {
     .maybeSingle()
 
   return (
-    <RondaIniciarClient
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      turno={(turno ?? null) as any}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rondaActiva={(rondaActiva ?? null) as any}
-      frecuenciaConfigurada={frecuenciaConfigurada}
-      totalPuntosActivos={totalPuntosActivos}
-    />
+    <>
+      <RondaAlertsReader />
+      <RondaIniciarClient
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        turno={(turno ?? null) as any}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rondaActiva={(rondaActiva ?? null) as any}
+        frecuenciaConfigurada={frecuenciaConfigurada}
+        totalPuntosActivos={totalPuntosActivos}
+      />
+    </>
   )
 }

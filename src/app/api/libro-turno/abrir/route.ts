@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, cliente_id, esquema_id, turno_saliente_id, relevo_firma_dataurl } = parsed.data
+  const { fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, cliente_id, esquema_id, interino, personal_apoyo, turno_saliente_id, relevo_firma_dataurl, verificacion_elementos } = parsed.data
 
   // Verificar que no hay turno abierto propio
   const { data: turnoAbierto } = await supabaseAdmin()
@@ -45,26 +45,29 @@ export async function POST(req: NextRequest) {
   }
 
   // Validar ventana horaria contra los esquemas configurados para el cliente
-  const { data: perfil } = await supabaseAdmin()
-    .from('users')
-    .select('cliente_id')
-    .eq('id', user.id)
-    .single()
+  // En modo interino se omite la validación (apoyo en emergencia)
+  if (!interino) {
+    const { data: perfil } = await supabaseAdmin()
+      .from('users')
+      .select('cliente_id')
+      .eq('id', user.id)
+      .single()
 
-  if (perfil?.cliente_id) {
-    const { data: esquemas } = await supabaseAdmin()
-      .from('esquemas_cobertura')
-      .select('nombre, hora_inicio, hora_fin, dias_semana, fecha_desde, fecha_hasta')
-      .eq('cliente_id', perfil.cliente_id)
-      .eq('activo', true)
+    if (perfil?.cliente_id) {
+      const { data: esquemas } = await supabaseAdmin()
+        .from('esquemas_cobertura')
+        .select('nombre, hora_inicio, hora_fin, dias_semana, fecha_desde, fecha_hasta')
+        .eq('cliente_id', perfil.cliente_id)
+        .eq('activo', true)
 
-    if (esquemas && esquemas.length > 0) {
-      const match = findEsquemaActivo(esquemas)
-      if (!match) {
-        return NextResponse.json(
-          { error: 'No estás dentro del horario programado. Podés iniciar hasta 30 minutos antes del comienzo de tu turno.' },
-          { status: 403 }
-        )
+      if (esquemas && esquemas.length > 0) {
+        const match = findEsquemaActivo(esquemas)
+        if (!match) {
+          return NextResponse.json(
+            { error: 'No estás dentro del horario programado. Podés iniciar hasta 30 minutos antes del comienzo de tu turno.' },
+            { status: 403 }
+          )
+        }
       }
     }
   }
@@ -100,6 +103,7 @@ export async function POST(req: NextRequest) {
       horario_inicio,
       cliente_id:  cliente_id  ?? null,
       esquema_id:  esquema_id  ?? null,
+      interino:    interino    ?? false,
       estado: 'abierto',
     })
     .select()
@@ -109,15 +113,73 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al crear el turno' }, { status: 500 })
   }
 
-  // Novedad de apertura automática
+  // Insertar verificación de elementos si se proporcionó
+  if (verificacion_elementos?.length) {
+    await supabaseAdmin()
+      .from('control_inventario_turno')
+      .insert(verificacion_elementos.map(v => ({
+        turno_id:         nuevoTurno.id,
+        elemento_id:      v.elemento_id,
+        estado_operativo: v.estado_operativo,
+        observacion:      v.observacion ?? null,
+      })))
+
+    // Crear incidencia automática por cada elemento con problema
+    const conProblemas = verificacion_elementos.filter(v => v.estado_operativo !== 'ok')
+    for (const v of conProblemas) {
+      const esFaltante = v.estado_operativo === 'faltante'
+      await supabaseAdmin()
+        .from('incidencias')
+        .insert({
+          cliente_id:           nuevoTurno.cliente_id ?? null,
+          turno_creacion_id:    nuevoTurno.id,
+          titulo:               esFaltante
+            ? `${v.nombre} — faltante al abrir guardia`
+            : `${v.nombre} — falla al abrir guardia`,
+          descripcion:          v.observacion
+            || `${v.nombre} reportado como ${esFaltante ? 'faltante' : 'dañado/en falla'} al inicio del turno.`,
+          severidad:            esFaltante ? 'alto' : 'medio',
+          estado:               'abierto',
+          elemento_afectado_id: v.elemento_id,
+          tecnico_detector_id:  user.id,
+        })
+    }
+  }
+
+  // Novedad de apertura — descripción enriquecida con resultado de verificación y personal
+  let descripcionApertura = interino
+    ? 'Apertura de guardia como encargado interino (encargado principal no se presentó)'
+    : 'Apertura de guardia'
+
+  // Personal de apoyo
+  if (personal_apoyo?.length) {
+    const presentes = personal_apoyo.filter(p => p.presente).map(p => p.nombre)
+    const ausentes  = personal_apoyo.filter(p => !p.presente).map(p => p.nombre)
+    if (presentes.length) descripcionApertura += `. Personal de apoyo presente: ${presentes.join(', ')}.`
+    if (ausentes.length)  descripcionApertura += ` Ausente: ${ausentes.join(', ')}.`
+  }
+
+  // Verificación de elementos
+  if (verificacion_elementos?.length) {
+    const conProblemas = verificacion_elementos.filter(v => v.estado_operativo !== 'ok')
+    if (conProblemas.length === 0) {
+      descripcionApertura += ` Elementos verificados en correctas condiciones (${verificacion_elementos.length} elementos).`
+    } else {
+      const lista = conProblemas
+        .map(v => `${v.nombre}: ${v.estado_operativo === 'faltante' ? 'faltante' : 'falla'}${v.observacion ? ` — ${v.observacion}` : ''}`)
+        .join('; ')
+      descripcionApertura += ` Observaciones en elementos: ${lista}`
+    }
+  }
+
   await supabaseAdmin()
     .from('libro_novedad')
     .insert({
-      turno_id: nuevoTurno.id,
+      turno_id:   nuevoTurno.id,
       tecnico_id: user.id,
-      tipo: 'apertura',
-      hora: horario_inicio,
-      descripcion: 'Apertura de guardia',
+      tipo:       'apertura',
+      hora:       horario_inicio,
+      descripcion: descripcionApertura,
     })
 
   return NextResponse.json(nuevoTurno, { status: 201 })

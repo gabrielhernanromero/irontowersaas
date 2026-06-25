@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { checkRateLimit, LIMITS } from '@/lib/rateLimit'
 
 export async function POST(req: NextRequest) {
   const {
@@ -10,6 +11,14 @@ export async function POST(req: NextRequest) {
 
   if (authErr || !user) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  }
+
+  const rl = checkRateLimit(`upload:${user.id}`, LIMITS.upload)
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Demasiadas subidas. Esperá un momento.' }, {
+      status: 429,
+      headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+    })
   }
 
   const formData = await req.formData()

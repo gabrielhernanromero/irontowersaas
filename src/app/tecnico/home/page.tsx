@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import { getSession } from '@/lib/auth/getSession'
-import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import {
   Droplets, FlameKindling, CheckCircle2, ChevronRight,
-  BookOpen, AlertTriangle, CircleDot, Lock, UserCheck,
+  BookOpen, AlertTriangle, CircleDot, Lock, UserCheck, Users,
 } from 'lucide-react'
 
 function getTurnoActual(): 'diurno' | 'nocturno' {
@@ -17,33 +16,67 @@ export default async function TecnicoHome() {
   const { user } = await getSession()
   const turno = getTurnoActual()
 
+  // Turno propio abierto
   const { data: turnoActivo } = await supabaseAdmin()
     .from('libro_turno')
-    .select('id, folio_numero, horario_inicio')
+    .select('id, folio_numero, horario_inicio, cliente_id, fecha, turno')
     .eq('tecnico_id', user!.id)
     .eq('estado', 'abierto')
     .maybeSingle()
 
-  const { data: pendingRelevo } = await supabaseAdmin()
-    .from('libro_turno')
-    .select('id, tecnico_nombre, horario_fin, fecha, turno')
-    .eq('estado', 'pendiente_relevo')
-    .neq('tecnico_id', user!.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // Si no tiene turno propio, buscar turno activo del encargado en el mismo puesto
+  let turnoEncargado: { id: string; folio_numero: number; horario_inicio: string; cliente_id: string; fecha: string; turno: string } | null = null
+  if (!turnoActivo && user?.cliente_id) {
+    const { data } = await supabaseAdmin()
+      .from('libro_turno')
+      .select('id, folio_numero, horario_inicio, cliente_id, fecha, turno')
+      .eq('cliente_id', user.cliente_id)
+      .eq('estado', 'abierto')
+      .neq('tecnico_id', user!.id)
+      .maybeSingle()
+    turnoEncargado = data
+  }
 
-  const { data: planillasHoy } = turnoActivo
-    ? await supabaseServer()
+  // Relevo pendiente (solo si no hay turno propio ni encargado)
+  const { data: pendingRelevo } = (!turnoActivo && !turnoEncargado)
+    ? await supabaseAdmin()
+        .from('libro_turno')
+        .select('id, tecnico_nombre, horario_fin, fecha, turno')
+        .eq('estado', 'pendiente_relevo')
+        .neq('tecnico_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null }
+
+  // Referencia para buscar planillas: propio > encargado
+  const turnoRef = turnoActivo ?? turnoEncargado
+
+  // Planillas habilitadas para el cliente
+  const clienteId = turnoRef?.cliente_id ?? user?.cliente_id ?? null
+  const { data: clienteData } = clienteId
+    ? await supabaseAdmin()
+        .from('clientes')
+        .select('planillas_habilitadas')
+        .eq('id', clienteId)
+        .single()
+    : { data: null }
+  const planillasHabilitadas: string[] = clienteData?.planillas_habilitadas ?? ['hidrantes', 'extintores']
+
+  // Planillas: buscar por turno_id del turno de referencia (propio o encargado)
+  const { data: planillasHoy } = turnoRef
+    ? await supabaseAdmin()
         .from('planillas')
         .select('tipo, inmutable, id')
-        .eq('turno_id', turnoActivo.id)
+        .eq('turno_id', turnoRef.id)
+        .eq('inmutable', true)
     : { data: [] as { tipo: string; inmutable: boolean; id: string }[] }
 
-  const enviada = (tipo: string) => planillasHoy?.find((p) => p.tipo === tipo && p.inmutable)
-  const hidrantesEnviada = enviada('hidrantes')
+  const enviada = (tipo: string) => planillasHoy?.find((p) => p.tipo === tipo)
+  const hidrantesEnviada  = enviada('hidrantes')
   const extintoresEnviada = enviada('extintores')
-  const turnoAbierto = !!turnoActivo
+  const turnoPropio       = !!turnoActivo
+  const hayTurnoActivo    = !!(turnoActivo ?? turnoEncargado)
 
   return (
     <div className="flex flex-col gap-5 pt-2">
@@ -57,7 +90,7 @@ export default async function TecnicoHome() {
       </div>
 
       {/* Banner relevo pendiente */}
-      {!turnoAbierto && pendingRelevo && (
+      {pendingRelevo && (
         <Link
           href={`/tecnico/libro-guardia/relevo?turno_id=${pendingRelevo.id}`}
           className="flex items-center gap-3 bg-amber-500 text-white rounded-xl p-4 shadow-md active:bg-amber-600"
@@ -73,13 +106,23 @@ export default async function TecnicoHome() {
         </Link>
       )}
 
-      {/* Estado del turno — aviso secundario */}
-      {turnoAbierto ? (
+      {/* Estado del turno */}
+      {turnoPropio ? (
         <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
           <CircleDot size={16} className="text-green-500 animate-pulse shrink-0" />
           <p className="text-sm text-green-800">
             Turno activo — Folio #{turnoActivo.folio_numero} · Inicio {turnoActivo.horario_inicio?.slice(0, 5)}
           </p>
+        </div>
+      ) : turnoEncargado ? (
+        <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+          <Users size={16} className="text-blue-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Turno activo — Folio #{turnoEncargado.folio_numero}</p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              El encargado ya abrió el turno. Ingresá al Libro de Guardia para unirte como apoyo.
+            </p>
+          </div>
         </div>
       ) : (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -94,27 +137,31 @@ export default async function TecnicoHome() {
       )}
 
       <div className="flex flex-col gap-4">
-        {/* Hidrantes */}
-        <PlanillaCard
-          label="Planilla Hidrantes"
-          sublabel="48 puntos de control"
-          icon={<Droplets size={24} className="text-white" />}
-          iconBg={hidrantesEnviada ? 'bg-green-500' : 'bg-brand-blue'}
-          enviada={!!hidrantesEnviada}
-          turnoAbierto={turnoAbierto}
-          href={hidrantesEnviada ? `/tecnico/historial/${hidrantesEnviada.id}` : '/tecnico/hidrantes'}
-        />
+        {/* Hidrantes — solo si está habilitada para el cliente */}
+        {planillasHabilitadas.includes('hidrantes') && (
+          <PlanillaCard
+            label="Planilla Hidrantes"
+            sublabel="48 puntos de control"
+            icon={<Droplets size={24} className="text-white" />}
+            iconBg={hidrantesEnviada ? 'bg-green-500' : 'bg-brand-blue'}
+            enviada={!!hidrantesEnviada}
+            turnoAbierto={hayTurnoActivo}
+            href={hidrantesEnviada ? `/tecnico/historial/${hidrantesEnviada.id}` : '/tecnico/hidrantes'}
+          />
+        )}
 
-        {/* Extintores */}
-        <PlanillaCard
-          label="Planilla Extintores"
-          sublabel="113 puntos de control"
-          icon={<FlameKindling size={24} className="text-white" />}
-          iconBg={extintoresEnviada ? 'bg-green-500' : 'bg-brand-orange'}
-          enviada={!!extintoresEnviada}
-          turnoAbierto={turnoAbierto}
-          href={extintoresEnviada ? `/tecnico/historial/${extintoresEnviada.id}` : '/tecnico/extintores'}
-        />
+        {/* Extintores — solo si está habilitada para el cliente */}
+        {planillasHabilitadas.includes('extintores') && (
+          <PlanillaCard
+            label="Planilla Extintores"
+            sublabel="113 puntos de control"
+            icon={<FlameKindling size={24} className="text-white" />}
+            iconBg={extintoresEnviada ? 'bg-green-500' : 'bg-brand-orange'}
+            enviada={!!extintoresEnviada}
+            turnoAbierto={hayTurnoActivo}
+            href={extintoresEnviada ? `/tecnico/historial/${extintoresEnviada.id}` : '/tecnico/extintores'}
+          />
+        )}
 
         {/* Libro de Guardia */}
         <Link
@@ -127,7 +174,11 @@ export default async function TecnicoHome() {
           <div className="flex-1">
             <p className="font-semibold text-brand-ink text-lg">Libro de Guardia</p>
             <p className="text-sm text-gray-500">
-              {turnoAbierto ? 'Ver novedades · Agregar · Cerrar turno' : 'Abrir turno para empezar'}
+              {turnoPropio
+                ? 'Ver novedades · Agregar · Cerrar turno'
+                : turnoEncargado
+                  ? 'Unirte como apoyo · Ver novedades'
+                  : 'Abrir turno para empezar'}
             </p>
           </div>
           <ChevronRight size={18} className="text-gray-300 shrink-0" />

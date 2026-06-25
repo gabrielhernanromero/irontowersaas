@@ -1,17 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Clock } from 'lucide-react'
+import { X, Clock, Eye, FileText } from 'lucide-react'
 import type { LibroNovedad, Incidencia } from '@/types/database'
 import IncidenciaDetailSheet from '@/components/libro/IncidenciaDetailSheet'
 
 function formatHora(h: string | null) { return h ? h.slice(0, 5) : '—' }
 
 const TIPO_CONFIG = {
-  apertura: { label: 'Apertura de guardia', color: 'text-emerald-600', dot: 'bg-emerald-500' },
-  novedad:  { label: 'Novedad',             color: 'text-amber-600',   dot: 'bg-amber-500'   },
-  cierre:   { label: 'Cierre de guardia',   color: 'text-brand-ink',   dot: 'bg-gray-500'    },
-  alerta:   { label: 'Alerta',              color: 'text-red-600',     dot: 'bg-red-500'     },
+  apertura:       { label: 'Apertura de guardia', color: 'text-emerald-600', dot: 'bg-emerald-500'           },
+  novedad:        { label: 'Novedad',             color: 'text-amber-600',   dot: 'bg-amber-500'             },
+  cierre:         { label: 'Cierre de guardia',   color: 'text-brand-ink',   dot: 'bg-gray-500'              },
+  alerta:         { label: 'Alerta del apoyo',    color: 'text-red-600',     dot: 'bg-red-500 animate-pulse' },
+  alerta_acusada: { label: 'Alerta (acusada)',    color: 'text-gray-400',    dot: 'bg-gray-400'              },
 }
 
 // ── Parseo estricto por regex ──────────────────────────────────────────────────
@@ -94,11 +95,13 @@ interface Props {
   novedades: LibroNovedad[]
   incidencias?: Incidencia[]
   turnoId?: string
+  rolActivo?: 'encargado' | 'apoyo' | null
+  encargadoTecnicoId?: string | null
 }
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
-export default function NovedadesTimeline({ novedades, incidencias = [], turnoId }: Props) {
+export default function NovedadesTimeline({ novedades, incidencias = [], turnoId, rolActivo, encargadoTecnicoId }: Props) {
   const [selected, setSelected]                     = useState<LibroNovedad | null>(null)
   const [selectedIncidencia, setSelectedIncidencia] = useState<Incidencia | null>(null)
   const [incReadonly, setIncReadonly]               = useState(false)
@@ -123,10 +126,12 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
   return (
     <>
       <div className="relative">
-        <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-200" />
+        <div className="absolute left-[10px] top-2 bottom-2 w-0.5 bg-gray-200" />
         <div className="flex flex-col gap-4">
           {novedades.map((n) => {
-            const cfg           = TIPO_CONFIG[n.tipo as keyof typeof TIPO_CONFIG] ?? TIPO_CONFIG.novedad
+            const esAlertaAcusada = n.tipo === 'alerta' && !!n.acusado_en
+            const cfgKey = esAlertaAcusada ? 'alerta_acusada' : n.tipo as keyof typeof TIPO_CONFIG
+            const cfg           = TIPO_CONFIG[cfgKey] ?? TIPO_CONFIG.novedad
             const esSeguimiento = !!n.incidencia_id && n.descripcion.startsWith('Seguimiento:')
             const parsed        = !esSeguimiento ? parsearNovedad(n.descripcion) : null
 
@@ -158,8 +163,25 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
               )
             }
 
-            // ── Dot: color según parseo, default según tipo ──────────────────
-            const dot = parsed ? INVENTARIO_ESTILO[parsed.estilo].dot : cfg.dot
+            // ── Incidencia vinculada (activa o resuelta) ─────────────────────
+            const esIncidencia = !!n.incidencia_id && !esSeguimiento
+            const incData      = n.incidencias as { estado?: string; severidad?: string; titulo?: string } | null | undefined
+            const estadoInc    = incData?.estado
+            const severidad    = incData?.severidad ?? 'alto'
+            const tituloInc    = incData?.titulo ?? ''
+            const esResuelta   = esIncidencia && estadoInc === 'resuelto'
+
+            const SEV_INC = {
+              bajo:  { dot: 'bg-yellow-400',                      card: 'bg-yellow-50/60 border-yellow-300 border-l-4 border-l-yellow-400', text: 'text-yellow-700' },
+              medio: { dot: 'bg-orange-500',                      card: 'bg-orange-50/60 border-orange-300 border-l-4 border-l-orange-500', text: 'text-orange-700' },
+              alto:  { dot: 'bg-red-500 animate-pulse',           card: 'bg-red-50/60 border-red-300 border-l-4 border-l-red-500',         text: 'text-red-600'   },
+            } as const
+
+            const sevStyle = SEV_INC[(severidad as keyof typeof SEV_INC) ?? 'alto'] ?? SEV_INC.alto
+
+            const dot = esIncidencia
+              ? esResuelta ? 'bg-emerald-500' : sevStyle.dot
+              : parsed ? INVENTARIO_ESTILO[parsed.estilo].dot : cfg.dot
 
             return (
               <button
@@ -170,14 +192,34 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
               >
                 <div className={`w-3.5 h-3.5 rounded-full shrink-0 mt-1 ${dot} ring-2 ring-white`} />
 
+                {(() => {
+                  // Si el tecnico_id es distinto al del encargado → novedad escrita por el apoyo
+                  const esDeApoyo = !esIncidencia && !parsed && !!encargadoTecnicoId && n.tecnico_id !== encargadoTecnicoId
+                  return (
                 <div className={`flex-1 rounded-xl border shadow-sm overflow-hidden p-3 ${
-                  parsed
-                    ? `${INVENTARIO_ESTILO[parsed.estilo].card} ${INVENTARIO_ESTILO[parsed.estilo].borderLeft}`
-                    : 'bg-white border-gray-100'
+                  esResuelta
+                    ? 'bg-emerald-50/60 border-emerald-300 border-l-4 border-l-emerald-500'
+                    : esIncidencia
+                      ? sevStyle.card
+                      : parsed
+                        ? `${INVENTARIO_ESTILO[parsed.estilo].card} ${INVENTARIO_ESTILO[parsed.estilo].borderLeft}`
+                        : esDeApoyo
+                          ? 'bg-blue-50/40 border-blue-100 border-l-4 border-l-blue-300'
+                          : 'bg-white border-gray-100'
                 }`}>
-                  {/* Header: label de tipo + hora */}
+                  {/* Header */}
                   <div className="flex items-center justify-between gap-2">
-                    {!parsed && (
+                    {esResuelta && (
+                      <span className="text-xs font-bold uppercase tracking-wide text-emerald-600">
+                        ✓ INCIDENCIA RESUELTA{tituloInc ? ` — ${tituloInc}` : ''}
+                      </span>
+                    )}
+                    {esIncidencia && !esResuelta && (
+                      <span className={`text-xs font-bold uppercase tracking-wide ${sevStyle.text}`}>
+                        ⚠ INCIDENCIA{tituloInc ? ` — ${tituloInc}` : ''}
+                      </span>
+                    )}
+                    {!esIncidencia && !parsed && (
                       <span className={`text-xs font-semibold uppercase tracking-wide ${cfg.color}`}>
                         {cfg.label}
                       </span>
@@ -185,13 +227,55 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                     <span className="text-xs text-gray-400 shrink-0 ml-auto">{formatHora(n.hora)}</span>
                   </div>
 
-                  {/* Cuerpo: card estructurada o texto plano */}
+                  {/* Cuerpo */}
                   {parsed ? (
                     <NovedadCard parsed={parsed} />
                   ) : (
-                    <p className="text-sm text-brand-ink mt-1 line-clamp-2">{n.descripcion}</p>
+                    <p className={`text-sm mt-1 line-clamp-2 ${esAlertaAcusada ? 'text-gray-400' : 'text-brand-ink'}`}>{n.descripcion}</p>
                   )}
+
+                  {/* Badge planilla */}
+                  {n.planilla_id && (
+                    <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
+                      <FileText size={11} className="text-brand-blue" />
+                      <span className="text-xs text-brand-blue font-medium">Planilla adjunta · Tocá para ver</span>
+                    </div>
+                  )}
+
+                  {/* Acuse de recibo */}
+                  {esAlertaAcusada && (
+                    <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
+                      <span className="text-[10px] text-gray-400">✓ Acusado {n.acusado_en ? `· ${n.acusado_en.slice(11, 16)}` : ''}</span>
+                    </div>
+                  )}
+
+                  {/* Autoría — solo en novedades comunes (no apertura/cierre) */}
+                  {(() => {
+                    const u = n.users as { nombre?: string; apellido?: string } | null
+                    const autorNombre = u?.nombre ? `${u.nombre} ${u.apellido ?? ''}`.trim() : null
+                    if (!autorNombre || n.tipo === 'apertura' || n.tipo === 'cierre') return null
+                    // Determinar rol por tecnico_id
+                    const autorRol: 'encargado' | 'apoyo' | null = encargadoTecnicoId
+                      ? n.tecnico_id === encargadoTecnicoId ? 'encargado' : 'apoyo'
+                      : null
+                    return (
+                      <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100/80">
+                        <span className="text-xs text-gray-400">{autorNombre}</span>
+                        {autorRol && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                            autorRol === 'apoyo'
+                              ? 'bg-blue-100 text-blue-600'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            {autorRol}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
+                  )
+                })()}
               </button>
             )
           })}
@@ -278,6 +362,18 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Foto</p>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={selected.foto_url} alt="Foto de la novedad" className="w-full rounded-xl object-cover max-h-72" />
+                  </div>
+                )}
+
+                {selected.planilla_id && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <a
+                      href={`/tecnico/historial/${selected.planilla_id}`}
+                      className="flex items-center justify-center gap-2 w-full border-2 border-brand-blue text-brand-blue font-bold py-3 rounded-xl text-sm min-h-[48px] active:bg-blue-50"
+                    >
+                      <Eye size={18} />
+                      Ver planilla completa
+                    </a>
                   </div>
                 )}
               </div>

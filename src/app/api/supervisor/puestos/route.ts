@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
-const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, created_at'
+const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, planillas_habilitadas, created_at'
 
 const PuestoSchema = z.object({
   nombre_empresa:           z.string().min(1, 'Nombre del puesto requerido'),
@@ -16,12 +16,16 @@ const PuestoSchema = z.object({
   aviso_ronda_minutos:      z.number().int().min(1).max(60).optional(),
 })
 
-const UpdatePuestoSchema   = PuestoSchema.extend({ id: z.string().uuid() })
-const ToggleActivoSchema   = z.object({ id: z.string().uuid(), activo: z.boolean() })
-const FrecuenciaSchema     = z.object({
-  id:                       z.string().uuid(),
-  frecuencia_ronda_minutos: z.number().int().positive().nullable(),
-  aviso_ronda_minutos:      z.number().int().min(1).max(120).optional(),
+const UpdatePuestoSchema       = PuestoSchema.extend({ id: z.string().uuid() })
+const ToggleActivoSchema       = z.object({ id: z.string().uuid(), activo: z.boolean() })
+const FrecuenciaSchema         = z.object({
+  id:                           z.string().uuid(),
+  frecuencia_ronda_minutos:     z.number().int().positive().nullable(),
+  aviso_ronda_minutos:          z.number().int().min(1).max(120).optional(),
+})
+const PlanillasHabilitadasSchema = z.object({
+  id:                    z.string().uuid(),
+  planillas_habilitadas: z.array(z.string()),
 })
 
 export async function GET() {
@@ -83,6 +87,18 @@ export async function PATCH(req: NextRequest) {
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, puesto: data })
+  }
+
+  // Planillas habilitadas por cliente
+  const planillasP = PlanillasHabilitadasSchema.safeParse(body)
+  if (planillasP.success) {
+    const { id, planillas_habilitadas } = planillasP.data
+    const { error } = await supabaseAdmin()
+      .from('clientes')
+      .update({ planillas_habilitadas })
+      .eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
   }
 
   // Actualización de frecuencia de rondas

@@ -27,7 +27,7 @@ export default function FirmaCanvas({ onChange, label = 'Firma' }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium text-brand-ink">{label}</p>
-      <div className="border-2 border-brand-ink rounded-lg overflow-hidden bg-white">
+      <div className="border-2 border-brand-ink rounded-lg overflow-hidden" style={{ backgroundColor: 'white' }}>
         <ReactSignatureCanvas
           ref={ref}
           penColor="#1a2d42"

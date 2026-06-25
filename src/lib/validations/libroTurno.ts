@@ -2,6 +2,19 @@ import { z } from 'zod'
 
 const hora = /^\d{2}:\d{2}$/
 
+export const VerificacionElementoSchema = z.object({
+  elemento_id:      z.string().uuid(),
+  nombre:           z.string(),
+  estado_operativo: z.enum(['ok', 'falla', 'faltante']),
+  observacion:      z.string().optional(),
+})
+
+export const PersonalApoyoSchema = z.object({
+  usuario_id: z.string().uuid(),
+  nombre:     z.string(),
+  presente:   z.boolean(),
+})
+
 export const AbrirTurnoSchema = z.object({
   fecha: z.string().min(1, 'La fecha es obligatoria'),
   turno: z.enum(['diurno', 'nocturno'], { message: 'Seleccioná un turno' }),
@@ -10,9 +23,15 @@ export const AbrirTurnoSchema = z.object({
   horario_inicio: z.string().regex(hora, 'Formato HH:MM'),
   cliente_id: z.string().uuid().optional(),
   esquema_id: z.string().uuid().optional(),
+  // Flag de encargado interino (apoyo que abre cuando el encargado no se presentó)
+  interino: z.boolean().optional(),
+  // Personal de apoyo con estado de presencia (confirma el encargado al abrir)
+  personal_apoyo: z.array(PersonalApoyoSchema).optional(),
   // Relevo del turno anterior (opcional — si hay turno cerrado sin relevo)
   turno_saliente_id: z.string().uuid().optional(),
   relevo_firma_dataurl: z.string().optional(),
+  // Verificación de elementos del puesto al abrir guardia
+  verificacion_elementos: z.array(VerificacionElementoSchema).optional(),
 })
 
 export const NuevaNovedadSchema = z.object({
@@ -23,7 +42,9 @@ export const NuevaNovedadSchema = z.object({
   medidas_adoptadas: z.string().optional(),
   observaciones_generales: z.string().optional(),
   foto_url: z.string().optional(),
-  // Incidencia persistente — se arrastra de turno en turno hasta resolverse
+  // Alerta urgente para el encargado (solo apoyo)
+  es_alerta: z.boolean().optional(),
+  // Incidencia persistente — se arrastra de turno en turno hasta resolverse (solo encargado)
   es_incidencia: z.boolean().optional(),
   incidencia_titulo: z.string().optional(),
   incidencia_severidad: z.enum(['bajo', 'medio', 'alto']).optional(),

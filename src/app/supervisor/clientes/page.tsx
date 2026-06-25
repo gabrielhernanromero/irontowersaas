@@ -27,7 +27,7 @@ export default async function ClientesPage() {
   ] = await Promise.all([
     supabaseAdmin()
       .from('clientes')
-      .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, created_at')
+      .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, planillas_habilitadas, created_at')
       .order('nombre_empresa', { ascending: true }),
     supabaseAdmin()
       .from('elementos_puesto')

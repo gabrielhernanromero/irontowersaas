@@ -92,7 +92,9 @@ export default function IncidenciaDetailSheet({ incidencia, turnoId, onClose, on
       })
       const json = await res.json()
       if (!res.ok) { setSubmitError(json.error ?? 'Error al guardar'); return }
-      setHistorial((prev) => [...prev, { id: json.id, hora: json.hora, descripcion: json.descripcion, created_at: json.created_at, libro_turno: null }])
+      // Refetch para obtener el join de users y mostrar el nombre real del técnico
+      const hist = await fetch(`/api/incidencias/historial?id=${incidencia.id}`).then(r => r.json())
+      setHistorial(Array.isArray(hist) ? hist : [])
       setMode('detail')
       setSeguimientoText('')
     } catch {
@@ -187,11 +189,17 @@ export default function IncidenciaDetailSheet({ incidencia, turnoId, onClose, on
                     <Clock size={13} />
                     <span>Reportada el {formatDate(incidencia.created_at)}</span>
                   </div>
-                  {incidencia.libro_turno?.tecnico_nombre && (
+                  {(incidencia.detector?.nombre || incidencia.libro_turno?.tecnico_nombre) && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <User size={13} />
-                      <span>Reportada por <span className="font-semibold text-brand-ink">{incidencia.libro_turno.tecnico_nombre}</span>
-                        {incidencia.libro_turno.tecnico_dni ? ` (DNI ${incidencia.libro_turno.tecnico_dni})` : ''}
+                      <span>Reportada por <span className="font-semibold text-brand-ink">
+                        {incidencia.detector
+                          ? `${incidencia.detector.nombre} ${incidencia.detector.apellido}`
+                          : incidencia.libro_turno!.tecnico_nombre}
+                      </span>
+                      {!incidencia.detector && incidencia.libro_turno?.tecnico_dni
+                        ? ` (DNI ${incidencia.libro_turno.tecnico_dni})`
+                        : ''}
                       </span>
                     </div>
                   )}

@@ -181,7 +181,7 @@ export default function ScanResultClient({ codigoQr, punto, rondaActiva }: Props
             </div>
 
             {/* ── Formulario novedad ── */}
-            {novedadEstado === 'form' && (
+            {(novedadEstado === 'form' || novedadEstado === 'submitting') && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
                 <p className="font-bold text-brand-ink text-base">¿Qué encontraste?</p>
 

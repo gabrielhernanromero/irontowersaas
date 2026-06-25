@@ -5,7 +5,7 @@ import {
   Building2, Plus, ChevronDown, ChevronUp, Edit2,
   Users, Package, Info, Sun, Moon, Loader2, X,
   ToggleLeft, ToggleRight, AlertCircle, MapPin, QrCode, Printer, Bell,
-  Trash2, ShieldCheck, UserPlus, UserMinus, Eye, EyeOff, Clock,
+  Trash2, ShieldCheck, UserPlus, UserMinus, Eye, EyeOff, Clock, FileText, CheckCircle2,
 } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import type { Cliente, ElementoPuesto, EstadoAdmin } from '@/types/database'
@@ -23,7 +23,7 @@ interface TecnicoRow {
   cliente_id: string | null
 }
 
-type Tab = 'info' | 'elementos' | 'cobertura' | 'rondas'
+type Tab = 'info' | 'elementos' | 'cobertura' | 'rondas' | 'planillas'
 
 interface PuntoControl {
   id: string
@@ -270,7 +270,7 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                 <div className="border-t border-gray-100">
                   {/* Tabs */}
                   <div className="flex gap-0 border-b border-gray-100 px-2 overflow-x-auto">
-                    {(['info', 'elementos', 'cobertura', 'rondas'] as Tab[]).map(t => (
+                    {(['info', 'elementos', 'cobertura', 'rondas', 'planillas'] as Tab[]).map(t => (
                       <button
                         key={t}
                         onClick={() => setActiveTab(prev => ({ ...prev, [cliente.id]: t }))}
@@ -280,14 +280,16 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                             : 'border-transparent text-gray-500 hover:text-gray-700'
                         }`}
                       >
-                        {t === 'info'      && <Info    size={13} />}
-                        {t === 'elementos' && <Package size={13} />}
-                        {t === 'cobertura' && <Clock   size={13} />}
-                        {t === 'rondas'    && <QrCode  size={13} />}
+                        {t === 'info'      && <Info     size={13} />}
+                        {t === 'elementos' && <Package  size={13} />}
+                        {t === 'cobertura' && <Clock    size={13} />}
+                        {t === 'rondas'    && <QrCode   size={13} />}
+                        {t === 'planillas' && <FileText size={13} />}
                         {t === 'info'       ? 'Info'
                           : t === 'elementos' ? `Elementos (${elsCliente.length})`
                           : t === 'cobertura' ? 'Turnos y Personal'
-                          : 'Puntos de control'}
+                          : t === 'rondas'    ? 'Puntos de control'
+                          : 'Planillas'}
                       </button>
                     ))}
                   </div>
@@ -388,6 +390,15 @@ export default function ClientesClient({ initialClientes, initialElementos, init
                         clienteId={cliente.id}
                         allTecnicos={tecnicos}
                         onEsquemasChange={esqs => setEsquemasPorCliente(prev => ({ ...prev, [cliente.id]: esqs }))}
+                      />
+                    )}
+
+                    {/* ── Planillas ── */}
+                    {tab === 'planillas' && (
+                      <PlanillasTab
+                        clienteId={cliente.id}
+                        planillasHabilitadas={cliente.planillas_habilitadas ?? ['hidrantes', 'extintores']}
+                        onSaved={(ph) => setClientes(prev => prev.map(c => c.id === cliente.id ? { ...c, planillas_habilitadas: ph } : c))}
                       />
                     )}
                   </div>
@@ -1898,6 +1909,98 @@ function TecnicoModal({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── PlanillasTab ──────────────────────────────────────────────────────────────
+
+const PLANILLAS_OPCIONES = [
+  { key: 'hidrantes',  label: 'Hidrantes',  desc: 'Planilla de revisión de hidrantes y gabinetes' },
+  { key: 'extintores', label: 'Extintores', desc: 'Planilla de revisión de matafuegos'            },
+] as const
+
+function PlanillasTab({
+  clienteId,
+  planillasHabilitadas,
+  onSaved,
+}: {
+  clienteId: string
+  planillasHabilitadas: string[]
+  onSaved: (ph: string[]) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState<string | null>(null)
+  const [local,  setLocal]  = useState<string[]>(planillasHabilitadas)
+
+  async function toggle(key: string) {
+    const next = local.includes(key) ? local.filter(k => k !== key) : [...local, key]
+    setLocal(next)
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/supervisor/puestos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clienteId, planillas_habilitadas: next }),
+      })
+      if (!res.ok) { setError('Error al guardar'); setLocal(local); return }
+      onSaved(next)
+    } catch { setError('Error de conexión'); setLocal(local) }
+    finally  { setSaving(false) }
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
+        Planillas habilitadas para este cliente
+      </p>
+
+      {error && (
+        <div className="mb-3 flex items-center gap-2 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2">
+          <AlertCircle size={13} />
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3">
+        {PLANILLAS_OPCIONES.map(({ key, label, desc }) => {
+          const activa = local.includes(key)
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggle(key)}
+              disabled={saving}
+              className={`flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all disabled:opacity-60 ${
+                activa
+                  ? 'border-brand-orange bg-orange-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                activa ? 'bg-brand-orange text-white' : 'bg-gray-100 text-gray-400'
+              }`}>
+                <FileText size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`font-semibold text-sm ${activa ? 'text-brand-ink' : 'text-gray-500'}`}>{label}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
+              </div>
+              <CheckCircle2
+                size={20}
+                className={`shrink-0 transition-colors ${activa ? 'text-brand-orange' : 'text-gray-200'}`}
+              />
+            </button>
+          )
+        })}
+      </div>
+
+      {saving && (
+        <p className="text-xs text-gray-400 text-center mt-3 flex items-center justify-center gap-1">
+          <Loader2 size={12} className="animate-spin" /> Guardando...
+        </p>
+      )}
     </div>
   )
 }

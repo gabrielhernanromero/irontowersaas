@@ -51,12 +51,23 @@ export default async function ReportarNovedadPage({ params, searchParams }: Prop
   }
 
   // Buscar turno activo del técnico
-  const { data: turnoActivo } = await supabaseAdmin()
+  let turnoActivo = (await supabaseAdmin()
     .from('libro_turno')
     .select('id, folio_numero')
     .eq('tecnico_id', user.id)
     .eq('estado', 'abierto')
-    .maybeSingle()
+    .maybeSingle()).data
+
+  // Apoyo: si no tiene turno propio, usar el del encargado en el mismo cliente
+  if (!turnoActivo && elemento.cliente_id) {
+    turnoActivo = (await supabaseAdmin()
+      .from('libro_turno')
+      .select('id, folio_numero')
+      .eq('cliente_id', elemento.cliente_id)
+      .eq('estado', 'abierto')
+      .neq('tecnico_id', user.id)
+      .maybeSingle()).data
+  }
 
   return (
     <div className="flex flex-col gap-4">

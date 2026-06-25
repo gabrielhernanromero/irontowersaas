@@ -61,7 +61,7 @@ export async function POST(
 
   if (!scan) return NextResponse.json({ error: 'Scan no encontrado en esta ronda' }, { status: 404 })
 
-  const puntoNombre = (scan.puntos_control as { nombre: string } | null)?.nombre ?? 'Punto de control'
+  const puntoNombre = (scan.puntos_control as unknown as { nombre: string } | null)?.nombre ?? 'Punto de control'
 
   const hora = new Date().toLocaleTimeString('es-AR', {
     hour: '2-digit', minute: '2-digit',

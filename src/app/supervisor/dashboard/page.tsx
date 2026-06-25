@@ -26,6 +26,8 @@ export default async function DashboardPage() {
     { data: clientes },
     { count: turnosCerradosHoy },
     { count: incidenciasNuevasHoy },
+    { data: rondasHoy },
+    { count: tecnicosActivos },
   ] = await Promise.all([
     supabaseAdmin()
       .from('libro_turno')
@@ -82,6 +84,18 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('estado', 'abierto')
       .gte('created_at', todayStart),
+
+    // Rondas de hoy con datos de cumplimiento
+    supabaseAdmin()
+      .from('rondas')
+      .select('id, completa, total_puntos, puntos_escaneados, tecnico_id, cliente_id, clientes(id, nombre_empresa)')
+      .gte('hora_inicio', todayStart),
+
+    // Técnicos únicos con guardia abierta ahora
+    supabaseAdmin()
+      .from('libro_turno')
+      .select('tecnico_id', { count: 'exact', head: true })
+      .eq('estado', 'abierto'),
   ])
 
   return (
@@ -99,6 +113,16 @@ export default async function DashboardPage() {
         turnosCerrados:       turnosCerradosHoy   ?? 0,
         novedadesHoy:         novedadesRaw?.length ?? 0,
         incidenciasNuevasHoy: incidenciasNuevasHoy ?? 0,
+        rondasHoy:            rondasHoy?.length    ?? 0,
+        rondasCompletas:      rondasHoy?.filter(r => r.completa).length ?? 0,
+        cumplimientoPromedio: rondasHoy?.length
+          ? Math.round(
+              rondasHoy.reduce((sum, r) =>
+                sum + (r.total_puntos > 0 ? r.puntos_escaneados / r.total_puntos : 0), 0
+              ) / rondasHoy.length * 100
+            )
+          : null,
+        tecnicosActivos: tecnicosActivos ?? 0,
       }}
     />
   )

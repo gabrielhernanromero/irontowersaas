@@ -1,80 +1,288 @@
 'use client'
 
 import { useState } from 'react'
+import { AlertTriangle, Bell, CheckCircle2, Clock } from 'lucide-react'
 import type { Alerta } from '@/types/database'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface Props {
   initialAlertas: Alerta[]
 }
 
-export default function AlertasClient({ initialAlertas }: Props) {
-  const [alertas, setAlertas] = useState<Alerta[]>(initialAlertas)
-  const [marking, setMarking] = useState<string | null>(null)
+function formatRelativo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const min  = Math.floor(diff / 60000)
+  if (min < 1)   return 'hace un momento'
+  if (min < 60)  return `hace ${min} min`
+  const hs = Math.floor(min / 60)
+  if (hs < 24)   return `hace ${hs} h`
+  return new Date(dateStr).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
 
-  async function markRead(id: string) {
-    setMarking(id)
-    const res = await fetch(`/api/alertas/${id}/read`, { method: 'PATCH' })
-    if (res.ok) {
-      setAlertas((prev) => prev.map((a) => (a.id === id ? { ...a, leida: true } : a)))
-    }
-    setMarking(null)
+// ── Tarjeta de alerta genérica (sin resolución) ──────────────────────────────
+
+function AlertaCard({ alerta, onRead }: { alerta: Alerta; onRead: (id: string) => void }) {
+  const [marking, setMarking] = useState(false)
+
+  async function handleRead() {
+    setMarking(true)
+    await fetch(`/api/alertas/${alerta.id}/read`, { method: 'PATCH' })
+    onRead(alerta.id)
+    setMarking(false)
   }
 
-  const noLeidas = alertas.filter((a) => !a.leida)
-  const leidas = alertas.filter((a) => a.leida)
+  return (
+    <div className={`rounded-xl border p-4 flex justify-between items-start gap-4 ${
+      alerta.leida
+        ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800'
+        : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800'
+    }`}>
+      <div className="flex items-start gap-3 flex-1 min-w-0">
+        <Bell size={16} className={`shrink-0 mt-0.5 ${alerta.leida ? 'text-gray-400' : 'text-red-500'}`} />
+        <div className="min-w-0">
+          <p className={`text-sm leading-snug ${alerta.leida ? 'text-gray-600 dark:text-gray-400' : 'text-red-800 dark:text-red-300'}`}>
+            {alerta.mensaje}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">{formatRelativo(alerta.created_at)}</p>
+        </div>
+      </div>
+      {!alerta.leida && (
+        <button
+          onClick={handleRead}
+          disabled={marking}
+          className="shrink-0 text-xs bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg min-h-[36px] hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 transition-colors"
+        >
+          {marking ? '...' : 'Leída'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Tarjeta de ronda vencida con flujo de resolución ─────────────────────────
+
+function RondaVencidaCard({
+  alerta,
+  onResolved,
+}: {
+  alerta: Alerta
+  onResolved: (id: string, obs: string, resueltaEn: string) => void
+}) {
+  const [expandido, setExpandido]     = useState(false)
+  const [observacion, setObservacion] = useState('')
+  const [enviando, setEnviando]       = useState(false)
+  const [error, setError]             = useState<string | null>(null)
+
+  async function handleResolver() {
+    if (observacion.trim().length < 10) {
+      setError('Describí la resolución (mínimo 10 caracteres)')
+      return
+    }
+    setError(null)
+    setEnviando(true)
+    const res = await fetch(`/api/alertas/${alerta.id}/resolver`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ observacion: observacion.trim() }),
+    })
+    if (res.ok) {
+      onResolved(alerta.id, observacion.trim(), new Date().toISOString())
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error ?? 'Error al resolver la alerta')
+    }
+    setEnviando(false)
+  }
+
+  // ── Resuelta ──────────────────────────────────────────────────────────────
+  if (alerta.resuelta) {
+    return (
+      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-0.5">
+              Resuelta
+            </p>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{alerta.mensaje}</p>
+            {alerta.resolucion_observacion && (
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 border border-emerald-100 dark:border-emerald-900 rounded-lg px-3 py-2">
+                "{alerta.resolucion_observacion}"
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-1">
+              {alerta.resuelta_en ? formatRelativo(alerta.resuelta_en) : formatRelativo(alerta.created_at)}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Pendiente de resolución ───────────────────────────────────────────────
+  return (
+    <div className="rounded-xl border-2 border-red-400 dark:border-red-700 bg-red-50 dark:bg-red-950/40 overflow-hidden">
+      {/* Cabecera */}
+      <div className="px-4 pt-4 pb-3 flex items-start gap-3">
+        <div className="relative shrink-0 mt-0.5">
+          <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-wide leading-none mb-1">
+            Ronda vencida — acción requerida
+          </p>
+          <p className="text-sm font-medium text-red-900 dark:text-red-200 leading-snug">
+            {alerta.mensaje}
+          </p>
+          <div className="flex items-center gap-1 text-xs text-red-500 dark:text-red-400 mt-1">
+            <Clock size={11} />
+            {formatRelativo(alerta.created_at)}
+          </div>
+        </div>
+      </div>
+
+      {/* Formulario de resolución */}
+      {!expandido ? (
+        <div className="px-4 pb-4">
+          <button
+            onClick={() => setExpandido(true)}
+            className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-2.5 px-4 rounded-xl transition-colors min-h-[44px]"
+          >
+            Registrar resolución
+          </button>
+        </div>
+      ) : (
+        <div className="border-t border-red-200 dark:border-red-800 bg-white dark:bg-gray-900 px-4 py-4 flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+              ¿Cómo se resolvió la situación? <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={observacion}
+              onChange={e => { setObservacion(e.target.value); setError(null) }}
+              placeholder="Ej: Me comuniqué con el técnico. Reportó que el acceso al sector estaba bloqueado temporalmente. Ronda reprogramada."
+              rows={4}
+              className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-red-400 dark:focus:ring-red-600"
+            />
+            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setExpandido(false); setError(null) }}
+              disabled={enviando}
+              className="flex-1 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700 rounded-xl py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[44px] disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleResolver}
+              disabled={enviando || observacion.trim().length < 10}
+              className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900 text-white text-sm font-bold rounded-xl py-2.5 transition-colors min-h-[44px]"
+            >
+              {enviando ? 'Guardando...' : 'Confirmar resolución'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
+
+export default function AlertasClient({ initialAlertas }: Props) {
+  const [alertas, setAlertas] = useState<Alerta[]>(initialAlertas)
+
+  function handleRead(id: string) {
+    setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))
+  }
+
+  function handleResolved(id: string, obs: string, resueltaEn: string) {
+    setAlertas(prev => prev.map(a =>
+      a.id === id
+        ? { ...a, resuelta: true, resolucion_observacion: obs, resuelta_en: resueltaEn, leida: true }
+        : a
+    ))
+  }
+
+  const rondaVencidaPendientes = alertas.filter(a => a.tipo === 'ronda_vencida' && !a.resuelta)
+  const rondaVencidaResueltas  = alertas.filter(a => a.tipo === 'ronda_vencida' && a.resuelta)
+  const otrasNoLeidas          = alertas.filter(a => a.tipo !== 'ronda_vencida' && !a.leida)
+  const otrasLeidas            = alertas.filter(a => a.tipo !== 'ronda_vencida' && a.leida)
+
+  const hayPendientes = rondaVencidaPendientes.length > 0 || otrasNoLeidas.length > 0
+
+  if (alertas.length === 0) {
+    return (
+      <EmptyState
+        icon={<Bell size={28} />}
+        title="Sin alertas"
+        description="Vas a ver aquí las alertas de los técnicos cuando envíen novedades urgentes o se venzan rondas."
+      />
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      {noLeidas.length === 0 && (
-        <p className="text-gray-500 text-sm">No hay alertas pendientes.</p>
+      {!hayPendientes && (
+        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-sm text-emerald-700 dark:text-emerald-400 font-medium">
+          <CheckCircle2 size={15} className="shrink-0" />
+          Todas las alertas están atendidas
+        </div>
       )}
 
-      {noLeidas.length > 0 && (
+      {/* Rondas vencidas pendientes de resolución — máxima prioridad */}
+      {rondaVencidaPendientes.length > 0 && (
         <section>
-          <h2 className="text-sm font-semibold text-red-700 mb-3 uppercase tracking-wide">
-            Sin leer ({noLeidas.length})
+          <h2 className="text-sm font-bold text-red-700 dark:text-red-400 mb-3 uppercase tracking-wide flex items-center gap-2">
+            <AlertTriangle size={14} />
+            Rondas vencidas ({rondaVencidaPendientes.length})
           </h2>
-          <div className="flex flex-col gap-2">
-            {noLeidas.map((alerta) => (
-              <div
-                key={alerta.id}
-                className="bg-red-50 border border-red-200 rounded-lg p-4 flex justify-between items-start gap-4"
-              >
-                <div>
-                  <p className="text-sm text-red-800">{alerta.mensaje}</p>
-                  <p className="text-xs text-red-400 mt-1">
-                    {new Date(alerta.created_at).toLocaleString('es-AR')}
-                  </p>
-                </div>
-                <button
-                  onClick={() => markRead(alerta.id)}
-                  disabled={marking === alerta.id}
-                  className="shrink-0 text-xs bg-white border border-red-300 text-red-700 px-3 py-2 rounded min-h-[36px] hover:bg-red-50 disabled:opacity-50"
-                >
-                  {marking === alerta.id ? '...' : 'Leída'}
-                </button>
-              </div>
+          <div className="flex flex-col gap-3">
+            {rondaVencidaPendientes.map(a => (
+              <RondaVencidaCard key={a.id} alerta={a} onResolved={handleResolved} />
             ))}
           </div>
         </section>
       )}
 
-      {leidas.length > 0 && (
+      {/* Otras alertas sin leer */}
+      {otrasNoLeidas.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-3 uppercase tracking-wide">
+            Sin leer ({otrasNoLeidas.length})
+          </h2>
+          <div className="flex flex-col gap-2">
+            {otrasNoLeidas.map(a => (
+              <AlertaCard key={a.id} alerta={a} onRead={handleRead} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Rondas vencidas ya resueltas */}
+      {rondaVencidaResueltas.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wide">
+            Rondas resueltas
+          </h2>
+          <div className="flex flex-col gap-2">
+            {rondaVencidaResueltas.map(a => (
+              <RondaVencidaCard key={a.id} alerta={a} onResolved={handleResolved} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Otras alertas leídas */}
+      {otrasLeidas.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wide">
             Leídas
           </h2>
           <div className="flex flex-col gap-2">
-            {leidas.map((alerta) => (
-              <div
-                key={alerta.id}
-                className="bg-white border border-gray-100 rounded-lg p-4"
-              >
-                <p className="text-sm text-gray-600">{alerta.mensaje}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {new Date(alerta.created_at).toLocaleString('es-AR')}
-                </p>
-              </div>
+            {otrasLeidas.map(a => (
+              <AlertaCard key={a.id} alerta={a} onRead={handleRead} />
             ))}
           </div>
         </section>

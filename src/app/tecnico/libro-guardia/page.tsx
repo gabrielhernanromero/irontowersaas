@@ -15,6 +15,8 @@ import NovedadesTimeline from './NovedadesTimeline'
 import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
 import JoinTurnoButton from './JoinTurnoButton'
 import IncidenciasPendientesAprobacion from '@/components/libro/IncidenciasPendientesAprobacion'
+import AlertasPendientesAcuse from '@/components/libro/AlertasPendientesAcuse'
+import GuardiaAlertsReader from './GuardiaAlertsReader'
 
 function formatHora(h: string | null) {
   return h ? h.slice(0, 5) : '—'
@@ -43,7 +45,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   const clienteId = userProfile?.cliente_id ?? null
 
   // ── 1. ¿Tiene turno propio abierto (encargado)? ───────────────────────────────
-  const { data: turnoEncargado } = await supabaseServer()
+  const { data: turnoEncargado } = await supabaseAdmin()
     .from('libro_turno')
     .select('*')
     .eq('tecnico_id', user.id)
@@ -122,6 +124,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       .from('libro_turno')
       .select('tecnico_nombre, folio_numero, estado')
       .eq('cliente_id', asignacionHoy.cliente_id)
+      .neq('tecnico_id', user.id)
       .in('estado', ['abierto', 'pendiente_relevo'])
       .or(esquemaId
         ? `esquema_id.eq.${esquemaId},esquema_id.is.null`
@@ -136,38 +139,117 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   const turnoActivo: LibroTurno | null = (turnoEncargado as LibroTurno | null) ?? turnoApoyo
   const rolActivo: 'encargado' | 'apoyo' | null = turnoEncargado ? 'encargado' : turnoApoyo ? 'apoyo' : null
 
+  // ── 5b. Apoyo en el turno activo (participantes activos + asignados en esquema) ─
+  let apoyoList: Array<{ id: string; nombre: string; apellido: string; dni: string | null }> = []
+  if (turnoActivo) {
+    // Participantes que ya se unieron
+    const { data: parts } = await supabaseAdmin()
+      .from('participaciones_turno')
+      .select('usuario_id, users!usuario_id(nombre, apellido, dni)')
+      .eq('turno_id', turnoActivo.id)
+
+    const joinedMap: Record<string, { id: string; nombre: string; apellido: string; dni: string | null }> = {}
+    for (const p of (parts ?? []) as any[]) {
+      joinedMap[p.usuario_id] = {
+        id: p.usuario_id,
+        nombre: p.users?.nombre ?? '',
+        apellido: p.users?.apellido ?? '',
+        dni: p.users?.dni ?? null,
+      }
+    }
+
+    // Asignados en el esquema (incluye los que aún no se unieron)
+    if (turnoActivo.esquema_id) {
+      const { data: excepciones } = await supabaseAdmin()
+        .from('asignaciones_turno')
+        .select('usuario_id, users!usuario_id(nombre, apellido, dni)')
+        .eq('esquema_id', turnoActivo.esquema_id)
+        .eq('rol_turno', 'apoyo')
+        .in('fecha', [hoy, ayer])
+
+      let asignadosBase: typeof apoyoList = []
+      if (excepciones && excepciones.length > 0) {
+        asignadosBase = (excepciones as any[]).map(e => ({
+          id: e.usuario_id,
+          nombre: e.users?.nombre ?? '',
+          apellido: e.users?.apellido ?? '',
+          dni: e.users?.dni ?? null,
+        }))
+      } else {
+        const { data: persistentes } = await supabaseAdmin()
+          .from('asignaciones_persistentes')
+          .select('usuario_id, users!usuario_id(nombre, apellido, dni)')
+          .eq('esquema_id', turnoActivo.esquema_id)
+          .eq('rol_turno', 'apoyo')
+        asignadosBase = ((persistentes ?? []) as any[]).map(p => ({
+          id: p.usuario_id,
+          nombre: p.users?.nombre ?? '',
+          apellido: p.users?.apellido ?? '',
+          dni: p.users?.dni ?? null,
+        }))
+      }
+
+      // Merge: los que ya se unieron tienen prioridad (mismo ID reemplaza el asignado)
+      const mergeRecord: Record<string, typeof apoyoList[0]> = {}
+      for (const a of asignadosBase) mergeRecord[a.id] = a
+      for (const j of Object.values(joinedMap)) mergeRecord[j.id] = j
+      apoyoList = Object.values(mergeRecord)
+    } else {
+      apoyoList = Object.values(joinedMap)
+    }
+
+    // Excluir al encargado del turno de la lista de apoyo
+    apoyoList = apoyoList.filter(a => a.id !== turnoActivo.tecnico_id)
+  }
+
   let novedades: LibroNovedad[] = []
   let incidenciasActivas: Incidencia[] = []
   let incidenciasPendientes: Incidencia[] = []
+  let alertasPendientes: LibroNovedad[] = []
 
   if (turnoActivo) {
-    const [{ data: nov }, { data: inc }, { data: pend }] = await Promise.all([
+    // El apoyo no crea su propio libro_turno; sus novedades van al turno del encargado.
+    // Por eso basta con el ID del turno activo para obtener todas las novedades.
+    const turnoIds = [turnoActivo.id]
+
+    const [{ data: nov }, { data: inc }, { data: pend }, { data: alertas }] = await Promise.all([
       supabaseAdmin()
         .from('libro_novedad')
-        .select('*, incidencias(id, titulo, descripcion, severidad, estado, foto_url, created_at, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni))')
-        .eq('turno_id', turnoActivo.id)
+        .select('*, incidencias(id, titulo, descripcion, severidad, estado, foto_url, created_at, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni)), users!tecnico_id(nombre, apellido)')
+        .in('turno_id', turnoIds)
         .order('created_at', { ascending: true }),
       turnoActivo.cliente_id
         ? supabaseAdmin()
             .from('incidencias')
-            .select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni)')
+            .select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni), detector:users!tecnico_detector_id(nombre, apellido)')
             .eq('cliente_id', turnoActivo.cliente_id)
             .eq('estado', 'abierto')
             .order('created_at', { ascending: true })
         : Promise.resolve({ data: [] }),
-      // Incidencias pendientes de aprobación (solo relevante para el encargado)
       rolActivo === 'encargado'
         ? supabaseAdmin()
             .from('incidencias')
-            .select('*, libro_turno!turno_creacion_id(tecnico_nombre)')
+            .select('*, libro_turno!turno_creacion_id(tecnico_nombre), detector:users!tecnico_detector_id(nombre, apellido)')
             .eq('turno_creacion_id', turnoActivo.id)
             .eq('estado_aprobacion', 'pendiente_revision')
+            .order('created_at', { ascending: true })
+        : Promise.resolve({ data: [] }),
+      // Alertas del apoyo sin acusar — solo visibles para el encargado
+      rolActivo === 'encargado'
+        ? supabaseAdmin()
+            .from('libro_novedad')
+            .select('*, users!tecnico_id(nombre, apellido)')
+            .eq('turno_id', turnoActivo.id)
+            .eq('tipo', 'alerta')
+            .neq('tecnico_id', turnoActivo.tecnico_id)
+            .is('acusado_en', null)
             .order('created_at', { ascending: true })
         : Promise.resolve({ data: [] }),
     ])
     novedades = (nov ?? []) as LibroNovedad[]
     incidenciasActivas = (inc ?? []) as Incidencia[]
     incidenciasPendientes = (pend ?? []) as Incidencia[]
+    alertasPendientes = (alertas ?? []) as LibroNovedad[]
   }
 
   // ── 6. Relevo pendiente (sin asignación activa) ───────────────────────────────
@@ -197,6 +279,8 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       {/* ── ESTADO A: Turno activo (encargado o apoyo) ─────────────────────────── */}
       {turnoActivo ? (
         <>
+          {/* Marca alertas novedad_apoyo como leídas al abrir el libro — encargado y apoyo */}
+          <GuardiaAlertsReader turnoId={turnoActivo.id} />
           {/* Header del turno con badge de rol */}
           <div className={`bg-white rounded-xl border shadow-sm p-4 ${rolActivo === 'apoyo' ? 'border-blue-200' : 'border-green-200'}`}>
             <div className="flex items-center gap-2 mb-3">
@@ -241,7 +325,28 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
                 </p>
               </div>
             </div>
+            {apoyoList.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
+                {apoyoList.map((a, i) => (
+                  <div key={a.id} className="grid grid-cols-2 gap-y-2 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-400">Apoyo{apoyoList.length > 1 ? ` ${i + 1}` : ''}</p>
+                      <p className="font-medium text-brand-ink">{a.nombre} {a.apellido}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">DNI</p>
+                      <p className="font-medium text-brand-ink">{a.dni ?? '—'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Alertas del apoyo sin acusar — solo encargado */}
+          {rolActivo === 'encargado' && (
+            <AlertasPendientesAcuse alertas={alertasPendientes} />
+          )}
 
           {/* Incidencias pendientes de aprobación — solo encargado */}
           {rolActivo === 'encargado' && incidenciasPendientes.length > 0 && (
@@ -259,14 +364,14 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Registro del turno
             </h2>
-            <NovedadesTimeline novedades={novedades} incidencias={incidenciasActivas} turnoId={turnoActivo.id} />
+            <NovedadesTimeline novedades={novedades} incidencias={incidenciasActivas} turnoId={turnoActivo.id} rolActivo={rolActivo} encargadoTecnicoId={turnoActivo.tecnico_id ?? null} />
           </div>
 
           {/* Botones de acción fijos */}
           <div className="fixed bottom-16 left-0 right-0 z-50 bg-white border-t border-gray-200 p-3">
             <div className="max-w-[430px] mx-auto flex gap-3">
               <Link
-                href={`/tecnico/libro-guardia/novedad?turno_id=${turnoActivo.id}`}
+                href={`/tecnico/libro-guardia/novedad?turno_id=${turnoActivo.id}&rol=${rolActivo}`}
                 className="flex-1 flex items-center justify-center gap-2 bg-brand-orange text-white font-bold py-3 rounded-lg text-sm min-h-[48px]"
               >
                 <Plus size={18} />

@@ -1,9 +1,9 @@
 export type Rol = 'admin' | 'supervisor' | 'tecnico' | 'cliente'
 export type TipoPlanilla = 'hidrantes' | 'extintores'
 export type Turno = 'diurno' | 'nocturno'
-export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima'
+export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
-export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta'
+export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
 export type EstadoOperativo = 'ok' | 'falla' | 'faltante'
 
@@ -36,6 +36,7 @@ export interface Cliente {
   activo: boolean
   frecuencia_ronda_minutos: number | null
   aviso_ronda_minutos: number
+  planillas_habilitadas: string[]
 }
 
 export interface Planilla {
@@ -103,6 +104,7 @@ export interface LibroTurno {
   hash_novedades: string | null
   cliente_id: string | null
   esquema_id: string | null
+  interino: boolean
   created_at: string
   novedades?: LibroNovedad[]
 }
@@ -128,6 +130,7 @@ export interface Incidencia {
   aprobada_at: string | null
   created_at: string
   libro_turno?: { tecnico_nombre: string; tecnico_dni: string } | null
+  detector?: { nombre: string; apellido: string } | null
 }
 
 export interface EsquemaCobertura {
@@ -196,6 +199,7 @@ export interface ControlInventarioTurno {
 export interface LibroNovedad {
   id: string
   turno_id: string
+  tecnico_id: string
   tipo: TipoNovedad
   hora: string
   descripcion: string
@@ -205,13 +209,17 @@ export interface LibroNovedad {
   foto_url: string | null
   incidencia_id: string | null
   planilla_id: string | null
-  // Populated when fetched with join: select('*, incidencias(*)')
+  // Populated when fetched with joins
   incidencias?: {
     id: string
     titulo: string
     severidad: 'bajo' | 'medio' | 'alto' | null
     estado: 'abierto' | 'resuelto'
   } | null
+  users?: { nombre: string; apellido: string } | null
+  libro_turno?: { rol_turno: 'encargado' | 'apoyo' | null; tecnico_nombre: string | null } | null
+  acusado_en?: string | null
+  acusado_por?: string | null
   created_at: string
 }
 
@@ -242,6 +250,12 @@ export interface Alerta {
   leida: boolean
   destinatario_id: string
   planilla_id: string | null
+  turno_id: string | null
+  novedad_id: string | null
+  resuelta: boolean
+  resuelta_en: string | null
+  resolucion_observacion: string | null
+  resuelta_por: string | null
   created_at: string
 }
 

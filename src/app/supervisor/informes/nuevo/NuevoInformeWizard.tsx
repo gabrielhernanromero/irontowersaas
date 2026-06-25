@@ -463,7 +463,7 @@ export default function NuevoInformeWizard({ clientes, turnos, incidencias, plan
                       <input type={tipo==='vida_incidencia'?'radio':'checkbox'} checked={selIncs.includes(inc.id)} onChange={()=>toggleI(inc.id)} className="mt-0.5 accent-brand-orange"/>
                       <div className="flex items-center gap-2 min-w-0">
                         <div><p className="text-sm font-medium text-gray-800">{inc.titulo}</p><p className="text-xs text-gray-500">{fmt(inc.created_at)} · {inc.estado==='abierto'?'Abierta':'Resuelta'}</p></div>
-                        {inc.foto_url&&<ImageIcon size={13} className="text-gray-400 shrink-0" title="Tiene foto adjunta"/>}
+                        {inc.foto_url&&<ImageIcon size={13} className="text-gray-400 shrink-0" aria-label="Tiene foto adjunta"/>}
                       </div>
                     </label>
                   ))}

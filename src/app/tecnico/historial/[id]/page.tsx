@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getSession } from '@/lib/auth/getSession'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -10,29 +11,42 @@ export default async function PlanillaDetalleTecnicoPage({
   params: { id: string }
 }) {
   const { user } = await getSession()
-  const sb = supabaseServer()
 
-  const { data: planilla } = await sb
+  // Buscar la planilla sin filtrar por tecnico_id para que el encargado
+  // pueda ver las planillas enviadas por el apoyo del mismo turno
+  const { data: planilla } = await supabaseAdmin()
     .from('planillas')
-    .select('*, clientes(nombre_empresa, direccion)')
+    .select('*, clientes(nombre_empresa, direccion), tecnico:users!tecnico_id(nombre, apellido)')
     .eq('id', params.id)
-    .eq('tecnico_id', user!.id) // técnico solo ve SUS planillas
     .single()
 
   if (!planilla) notFound()
 
+  // Verificar que el usuario tiene acceso: es el autor o pertenece al mismo cliente
+  const { data: userProfile } = await supabaseAdmin()
+    .from('users')
+    .select('cliente_id, rol')
+    .eq('id', user!.id)
+    .single()
+
+  const esAutor    = planilla.tecnico_id === user!.id
+  const mismoPuesto = userProfile?.cliente_id === planilla.cliente_id
+  const esAdmin    = userProfile?.rol === 'admin' || userProfile?.rol === 'supervisor'
+
+  if (!esAutor && !mismoPuesto && !esAdmin) notFound()
+
   const [{ data: hidrantes }, { data: extintores }] = await Promise.all([
-    sb.from('planilla_hidrantes').select('*').eq('planilla_id', params.id).order('numero'),
-    sb.from('planilla_extintores').select('*').eq('planilla_id', params.id).order('numero'),
+    supabaseAdmin().from('planilla_hidrantes').select('*').eq('planilla_id', params.id).order('numero'),
+    supabaseAdmin().from('planilla_extintores').select('*').eq('planilla_id', params.id).order('numero'),
   ])
 
   const esHidrante = planilla.tipo === 'hidrantes'
   const items = (esHidrante ? hidrantes : extintores) ?? []
 
-  // Firma: signed URL de 60 segundos
+  // Firma: signed URL de 60 segundos (admin para evitar bloqueo de RLS en Storage)
   let firmaUrl: string | null = null
   if (planilla.firma_url) {
-    const { data } = await sb.storage.from('firmas').createSignedUrl(planilla.firma_url, 60)
+    const { data } = await supabaseAdmin().storage.from('firmas').createSignedUrl(planilla.firma_url, 60)
     firmaUrl = data?.signedUrl ?? null
   }
 
@@ -75,6 +89,12 @@ export default async function PlanillaDetalleTecnicoPage({
           Planilla de {planilla.tipo}
         </h1>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <dt className="text-gray-500">Técnico</dt>
+          <dd className="font-medium">
+            {(planilla as any).tecnico
+              ? `${(planilla as any).tecnico.nombre} ${(planilla as any).tecnico.apellido}`
+              : '—'}
+          </dd>
           <dt className="text-gray-500">Cliente</dt>
           <dd className="font-medium truncate">{(planilla as any).clientes?.nombre_empresa}</dd>
           <dt className="text-gray-500">Fecha</dt>
@@ -162,9 +182,12 @@ export default async function PlanillaDetalleTecnicoPage({
       {firmaUrl && (
         <div className="bg-white rounded-xl p-4 border border-gray-100">
           <p className="text-sm font-medium text-brand-ink mb-1">Firma del técnico</p>
-          {planilla.firma_aclaracion && (
-            <p className="text-xs text-gray-500 mb-2">{planilla.firma_aclaracion}</p>
-          )}
+          <p className="text-xs text-gray-500 mb-2">
+            {planilla.firma_aclaracion ||
+              ((planilla as any).tecnico
+                ? `${(planilla as any).tecnico.nombre} ${(planilla as any).tecnico.apellido}`
+                : '')}
+          </p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={firmaUrl}

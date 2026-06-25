@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { PlanillaHidrantesSubmitSchema } from '@/lib/validations/planilla'
 import { checkDuplicatePlanilla } from '@/lib/utils/checkDuplicatePlanilla'
 import { alertarSupervisores } from '@/lib/alertas/createAlerta'
+import { notificarNovedad } from '@/lib/alertas/notificarNovedad'
 
 export async function POST(req: NextRequest) {
   // Regla 6: autenticación y captura de user_agent
@@ -37,13 +38,27 @@ export async function POST(req: NextRequest) {
   const { cliente_id, fecha, turno, items, firma_dataurl, firma_aclaracion } = parsed.data
   const admin = supabaseAdmin()
 
-  // Opción A: requiere turno activo para enviar planillas
-  const { data: turnoActivo } = await admin
+  // Turno propio abierto
+  let turnoActivo = (await admin
     .from('libro_turno')
-    .select('id, tecnico_nombre, tecnico_dni')
+    .select('id, tecnico_id, tecnico_nombre, tecnico_dni, cliente_id')
     .eq('tecnico_id', user.id)
     .eq('estado', 'abierto')
-    .maybeSingle()
+    .maybeSingle()).data
+
+  // Si el apoyo no tiene turno propio, busca el turno del encargado en el mismo cliente
+  if (!turnoActivo) {
+    const { data: perfil } = await admin.from('users').select('cliente_id').eq('id', user.id).single()
+    if (perfil?.cliente_id) {
+      turnoActivo = (await admin
+        .from('libro_turno')
+        .select('id, tecnico_id, tecnico_nombre, tecnico_dni, cliente_id')
+        .eq('cliente_id', perfil.cliente_id)
+        .eq('estado', 'abierto')
+        .neq('tecnico_id', user.id)
+        .maybeSingle()).data
+    }
+  }
 
   if (!turnoActivo) {
     return NextResponse.json(
@@ -138,13 +153,29 @@ export async function POST(req: NextRequest) {
 
   // Crear novedad automática en el libro de guardia
   const noItems = hayNo ? ' (con observaciones)' : ''
-  await admin.from('libro_novedad').insert({
-    turno_id: turnoActivo.id,
+  const descripcionNovedad = `Planilla de hidrantes enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
+  const { data: novedad } = await admin.from('libro_novedad').insert({
+    turno_id:   turnoActivo.id,
+    tecnico_id: user.id,
     planilla_id: planilla.id,
-    tipo: 'novedad',
-    hora: new Date().toTimeString().slice(0, 5),
-    descripcion: `Planilla de hidrantes enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`,
-  })
+    tipo:        'novedad',
+    hora:        new Date().toTimeString().slice(0, 5),
+    descripcion: descripcionNovedad,
+  }).select('id').single()
+
+  // Notificar al otro rol (apoyo → encargado o encargado → apoyo)
+  if (novedad) {
+    const { data: autorUser } = await admin.from('users').select('nombre, apellido').eq('id', user.id).single()
+    const autorNombre = autorUser ? `${autorUser.nombre} ${autorUser.apellido}` : 'Técnico'
+    await notificarNovedad({
+      autorId:     user.id,
+      encargadoId: turnoActivo.tecnico_id,
+      turnoId:     turnoActivo.id,
+      novedadId:   novedad.id,
+      mensaje:     `${autorNombre} envió planilla de hidrantes${noItems}`,
+      pushTitle:   '📋 Planilla de hidrantes enviada',
+    })
+  }
 
   return NextResponse.json({ id: planilla.id }, { status: 201 })
 }
