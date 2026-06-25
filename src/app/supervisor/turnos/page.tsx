@@ -10,7 +10,7 @@ interface TecnicoRow {
   nombre: string
   apellido: string
   dni: string | null
-  turno_habitual: string | null
+  activo: boolean
 }
 
 interface ClienteRow {
@@ -24,7 +24,7 @@ export default async function TurnosPage() {
   const [{ data: tecnicos }, { data: clientes }] = await Promise.all([
     supabaseAdmin()
       .from('users')
-      .select('id, nombre, apellido, dni, turno_habitual')
+      .select('id, nombre, apellido, dni, activo')
       .eq('rol', 'tecnico')
       .order('apellido', { ascending: true }),
     supabaseAdmin()
@@ -41,9 +41,9 @@ export default async function TurnosPage() {
           <CalendarDays size={22} className="text-brand-orange" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Asignación de Turnos</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Turnos de Guardia</h1>
           <p className="text-sm text-gray-500">
-            Asigná encargado y apoyo a cada objetivo antes de que comience el turno
+            Configurá los bloques horarios y el personal permanente de cada objetivo
           </p>
         </div>
       </div>
