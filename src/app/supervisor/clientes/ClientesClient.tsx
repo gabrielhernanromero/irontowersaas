@@ -1097,17 +1097,15 @@ function PuntosControlTab({ clienteId, frecuenciaMinutos, avisoMinutos, onRondas
   )
 }
 
-// ── Selector de hora (00:00 – 24:00, intervalos de 30 min) ───────────────────
+// ── Selector de hora ──────────────────────────────────────────────────────────
 function HoraSelect({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
-  const opciones: string[] = []
-  for (let h = 0; h <= 24; h++) {
-    opciones.push(`${String(h).padStart(2, '0')}:00`)
-    if (h < 24) opciones.push(`${String(h).padStart(2, '0')}:30`)
-  }
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} className={className}>
-      {opciones.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
+    <input
+      type="time"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className={className}
+    />
   )
 }
 

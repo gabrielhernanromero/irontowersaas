@@ -31,7 +31,7 @@ export async function PATCH(
     .from('esquemas_cobertura')
     .update(parsed.data)
     .eq('id', params.id)
-    .select('id, nombre, hora_inicio, hora_fin, activo')
+    .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

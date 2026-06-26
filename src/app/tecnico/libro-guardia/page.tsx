@@ -56,7 +56,9 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     .maybeSingle()
 
   // ── 2. ¿Está participando como apoyo en un turno activo o cerrado de hoy? ─────
-  const { data: participacion } = await supabaseAdmin()
+  // Traemos todas las participaciones y elegimos la más relevante en código
+  // para evitar que registros viejos de pruebas pasadas envenenan el estado.
+  const { data: participacionesRaw } = await supabaseAdmin()
     .from('participaciones_turno')
     .select(`
       id,
@@ -66,20 +68,31 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       )
     `)
     .eq('usuario_id', user.id)
-    .maybeSingle()
 
-  const turnoApoyo = participacion?.libro_turno &&
-    (participacion.libro_turno as unknown as { estado: string }).estado === 'abierto'
+  type ParticipacionRaw = {
+    id: string
+    libro_turno: { id: string; folio_numero: number; fecha: string; turno: string; estado: string; horario_inicio: string | null; tecnico_nombre: string; tecnico_dni: string; cliente_id: string | null; esquema_id: string | null } | null
+  }
+  const participaciones = (participacionesRaw ?? []) as unknown as ParticipacionRaw[]
+
+  // Prioridad: turno abierto > turno cerrado hoy
+  const participacion =
+    participaciones.find(p => p.libro_turno?.estado === 'abierto') ??
+    participaciones.find(p =>
+      ['cerrado', 'pendiente_relevo'].includes(p.libro_turno?.estado ?? '') &&
+      p.libro_turno?.fecha === hoy
+    ) ??
+    null
+
+  const turnoApoyo = participacion?.libro_turno?.estado === 'abierto'
     ? (participacion.libro_turno as unknown as LibroTurno)
     : null
 
-  // Turno cerrado hoy en el que el usuario participó como apoyo
-  const _apoyoData = participacion?.libro_turno as unknown as { id: string; estado: string; fecha: string } | null
   const turnoApoyoCerradoHoy: { id: string; estado: string } | null =
-    _apoyoData &&
-    ['cerrado', 'pendiente_relevo'].includes(_apoyoData.estado) &&
-    [hoy, ayer].includes(_apoyoData.fecha)
-      ? { id: _apoyoData.id, estado: _apoyoData.estado }
+    participacion?.libro_turno &&
+    ['cerrado', 'pendiente_relevo'].includes(participacion.libro_turno.estado) &&
+    participacion.libro_turno.fecha === hoy
+      ? { id: participacion.libro_turno.id, estado: participacion.libro_turno.estado }
       : null
 
   // ── 3. ¿Tiene asignación para hoy? Fallback: excepción → persistente ──────────
@@ -282,8 +295,22 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     turnoEncargadoCerradoHoy = cerrado ?? null
   }
 
-  // ── 7. Relevo pendiente — solo si el usuario no cerró ni participó en turno de hoy ──
-  const { data: pendingReleovRaw } = !turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy
+  // ── 7. Turno abierto del esquema — para que el apoyo vea quién lo abrió ─────
+  let turnoAbiertoDeEsquema: {
+    id: string; tecnico_nombre: string; horario_inicio: string | null; horario_fin: string | null
+  } | null = null
+  if (asignacionHoy?.rol_turno === 'apoyo' && !turnoApoyo && !turnoApoyoCerradoHoy && asignacionHoy.esquema_id) {
+    const { data: turnoRaw } = await supabaseAdmin()
+      .from('libro_turno')
+      .select('id, tecnico_nombre, horario_inicio, horario_fin')
+      .eq('estado', 'abierto')
+      .eq('esquema_id', asignacionHoy.esquema_id)
+      .maybeSingle()
+    turnoAbiertoDeEsquema = turnoRaw ?? null
+  }
+
+  // ── 8. Relevo pendiente — solo si el usuario no cerró ni participó en turno de hoy ──
+  const { data: pendingReleovRaw } = !turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy && !turnoAbiertoDeEsquema
     ? await supabaseAdmin()
         .from('libro_turno')
         .select('id, tecnico_nombre, tecnico_dni, horario_fin, fecha, turno')
@@ -531,22 +558,41 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
             </div>
           )}
 
-          {/* ── ESTADO D: Apoyo — encargado no abrió aún ─────────────────── */}
+          {/* ── ESTADO D: Apoyo — confirmar presencia ──────────────────── */}
           {asignacionHoy?.rol_turno === 'apoyo' && !turnoApoyo && !turnoApoyoCerradoHoy && (
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
               <div className="flex items-start gap-3 mb-4">
                 <Users size={20} className="text-blue-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-blue-800 text-sm">Asignado como apoyo</p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Tenés asignación de apoyo para el turno{' '}
-                    <strong>{asignacionHoy.esquema_nombre ?? 'de hoy'}</strong>.
-                  </p>
+                  {turnoAbiertoDeEsquema ? (
+                    <>
+                      <p className="font-semibold text-blue-800 text-sm">Turno en curso</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        <strong>{turnoAbiertoDeEsquema.tecnico_nombre}</strong> abrió el turno{' '}
+                        {formatHora(turnoAbiertoDeEsquema.horario_inicio)}–{formatHora(turnoAbiertoDeEsquema.horario_fin)}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-blue-800 text-sm">Asignado como apoyo</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Turno <strong>{asignacionHoy.esquema_nombre ?? 'de hoy'}</strong> — el encargado todavía no abrió la guardia
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
-              <JoinTurnoButton
-                esquemaId={asignacionHoy.esquema_id!}
-              />
+              {turnoAbiertoDeEsquema ? (
+                <JoinTurnoButton
+                  esquemaId={asignacionHoy.esquema_id!}
+                  label="Confirmar que estoy en puesto"
+                />
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-sm text-blue-600 bg-blue-100 rounded-xl py-3 min-h-[48px]">
+                  <Clock size={16} />
+                  Esperando que el encargado abra la guardia
+                </div>
+              )}
             </div>
           )}
 

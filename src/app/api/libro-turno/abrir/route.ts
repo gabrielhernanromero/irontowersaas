@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { AbrirTurnoSchema } from '@/lib/validations/libroTurno'
 import { findEsquemaActivo } from '@/lib/esquemas/validarVentana'
 import { getArgTime } from '@/lib/cobertura/timeUtils'
+import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 
 async function uploadFirma(dataUrl: string, userId: string, prefix: string): Promise<string> {
   const base64 = dataUrl.split(',')[1]
@@ -191,6 +192,18 @@ export async function POST(req: NextRequest) {
           elemento_afectado_id: v.elemento_id,
           tecnico_detector_id:  user.id,
         })
+    }
+  }
+
+  // Alerta a supervisores por cada apoyo ausente
+  if (personal_apoyo?.length) {
+    const ausentes = personal_apoyo.filter(p => !p.presente)
+    for (const a of ausentes) {
+      await alertarSupervisores(
+        'novedad_apoyo',
+        `${a.nombre} no se presentó al turno de ${tecnico_nombre} (${nuevoTurno.turno}).`,
+        { turnoId: nuevoTurno.id },
+      ).catch(() => {})
     }
   }
 

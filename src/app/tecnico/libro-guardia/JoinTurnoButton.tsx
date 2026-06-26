@@ -7,9 +7,10 @@ import { Users, Loader2, AlertCircle } from 'lucide-react'
 interface Props {
   esquemaId: string
   tarde?: boolean  // true = encargado que llega tarde
+  label?: string
 }
 
-export default function JoinTurnoButton({ esquemaId, tarde = false }: Props) {
+export default function JoinTurnoButton({ esquemaId, tarde = false, label: labelProp }: Props) {
   const router = useRouter()
   const [cargando, setCargando] = useState(false)
   const [error, setError]       = useState('')
@@ -36,7 +37,7 @@ export default function JoinTurnoButton({ esquemaId, tarde = false }: Props) {
     }
   }
 
-  const label    = tarde ? 'Registrar llegada e incorporarme' : 'Unirme al turno activo'
+  const label    = labelProp ?? (tarde ? 'Registrar llegada e incorporarme' : 'Unirme al turno activo')
   const colorCls = tarde
     ? 'bg-amber-500 hover:bg-amber-600'
     : 'bg-blue-600 hover:bg-blue-700'

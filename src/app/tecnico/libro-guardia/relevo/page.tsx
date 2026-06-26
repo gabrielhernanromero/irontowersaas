@@ -73,6 +73,21 @@ export default async function RelevoPPage({ searchParams }: Props) {
   const entranteNombre = `${perfil?.nombre ?? ''} ${perfil?.apellido ?? ''}`.trim()
   const entranteDni = perfil?.dni ?? ''
 
+  // Personal de apoyo del turno saliente
+  const { data: participaciones } = await supabaseAdmin()
+    .from('participaciones_turno')
+    .select('usuario_id, users!usuario_id(nombre, apellido, dni)')
+    .eq('turno_id', turnoId)
+
+  const apoyosSalientes = ((participaciones ?? []) as unknown as {
+    usuario_id: string
+    users: { nombre: string; apellido: string; dni: string | null } | null
+  }[]).map(p => ({
+    id:      p.usuario_id,
+    nombre:  `${p.users?.nombre ?? ''} ${p.users?.apellido ?? ''}`.trim(),
+    dni:     p.users?.dni ?? null,
+  }))
+
   // Novedades con join a incidencias para mostrar badge
   const { data: novedadesRaw } = await supabaseAdmin()
     .from('libro_novedad')
@@ -130,6 +145,19 @@ export default async function RelevoPPage({ searchParams }: Props) {
             </p>
           </div>
         </div>
+        {apoyosSalientes.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-400 mb-2">Apoyo</p>
+            <div className="space-y-1">
+              {apoyosSalientes.map(a => (
+                <div key={a.id} className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-brand-ink">{a.nombre}</span>
+                  {a.dni && <span className="text-gray-500 text-xs">DNI {a.dni}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <RelevoPForm

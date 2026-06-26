@@ -94,6 +94,7 @@ export default function AbrirGuardiaForm({
           tecnico_dni:     tecnicoDni,
           horario_inicio:  horario,
           cliente_id:      clienteId || undefined,
+          esquema_id:      esquema?.id || undefined,
           interino:        interino || undefined,
           turno_saliente_id: turnoSalienteId,
           personal_apoyo: personalApoyo.length > 0
@@ -426,8 +427,7 @@ export default function AbrirGuardiaForm({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEstado(el.id, v?.estado === 'falla' ? 'faltante' : 'falla')}
-                        onContextMenu={e => { e.preventDefault(); setEstado(el.id, 'faltante') }}
+                        onClick={() => setEstado(el.id, 'falla')}
                         className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors min-h-[36px] ${
                           v?.estado === 'falla' || v?.estado === 'faltante'
                             ? 'bg-red-500 border-red-500 text-white'
