@@ -55,14 +55,14 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     .limit(1)
     .maybeSingle()
 
-  // ── 2. ¿Está participando como apoyo en un turno activo? ─────────────────────
+  // ── 2. ¿Está participando como apoyo en un turno activo o cerrado de hoy? ─────
   const { data: participacion } = await supabaseAdmin()
     .from('participaciones_turno')
     .select(`
       id,
       libro_turno!turno_id (
         id, folio_numero, fecha, turno, estado,
-        horario_inicio, tecnico_nombre, tecnico_dni, cliente_id
+        horario_inicio, tecnico_nombre, tecnico_dni, cliente_id, esquema_id
       )
     `)
     .eq('usuario_id', user.id)
@@ -72,6 +72,15 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     (participacion.libro_turno as unknown as { estado: string }).estado === 'abierto'
     ? (participacion.libro_turno as unknown as LibroTurno)
     : null
+
+  // Turno cerrado hoy en el que el usuario participó como apoyo
+  const _apoyoData = participacion?.libro_turno as unknown as { id: string; estado: string; fecha: string } | null
+  const turnoApoyoCerradoHoy: { id: string; estado: string } | null =
+    _apoyoData &&
+    ['cerrado', 'pendiente_relevo'].includes(_apoyoData.estado) &&
+    [hoy, ayer].includes(_apoyoData.fecha)
+      ? { id: _apoyoData.id, estado: _apoyoData.estado }
+      : null
 
   // ── 3. ¿Tiene asignación para hoy? Fallback: excepción → persistente ──────────
   let asignacionHoy: { rol_turno: 'encargado' | 'apoyo'; cliente_id: string | null; esquema_id: string | null; esquema_nombre: string | null } | null = null
@@ -259,8 +268,22 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     alertasPendientes = (alertas ?? []) as LibroNovedad[]
   }
 
-  // ── 6. Relevo pendiente (sin asignación activa) ───────────────────────────────
-  const { data: pendingRelevo } = !turnoActivo
+  // ── 6. ¿El encargado ya cerró su turno de hoy? ───────────────────────────────
+  let turnoEncargadoCerradoHoy: { id: string; estado: string; folio_numero: number } | null = null
+  if (!turnoEncargado && !turnoActivo && asignacionHoy?.rol_turno === 'encargado' && asignacionHoy?.esquema_id) {
+    const { data: cerrado } = await supabaseAdmin()
+      .from('libro_turno')
+      .select('id, estado, folio_numero')
+      .eq('tecnico_id', user.id)
+      .eq('esquema_id', asignacionHoy.esquema_id)
+      .in('estado', ['cerrado', 'pendiente_relevo'])
+      .in('fecha', [hoy, ayer])
+      .maybeSingle()
+    turnoEncargadoCerradoHoy = cerrado ?? null
+  }
+
+  // ── 7. Relevo pendiente — solo si el usuario no cerró ni participó en turno de hoy ──
+  const { data: pendingReleovRaw } = !turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy
     ? await supabaseAdmin()
         .from('libro_turno')
         .select('id, tecnico_nombre, tecnico_dni, horario_fin, fecha, turno')
@@ -270,6 +293,11 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
         .limit(1)
         .maybeSingle()
     : { data: null }
+
+  // Excluir el caso donde el usuario fue apoyo de ese mismo turno pendiente
+  const pendingRelevo = (pendingReleovRaw && turnoApoyoCerradoHoy?.id !== pendingReleovRaw.id)
+    ? pendingReleovRaw
+    : null
 
   return (
     <div className="flex flex-col gap-4 pb-28">
@@ -399,6 +427,50 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
         </>
       ) : (
         <>
+          {/* ── ESTADO G: Guardia del día ya cerrada — encargado ──────────── */}
+          {turnoEncargadoCerradoHoy && asignacionHoy?.rol_turno === 'encargado' && (
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
+              <div className="flex items-start gap-3 mb-3">
+                <CheckCircle2 size={20} className="text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-gray-700 text-sm">Guardia del día registrada</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ya cerraste tu guardia de hoy. No podés abrir un nuevo turno hasta el próximo día.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={`/tecnico/libro-guardia/${turnoEncargadoCerradoHoy.id}`}
+                className="flex items-center justify-center gap-2 w-full bg-gray-100 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+              >
+                <BookOpen size={16} />
+                Ver registro del turno
+              </Link>
+            </div>
+          )}
+
+          {/* ── ESTADO G2: Guardia del día ya cerrada — apoyo ─────────────── */}
+          {turnoApoyoCerradoHoy && (
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
+              <div className="flex items-start gap-3 mb-3">
+                <CheckCircle2 size={20} className="text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-gray-700 text-sm">Guardia del día registrada</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    El turno al que pertenecías ya fue cerrado. Podés revisar el registro en el historial.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={`/tecnico/libro-guardia/${turnoApoyoCerradoHoy.id}`}
+                className="flex items-center justify-center gap-2 w-full bg-gray-100 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+              >
+                <BookOpen size={16} />
+                Ver registro del turno
+              </Link>
+            </div>
+          )}
+
           {/* ── ESTADO B: Relevo pendiente ─────────────────────────────────── */}
           {pendingRelevo && (
             <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
@@ -460,7 +532,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
           )}
 
           {/* ── ESTADO D: Apoyo — encargado no abrió aún ─────────────────── */}
-          {asignacionHoy?.rol_turno === 'apoyo' && !turnoApoyo && (
+          {asignacionHoy?.rol_turno === 'apoyo' && !turnoApoyo && !turnoApoyoCerradoHoy && (
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
               <div className="flex items-start gap-3 mb-4">
                 <Users size={20} className="text-blue-600 shrink-0 mt-0.5" />
@@ -479,7 +551,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
           )}
 
           {/* ── ESTADO E: Encargado asignado sin turno, puede abrir ─────── */}
-          {asignacionHoy?.rol_turno === 'encargado' && !turnoBlockeante && (
+          {asignacionHoy?.rol_turno === 'encargado' && !turnoBlockeante && !turnoEncargadoCerradoHoy && (
             <div className="bg-brand-orange/5 border-2 border-brand-orange/30 rounded-xl p-4">
               <div className="flex items-start gap-3 mb-4">
                 <ShieldCheck size={20} className="text-brand-orange shrink-0 mt-0.5" />
