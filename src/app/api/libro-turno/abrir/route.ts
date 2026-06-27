@@ -149,6 +149,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Hora de apertura: siempre del servidor, nunca del cliente
+  const { hours: hA, minutes: mA } = getArgTime()
+  const horarioApertura = `${String(hA).padStart(2, '0')}:${String(mA).padStart(2, '0')}`
+
   // Crear el nuevo turno
   const { data: nuevoTurno, error: insertErr } = await supabaseAdmin()
     .from('libro_turno')
@@ -158,7 +162,7 @@ export async function POST(req: NextRequest) {
       tecnico_id: user.id,
       tecnico_nombre,
       tecnico_dni,
-      horario_inicio,
+      horario_inicio: horarioApertura,
       cliente_id:  cliente_id  ?? null,
       esquema_id:  esquema_id  ?? null,
       interino:    interino    ?? false,
@@ -248,7 +252,7 @@ export async function POST(req: NextRequest) {
       turno_id:   nuevoTurno.id,
       tecnico_id: user.id,
       tipo:       'apertura',
-      hora:       horario_inicio,
+      hora:       horarioApertura,
       descripcion: descripcionApertura,
     })
 

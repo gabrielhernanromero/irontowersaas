@@ -12,6 +12,7 @@ export async function checkDuplicatePlanilla(
     .eq('tecnico_id', tecnicoId)
     .eq('tipo', tipo)
     .eq('turno_id', turnoId)
+    .eq('inmutable', true)
     .maybeSingle()
 
   if (error) throw new Error(`Error checking duplicate: ${error.message}`)

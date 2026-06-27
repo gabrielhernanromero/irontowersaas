@@ -340,14 +340,16 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     turnoAbiertoDeEsquema = turnoRaw ?? null
   }
 
-  // ── 8. Relevo pendiente — solo si el usuario no cerró ni participó en turno de hoy ──
+  // ── 8. Relevo pendiente ───────────────────────────────────────────────────────
+  // No se excluye el propio tecnico_id: el mismo encargado puede cubrir el
+  // turno siguiente (ej. pruebas o técnico con doble cobertura).
+  // El guard solo descarta si ya hay turno activo o el apoyo ya cerró hoy.
   let pendingReleovRaw: { id: string; tecnico_nombre: string; tecnico_dni: string; horario_fin: string | null; fecha: string; turno: string } | null = null
-  if (!turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy && !turnoAbiertoDeEsquema) {
+  if (!turnoActivo && !turnoApoyoCerradoHoy && !turnoAbiertoDeEsquema) {
     const q = supabaseAdmin()
       .from('libro_turno')
       .select('id, tecnico_nombre, tecnico_dni, horario_fin, fecha, turno')
       .eq('estado', 'pendiente_relevo')
-      .neq('tecnico_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
     if (clienteId) q.eq('cliente_id', clienteId)
@@ -355,11 +357,10 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     pendingReleovRaw = data ?? null
   }
 
-  // El relevo solo aplica al encargado entrante, nunca al apoyo del turno que cerró
+  // El relevo aplica al encargado entrante (incluye mismo usuario cubriendo turno siguiente)
   const pendingRelevo = (
     pendingReleovRaw &&
-    asignacionHoy?.rol_turno === 'encargado' &&
-    turnoApoyoCerradoHoy?.id !== pendingReleovRaw.id
+    asignacionHoy?.rol_turno === 'encargado'
   ) ? pendingReleovRaw : null
 
   return (
@@ -400,45 +401,48 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
               </span>
               <span className="ml-auto text-xs text-gray-400">Folio #{turnoActivo.folio_numero}</span>
             </div>
-            <div className="grid grid-cols-2 gap-y-2 text-sm">
-              <div>
-                <p className="text-xs text-gray-400">Encargado</p>
-                <p className="font-medium text-brand-ink">{turnoActivo.tecnico_nombre}</p>
+            <div className="flex flex-col gap-3 text-sm">
+              {/* Personal — encargado primero */}
+              <div className="grid grid-cols-2 gap-y-1">
+                <div>
+                  <p className="text-xs text-gray-400">Encargado</p>
+                  <p className="font-medium text-brand-ink">{turnoActivo.tecnico_nombre}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">DNI</p>
+                  <p className="font-medium text-brand-ink">{turnoActivo.tecnico_dni}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-400">DNI</p>
-                <p className="font-medium text-brand-ink">{turnoActivo.tecnico_dni}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Fecha / Turno</p>
-                <p className="font-medium text-brand-ink capitalize">
-                  {formatFecha(turnoActivo.fecha)} — {turnoActivo.turno}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Inicio</p>
-                <p className="font-medium text-brand-ink flex items-center gap-1">
-                  <Clock size={13} />
-                  {formatHora(turnoActivo.horario_inicio)}
-                </p>
+              {/* Apoyo(s) */}
+              {apoyoList.map((a, i) => (
+                <div key={a.id} className="grid grid-cols-2 gap-y-1">
+                  <div>
+                    <p className="text-xs text-gray-400">Apoyo{apoyoList.length > 1 ? ` ${i + 1}` : ''}</p>
+                    <p className="font-medium text-brand-ink">{a.nombre} {a.apellido}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">DNI</p>
+                    <p className="font-medium text-brand-ink">{a.dni ?? '—'}</p>
+                  </div>
+                </div>
+              ))}
+              {/* Fecha y turno al final */}
+              <div className="grid grid-cols-2 gap-y-1 pt-2 border-t border-gray-100">
+                <div>
+                  <p className="text-xs text-gray-400">Fecha / Turno</p>
+                  <p className="font-medium text-brand-ink capitalize">
+                    {formatFecha(turnoActivo.fecha)} — {turnoActivo.turno}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Inicio</p>
+                  <p className="font-medium text-brand-ink flex items-center gap-1">
+                    <Clock size={13} />
+                    {formatHora(turnoActivo.horario_inicio)}
+                  </p>
+                </div>
               </div>
             </div>
-            {apoyoList.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
-                {apoyoList.map((a, i) => (
-                  <div key={a.id} className="grid grid-cols-2 gap-y-2 text-sm">
-                    <div>
-                      <p className="text-xs text-gray-400">Apoyo{apoyoList.length > 1 ? ` ${i + 1}` : ''}</p>
-                      <p className="font-medium text-brand-ink">{a.nombre} {a.apellido}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">DNI</p>
-                      <p className="font-medium text-brand-ink">{a.dni ?? '—'}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Alertas del apoyo sin acusar — solo encargado */}
@@ -491,7 +495,8 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       ) : (
         <>
           {/* ── ESTADO G: Guardia del día ya cerrada — encargado ──────────── */}
-          {turnoEncargadoCerradoHoy && (
+          {/* Se oculta cuando hay relevo pendiente para priorizar la firma del relevo */}
+          {turnoEncargadoCerradoHoy && !pendingRelevo && (
             <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
               <div className="flex items-start gap-3 mb-3">
                 <CheckCircle2 size={20} className="text-gray-400 shrink-0 mt-0.5" />

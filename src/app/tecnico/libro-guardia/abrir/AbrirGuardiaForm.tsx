@@ -314,19 +314,16 @@ export default function AbrirGuardiaForm({
           </div>
         )}
 
-        {/* Hora de inicio — siempre editable */}
+        {/* Hora de inicio — solo lectura, la registra el servidor */}
         <div>
-          <label htmlFor="horario" className="block text-sm font-medium mb-1">
+          <p className="text-xs text-gray-400 mb-1">
             <Clock size={13} className="inline mr-1" />
             Hora de inicio
-          </label>
-          <input
-            id="horario"
-            type="time"
-            value={horario}
-            onChange={e => setHorario(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-3 text-base min-h-[44px]"
-          />
+          </p>
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 min-h-[44px]">
+            <span className="text-base font-semibold text-brand-ink">{horario}</span>
+            <span className="text-xs text-gray-400 ml-1">hs · registrada al confirmar</span>
+          </div>
         </div>
       </div>
 

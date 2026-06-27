@@ -69,6 +69,13 @@ export default async function ExtintoresPage() {
     )
   }
 
+  const { data: perfil } = await supabaseAdmin()
+    .from('users').select('nombre, apellido, dni').eq('id', user.id).single()
+
+  const aclaracion = perfil
+    ? `${perfil.nombre} ${perfil.apellido} — DNI ${perfil.dni}`
+    : undefined
+
   const clienteData = turnoActivo?.clientes as unknown as { nombre_empresa: string } | null
 
   return (
@@ -80,6 +87,7 @@ export default async function ExtintoresPage() {
         clienteId={turnoActivo?.cliente_id ?? null}
         clienteNombre={clienteData?.nombre_empresa ?? null}
         turnoDefault={(turnoActivo?.turno as 'diurno' | 'nocturno') ?? (new Date().getHours() < 18 ? 'diurno' : 'nocturno')}
+        aclaracion={aclaracion}
       />
     </div>
   )

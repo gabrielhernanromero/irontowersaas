@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
     .upload(firmaPath, firmaBuffer, { contentType: 'image/png' })
 
   if (uploadErr) {
+    console.error('[extintores] firma upload:', uploadErr.message)
     return NextResponse.json({ error: 'Error al subir la firma' }, { status: 500 })
   }
 
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (planillaErr || !planilla) {
+    console.error('[extintores] planilla insert:', planillaErr?.message)
     return NextResponse.json({ error: 'Error al crear la planilla' }, { status: 500 })
   }
 
@@ -125,6 +127,7 @@ export async function POST(req: NextRequest) {
 
   const { error: itemsErr } = await admin.from('planilla_extintores').insert(extintores)
   if (itemsErr) {
+    console.error('[extintores] items insert:', itemsErr.message)
     return NextResponse.json({ error: 'Error al guardar los ítems' }, { status: 500 })
   }
 
@@ -135,6 +138,7 @@ export async function POST(req: NextRequest) {
     .eq('id', planilla.id)
 
   if (immutableErr) {
+    console.error('[extintores] set inmutable:', immutableErr.message)
     return NextResponse.json({ error: 'Error al cerrar la planilla' }, { status: 500 })
   }
 

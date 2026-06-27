@@ -6,9 +6,10 @@ import ReactSignatureCanvas from 'react-signature-canvas'
 interface Props {
   onChange: (dataUrl: string | null) => void
   onAclaracionChange: (val: string) => void
+  aclaracion?: string  // si se pasa, el campo es de solo lectura con este valor
 }
 
-export default function SignatureCanvas({ onChange, onAclaracionChange }: Props) {
+export default function SignatureCanvas({ onChange, onAclaracionChange, aclaracion }: Props) {
   const ref = useRef<ReactSignatureCanvas>(null)
 
   function handleEnd() {
@@ -46,16 +47,22 @@ export default function SignatureCanvas({ onChange, onAclaracionChange }: Props)
         Borrar firma
       </button>
       <div>
-        <label htmlFor="firma_aclaracion" className="block text-sm font-medium text-brand-ink mb-1">
-          Aclaración <span className="text-gray-500 font-normal">(nombre y apellido)</span>
+        <label className="block text-sm font-medium text-brand-ink mb-1">
+          Aclaración
         </label>
-        <input
-          id="firma_aclaracion"
-          type="text"
-          placeholder=""
-          onChange={(e) => onAclaracionChange(e.target.value)}
-          className="w-full border border-gray-300 rounded p-3 text-base min-h-[44px] focus:outline-none focus:ring-2 focus:ring-brand-blue"
-        />
+        {aclaracion ? (
+          <div className="w-full border border-gray-200 bg-gray-50 rounded p-3 text-base min-h-[44px] text-brand-ink">
+            {aclaracion}
+          </div>
+        ) : (
+          <input
+            id="firma_aclaracion"
+            type="text"
+            placeholder="Nombre y apellido"
+            onChange={(e) => onAclaracionChange(e.target.value)}
+            className="w-full border border-gray-300 rounded p-3 text-base min-h-[44px] focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          />
+        )}
       </div>
     </div>
   )

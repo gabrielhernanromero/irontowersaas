@@ -101,23 +101,25 @@ export async function PATCH(req: NextRequest) {
         .eq('cliente_id', perfilUser.cliente_id)
         .eq('activo', true)
 
-      const esquemaActivo = findEsquemaActivo((esquemasRaw ?? []) as EsquemaVentana[])
-      if (esquemaActivo) {
-        const { hoy, ayer } = getArgTime()
-        const esquemaId = (esquemaActivo as EsquemaVentana & { id: string }).id
+      // Iterar cada esquema individualmente para no asumir el primero activo
+      // cuando hay solapamiento de horarios (mañana/tarde ambos en ventana).
+      const { hoy, ayer } = getArgTime()
+      for (const esq of (esquemasRaw ?? [])) {
+        if (!findEsquemaActivo([esq as EsquemaVentana])) continue
+        const esquemaId = (esq as EsquemaVentana & { id: string }).id
 
         const { data: exc } = await supabaseAdmin()
           .from('asignaciones_turno').select('rol_turno')
           .eq('esquema_id', esquemaId).eq('usuario_id', user.id)
           .in('fecha', [hoy, ayer]).maybeSingle()
 
-        if (exc?.rol_turno === 'encargado') {
-          autorizado = true
-        } else if (!exc) {
+        if (exc?.rol_turno === 'encargado') { autorizado = true; break }
+
+        if (!exc) {
           const { data: pers } = await supabaseAdmin()
             .from('asignaciones_persistentes').select('rol_turno')
             .eq('esquema_id', esquemaId).eq('usuario_id', user.id).maybeSingle()
-          if (pers?.rol_turno === 'encargado') autorizado = true
+          if (pers?.rol_turno === 'encargado') { autorizado = true; break }
         }
       }
     }
@@ -154,9 +156,36 @@ export async function PATCH(req: NextRequest) {
 
   if (closeErr) return NextResponse.json({ error: 'Error al cerrar el turno saliente' }, { status: 500 })
 
+  // Detectar el esquema activo para el usuario entrante, para que el nuevo turno
+  // quede vinculado al esquema correcto y el cierre detecte el relevo siguiente.
+  let esquemaIdNuevoTurno: string | null = null
+  if (perfilUser?.cliente_id) {
+    const { data: esqRaw } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+      .eq('cliente_id', perfilUser.cliente_id)
+      .eq('activo', true)
+    const { hoy: hoyEsq, ayer: ayerEsq } = getArgTime()
+    for (const esq of (esqRaw ?? [])) {
+      if (!findEsquemaActivo([esq as EsquemaVentana])) continue
+      const eId = (esq as EsquemaVentana & { id: string }).id
+      const { data: eExc } = await supabaseAdmin()
+        .from('asignaciones_turno').select('rol_turno')
+        .eq('esquema_id', eId).eq('usuario_id', user.id)
+        .in('fecha', [hoyEsq, ayerEsq]).maybeSingle()
+      if (eExc?.rol_turno === 'encargado') { esquemaIdNuevoTurno = eId; break }
+      if (!eExc) {
+        const { data: ePers } = await supabaseAdmin()
+          .from('asignaciones_persistentes').select('rol_turno')
+          .eq('esquema_id', eId).eq('usuario_id', user.id).maybeSingle()
+        if (ePers?.rol_turno === 'encargado') { esquemaIdNuevoTurno = eId; break }
+      }
+    }
+  }
+
   const { data: nuevoTurno, error: insertErr } = await supabaseAdmin()
     .from('libro_turno')
-    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null })
+    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null, esquema_id: esquemaIdNuevoTurno })
     .select()
     .single()
 

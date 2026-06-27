@@ -75,6 +75,8 @@ export default async function RelevoPPage({ searchParams }: Props) {
 
   // Guard: solo el encargado dentro de su franja horaria puede firmar el relevo
   // Los admins están exentos para permitir operaciones de soporte
+  // Se itera cada esquema individualmente (como en el hub) para evitar que
+  // findEsquemaActivo devuelva el esquema incorrecto en período de solapamiento.
   if (perfil?.rol !== 'admin') {
     const clienteIdTecnico = perfil?.cliente_id ?? null
     let autorizado = false
@@ -86,11 +88,11 @@ export default async function RelevoPPage({ searchParams }: Props) {
         .eq('cliente_id', clienteIdTecnico)
         .eq('activo', true)
 
-      const esquemaActivo = findEsquemaActivo((esquemasRaw ?? []) as EsquemaVentana[])
+      const { hoy, ayer } = getArgTime()
 
-      if (esquemaActivo) {
-        const { hoy, ayer } = getArgTime()
-        const esquemaId = (esquemaActivo as EsquemaVentana & { id: string }).id
+      for (const esq of (esquemasRaw ?? [])) {
+        if (!findEsquemaActivo([esq as EsquemaVentana])) continue
+        const esquemaId = (esq as EsquemaVentana & { id: string }).id
 
         const { data: exc } = await supabaseAdmin()
           .from('asignaciones_turno')
@@ -100,16 +102,16 @@ export default async function RelevoPPage({ searchParams }: Props) {
           .in('fecha', [hoy, ayer])
           .maybeSingle()
 
-        if (exc?.rol_turno === 'encargado') {
-          autorizado = true
-        } else if (!exc) {
+        if (exc?.rol_turno === 'encargado') { autorizado = true; break }
+
+        if (!exc) {
           const { data: pers } = await supabaseAdmin()
             .from('asignaciones_persistentes')
             .select('rol_turno')
             .eq('esquema_id', esquemaId)
             .eq('usuario_id', me.id)
             .maybeSingle()
-          if (pers?.rol_turno === 'encargado') autorizado = true
+          if (pers?.rol_turno === 'encargado') { autorizado = true; break }
         }
       }
     }

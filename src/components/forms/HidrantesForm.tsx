@@ -47,9 +47,10 @@ interface Props {
   clienteId: string | null
   clienteNombre: string | null
   turnoDefault: 'diurno' | 'nocturno'
+  aclaracion?: string
 }
 
-export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault }: Props) {
+export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, aclaracion }: Props) {
   const router = useRouter()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -64,7 +65,7 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault }
       turno: turnoDefault,
       items: buildDefaultItems(),
       firma_dataurl: '',
-      firma_aclaracion: '',
+      firma_aclaracion: aclaracion ?? '',
     },
   })
 
@@ -197,7 +198,7 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault }
         {/* Firma */}
         <div className="mb-6">
           <h2 className="text-base font-semibold mb-2 text-brand-ink">Firma del técnico</h2>
-          <SignatureCanvas onChange={handleFirma} onAclaracionChange={handleAclaracion} />
+          <SignatureCanvas onChange={handleFirma} onAclaracionChange={handleAclaracion} aclaracion={aclaracion} />
           {errors.firma_dataurl && (
             <p className="text-red-600 text-sm mt-1">{errors.firma_dataurl.message}</p>
           )}

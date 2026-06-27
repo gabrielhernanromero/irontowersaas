@@ -2,7 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, Circle, MapPin, Loader2, Trophy, Flag, QrCode, AlertCircle } from 'lucide-react'
+import { CheckCircle, Circle, MapPin, Loader2, Trophy, Flag, QrCode, AlertCircle, Camera, X } from 'lucide-react'
+import jsQR from 'jsqr'
 
 interface Scan  { id: string; punto_control_id: string }
 interface Punto { id: string; nombre: string; ubicacion: string | null; orden: number }
@@ -24,25 +25,27 @@ interface Props {
   puntos: Punto[]
 }
 
-// BarcodeDetector no está en los tipos TS estándar
-declare const BarcodeDetector: {
-  new(options?: { formats: string[] }): {
-    detect(image: ImageBitmapSource): Promise<Array<{ rawValue: string }>>
-  }
-  getSupportedFormats?(): Promise<string[]>
+interface PendingConfirm {
+  puntoId:     string
+  puntoNombre: string
+  codigoQr:    string
+  fotoFile:    File | null
+  fotoPreview: string | null
 }
 
 export default function RondaActivaClient({ ronda, puntos }: Props) {
   const router = useRouter()
-  const [scans,        setScans]        = useState<Scan[]>(ronda.ronda_scans)
-  const [escaneados,   setEscaneados]   = useState(ronda.puntos_escaneados)
-  const [completa,     setCompleta]     = useState(ronda.completa)
-  const [completing,   setCompleting]   = useState(false)
-  const [error,        setError]        = useState<string | null>(null)
-  const [scanningId,   setScanningId]   = useState<string | null>(null)  // punto.id siendo procesado
-  const [iosWarning,   setIosWarning]   = useState(false)
+  const [scans,          setScans]          = useState<Scan[]>(ronda.ronda_scans)
+  const [escaneados,     setEscaneados]     = useState(ronda.puntos_escaneados)
+  const [completa,       setCompleta]       = useState(ronda.completa)
+  const [completing,     setCompleting]     = useState(false)
+  const [error,          setError]          = useState<string | null>(null)
+  const [scanningId,     setScanningId]     = useState<string | null>(null)
+  const [uploadingFoto,  setUploadingFoto]  = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const qrInputRef   = useRef<HTMLInputElement>(null)
+  const fotoInputRef = useRef<HTMLInputElement>(null)
   const pendingPuntoId = useRef<string | null>(null)
 
   const escaneadosIds = new Set(scans.map(s => s.punto_control_id))
@@ -51,21 +54,12 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
   function handlePuntoClick(puntoId: string) {
     if (escaneadosIds.has(puntoId)) return
     setError(null)
-
-    const tieneDetector = typeof BarcodeDetector !== 'undefined'
-    if (!tieneDetector) {
-      // iOS Safari no soporta BarcodeDetector — avisamos
-      setIosWarning(true)
-      return
-    }
-
     pendingPuntoId.current = puntoId
-    fileInputRef.current?.click()
+    qrInputRef.current?.click()
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleQrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    // Limpiar el input para permitir capturar de nuevo si falla
     e.target.value = ''
     if (!file || !pendingPuntoId.current) return
 
@@ -75,41 +69,84 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
     setError(null)
 
     try {
-      const bitmap = await createImageBitmap(file)
-      const detector = new BarcodeDetector({ formats: ['qr_code'] })
-      const results  = await detector.detect(bitmap)
+      const bitmap  = await createImageBitmap(file)
+      const canvas  = document.createElement('canvas')
+      canvas.width  = bitmap.width
+      canvas.height = bitmap.height
+      const ctx     = canvas.getContext('2d')!
+      ctx.drawImage(bitmap, 0, 0)
+      const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
+      const result    = jsQR(imageData.data, imageData.width, imageData.height)
 
-      if (!results.length) {
-        setError('No se detectó un código QR. Intentá de nuevo apuntando bien.')
-        setScanningId(null)
+      setScanningId(null)
+
+      if (!result) {
+        setError('No se detectó un código QR. Apuntá bien la cámara al código e intentá de nuevo.')
         return
       }
 
-      const rawValue = results[0].rawValue
-      // El rawValue puede ser una URL (ej: https://app.com/ronda/scan?c=CODIGO) o el código directo
-      let codigoQr = rawValue
+      let codigoQr = result.data
       try {
-        const url = new URL(rawValue)
-        const c = url.searchParams.get('c') ?? url.searchParams.get('codigo')
+        const url = new URL(result.data)
+        const c   = url.searchParams.get('c') ?? url.searchParams.get('codigo')
         if (c) codigoQr = c
       } catch {
-        // rawValue no es URL — lo usamos tal cual
+        // no es URL — usar tal cual
       }
 
-      await registrarScan(puntoId, codigoQr)
+      const puntoNombre = puntos.find(p => p.id === puntoId)?.nombre ?? 'Punto de control'
+      setPendingConfirm({ puntoId, puntoNombre, codigoQr, fotoFile: null, fotoPreview: null })
     } catch (err) {
-      console.error('Error BarcodeDetector:', err)
+      console.error('Error jsQR:', err)
       setError('Error al leer la imagen. Intentá de nuevo.')
       setScanningId(null)
     }
   }
 
-  async function registrarScan(puntoId: string, codigoQr: string) {
+  function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !pendingConfirm) return
+    if (pendingConfirm.fotoPreview) URL.revokeObjectURL(pendingConfirm.fotoPreview)
+    setPendingConfirm(prev => prev
+      ? { ...prev, fotoFile: file, fotoPreview: URL.createObjectURL(file) }
+      : null
+    )
+  }
+
+  function cancelarConfirm() {
+    if (pendingConfirm?.fotoPreview) URL.revokeObjectURL(pendingConfirm.fotoPreview)
+    setPendingConfirm(null)
+  }
+
+  async function confirmarScan() {
+    if (!pendingConfirm) return
+    const { puntoId, codigoQr, fotoFile } = pendingConfirm
+
+    let foto_url: string | undefined
+    if (fotoFile) {
+      setUploadingFoto(true)
+      try {
+        const fd = new FormData()
+        fd.append('file', fotoFile)
+        const res = await fetch('/api/upload/foto', { method: 'POST', body: fd })
+        if (res.ok) { const { path } = await res.json(); foto_url = path }
+      } catch { /* si falla la foto, continuamos sin ella */ }
+      setUploadingFoto(false)
+    }
+
+    if (pendingConfirm.fotoPreview) URL.revokeObjectURL(pendingConfirm.fotoPreview)
+    setPendingConfirm(null)
+    setScanningId(puntoId)
+    await registrarScan(puntoId, codigoQr, foto_url)
+  }
+
+  async function registrarScan(puntoId: string, codigoQr: string, fotoUrl?: string) {
     try {
       const res  = await fetch(`/api/tecnico/ronda/${ronda.id}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ codigo_qr: codigoQr }),
+        body:    JSON.stringify({ codigo_qr: codigoQr, foto_url: fotoUrl }),
       })
       const json = await res.json()
 
@@ -119,7 +156,6 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
         return
       }
 
-      // Actualizar estado local
       setScans(prev => [...prev, { id: json.scan.id, punto_control_id: puntoId }])
       setEscaneados(json.escaneados)
       if (json.rondaCompleta) setCompleta(true)
@@ -156,14 +192,24 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Input oculto para la cámara */}
+      {/* Input QR — cámara trasera */}
       <input
-        ref={fileInputRef}
+        ref={qrInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={handleFileChange}
+        onChange={handleQrFileChange}
+      />
+
+      {/* Input foto del estado del punto */}
+      <input
+        ref={fotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFotoChange}
       />
 
       {/* Header */}
@@ -215,7 +261,6 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
                     : 'bg-white border-gray-100 active:bg-gray-50'
               }`}
             >
-              {/* Icono estado */}
               {escaneado ? (
                 <CheckCircle size={24} className="text-emerald-500 shrink-0" />
               ) : procesando ? (
@@ -242,7 +287,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
                   </p>
                 )}
                 {procesando && (
-                  <p className="text-xs text-brand-blue mt-1">Leyendo código...</p>
+                  <p className="text-xs text-brand-blue mt-1">Registrando...</p>
                 )}
               </div>
 
@@ -259,32 +304,6 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           {error}
         </div>
-      )}
-
-      {/* Aviso iOS — BarcodeDetector no disponible */}
-      {iosWarning && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setIosWarning(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-xl p-5 max-w-[430px] mx-auto">
-            <div className="flex justify-center mb-3">
-              <div className="w-10 h-1 bg-gray-300 rounded-full" />
-            </div>
-            <div className="flex flex-col items-center text-center gap-3 pb-4">
-              <QrCode size={36} className="text-brand-blue" />
-              <p className="font-bold text-brand-ink">Escanear QR</p>
-              <p className="text-sm text-gray-600">
-                En iOS, usá la cámara nativa del dispositivo para escanear el código QR del checkpoint. El link te llevará de vuelta a esta pantalla automáticamente.
-              </p>
-              <button
-                type="button"
-                onClick={() => setIosWarning(false)}
-                className="w-full bg-brand-ink text-white font-bold py-3 rounded-xl text-sm min-h-[48px]"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </>
       )}
 
       {/* Instrucción o botón finalizar */}
@@ -304,6 +323,75 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
             : <><Flag size={22} /> Finalizar ronda</>
           }
         </button>
+      )}
+
+      {/* Sheet confirmación de scan con foto opcional */}
+      {pendingConfirm && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-[60]" onClick={cancelarConfirm} />
+          <div className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-xl p-5 max-w-[430px] mx-auto pb-8">
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle size={18} className="text-emerald-500 shrink-0" />
+              <p className="font-bold text-brand-ink">QR detectado</p>
+            </div>
+            <p className="text-sm text-gray-500 mb-5 pl-6">{pendingConfirm.puntoNombre}</p>
+
+            {/* Foto opcional */}
+            {pendingConfirm.fotoPreview ? (
+              <div className="relative mb-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pendingConfirm.fotoPreview}
+                  alt="Foto del punto"
+                  className="w-full h-44 object-cover rounded-xl border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPendingConfirm(prev => prev
+                    ? { ...prev, fotoFile: null, fotoPreview: null }
+                    : null
+                  )}
+                  className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fotoInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl py-3 text-gray-500 text-sm mb-4 min-h-[52px] active:bg-gray-50"
+              >
+                <Camera size={18} />
+                Foto del estado del punto (opcional)
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={confirmarScan}
+              disabled={uploadingFoto}
+              className="w-full flex items-center justify-center gap-2 bg-brand-orange text-white font-bold py-4 rounded-xl min-h-[52px] disabled:opacity-60"
+            >
+              {uploadingFoto
+                ? <><Loader2 size={18} className="animate-spin" /> Subiendo foto...</>
+                : 'Confirmar scan'
+              }
+            </button>
+
+            <button
+              type="button"
+              onClick={cancelarConfirm}
+              className="w-full text-gray-400 text-sm py-3 mt-1 min-h-[44px]"
+            >
+              Cancelar
+            </button>
+          </div>
+        </>
       )}
     </div>
   )
