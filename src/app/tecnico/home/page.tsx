@@ -7,6 +7,8 @@ import {
   Droplets, FlameKindling, CheckCircle2, ChevronRight,
   BookOpen, AlertTriangle, CircleDot, Lock, UserCheck, Users,
 } from 'lucide-react'
+import { findEsquemaActivo, type EsquemaVentana } from '@/lib/esquemas/validarVentana'
+import { getArgTime } from '@/lib/cobertura/timeUtils'
 
 function getTurnoActual(): 'diurno' | 'nocturno' {
   return new Date().getHours() < 18 ? 'diurno' : 'nocturno'
@@ -38,16 +40,76 @@ export default async function TecnicoHome() {
   }
 
   // Relevo pendiente (solo si no hay turno propio ni encargado)
-  const { data: pendingRelevo } = (!turnoActivo && !turnoEncargado)
-    ? await supabaseAdmin()
-        .from('libro_turno')
-        .select('id, tecnico_nombre, horario_fin, fecha, turno')
-        .eq('estado', 'pendiente_relevo')
-        .neq('tecnico_id', user!.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-    : { data: null }
+  let pendingRelevo: { id: string; tecnico_nombre: string; horario_fin: string | null; fecha: string; turno: string; esquema_id: string | null } | null = null
+  if (!turnoActivo && !turnoEncargado) {
+    const relevoQuery = supabaseAdmin()
+      .from('libro_turno')
+      .select('id, tecnico_nombre, horario_fin, fecha, turno, esquema_id')
+      .eq('estado', 'pendiente_relevo')
+      .neq('tecnico_id', user!.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (user?.cliente_id) relevoQuery.eq('cliente_id', user.cliente_id)
+    const { data: relevoRaw } = await relevoQuery.maybeSingle()
+
+    if (relevoRaw) {
+      // Solo mostrar si el usuario es el encargado entrante, no el apoyo del turno saliente
+      let esApoyoDelTurno = false
+      if (relevoRaw.esquema_id) {
+        const { data: exc } = await supabaseAdmin()
+          .from('asignaciones_turno')
+          .select('rol_turno')
+          .eq('esquema_id', relevoRaw.esquema_id)
+          .eq('usuario_id', user!.id)
+          .eq('rol_turno', 'apoyo')
+          .maybeSingle()
+        if (exc) {
+          esApoyoDelTurno = true
+        } else {
+          const { data: pers } = await supabaseAdmin()
+            .from('asignaciones_persistentes')
+            .select('rol_turno')
+            .eq('esquema_id', relevoRaw.esquema_id)
+            .eq('usuario_id', user!.id)
+            .eq('rol_turno', 'apoyo')
+            .maybeSingle()
+          if (pers) esApoyoDelTurno = true
+        }
+      }
+      // Además verificar que el usuario es encargado dentro de su ventana horaria
+      if (!esApoyoDelTurno && user?.cliente_id) {
+        const { data: esquemasRaw } = await supabaseAdmin()
+          .from('esquemas_cobertura')
+          .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+          .eq('cliente_id', user.cliente_id)
+          .eq('activo', true)
+
+        const esquemaActivo = findEsquemaActivo((esquemasRaw ?? []) as EsquemaVentana[])
+        let esEncargadoEnVentana = false
+
+        if (esquemaActivo) {
+          const { hoy, ayer } = getArgTime()
+          const esquemaId = (esquemaActivo as EsquemaVentana & { id: string }).id
+
+          const { data: exc } = await supabaseAdmin()
+            .from('asignaciones_turno').select('rol_turno')
+            .eq('esquema_id', esquemaId).eq('usuario_id', user!.id)
+            .in('fecha', [hoy, ayer]).maybeSingle()
+
+          if (exc?.rol_turno === 'encargado') {
+            esEncargadoEnVentana = true
+          } else if (!exc) {
+            const { data: pers } = await supabaseAdmin()
+              .from('asignaciones_persistentes').select('rol_turno')
+              .eq('esquema_id', esquemaId).eq('usuario_id', user!.id).maybeSingle()
+            if (pers?.rol_turno === 'encargado') esEncargadoEnVentana = true
+          }
+        }
+
+        if (esEncargadoEnVentana) pendingRelevo = relevoRaw
+      }
+    }
+  }
 
   // Referencia para buscar planillas: propio > encargado
   const turnoRef = turnoActivo ?? turnoEncargado

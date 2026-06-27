@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, User, Clock, MapPin, Loader2, BookOpen } from 'lucide-react'
+import { X, User, Clock, MapPin, Loader2, BookOpen, ShieldAlert } from 'lucide-react'
 
 interface Novedad {
   id: string
@@ -40,9 +40,30 @@ const TIPO_STYLE: Record<string, { dot: string; label: string }> = {
 }
 
 export default function TurnoSheet({ turnoId, onClose }: Props) {
-  const [turno,   setTurno]   = useState<TurnoDetalle | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string | null>(null)
+  const [turno,         setTurno]         = useState<TurnoDetalle | null>(null)
+  const [loading,       setLoading]       = useState(true)
+  const [error,         setError]         = useState<string | null>(null)
+  const [forceMotivo,   setForceMotivo]   = useState('')
+  const [forcingClose,  setForcingClose]  = useState(false)
+  const [forceError,    setForceError]    = useState<string | null>(null)
+
+  async function handleForceClose() {
+    if (!forceMotivo.trim()) { setForceError('Escribí el motivo'); return }
+    setForcingClose(true)
+    setForceError(null)
+    try {
+      const res = await fetch(`/api/supervisor/turno/${turnoId}/force-close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: forceMotivo }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setForceError(json.error ?? 'Error al cerrar'); return }
+      setTurno(prev => prev ? { ...prev, estado: 'cerrado' } : prev)
+      setForceMotivo('')
+    } catch { setForceError('Error de conexión') }
+    finally  { setForcingClose(false) }
+  }
 
   useEffect(() => {
     async function load() {
@@ -144,6 +165,34 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
               </div>
 
               <div className="h-px bg-gray-100 mx-5" />
+
+              {/* Force-close — solo si está pendiente de relevo */}
+              {turno.estado === 'pendiente_relevo' && (
+                <div className="p-5 bg-red-50 border-b border-red-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldAlert size={16} className="text-red-500 shrink-0" />
+                    <p className="text-sm font-semibold text-red-700">Cierre forzado por supervisión</p>
+                  </div>
+                  <p className="text-xs text-red-600 mb-3">
+                    Usá esto solo si el encargado entrante no puede firmar el relevo. Quedará registrado con tu usuario y motivo.
+                  </p>
+                  <textarea
+                    value={forceMotivo}
+                    onChange={e => setForceMotivo(e.target.value)}
+                    placeholder="Motivo del cierre forzado..."
+                    rows={2}
+                    className="w-full border border-red-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-red-400 bg-white"
+                  />
+                  {forceError && <p className="text-xs text-red-600 mt-1">{forceError}</p>}
+                  <button
+                    onClick={handleForceClose}
+                    disabled={forcingClose}
+                    className="mt-2 w-full bg-red-600 text-white text-sm font-semibold py-2.5 rounded-lg active:bg-red-700 disabled:opacity-50"
+                  >
+                    {forcingClose ? 'Cerrando...' : 'Confirmar cierre forzado'}
+                  </button>
+                </div>
+              )}
 
               {/* Novedades timeline */}
               <div className="p-5">

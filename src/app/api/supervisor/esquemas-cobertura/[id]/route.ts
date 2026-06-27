@@ -27,6 +27,58 @@ export async function PATCH(
   const parsed = UpdateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
 
+  // Obtener el esquema actual para tener cliente_id y valores vigentes
+  const { data: actual } = await supabaseAdmin()
+    .from('esquemas_cobertura')
+    .select('cliente_id, nombre, hora_inicio, hora_fin')
+    .eq('id', params.id)
+    .single()
+
+  if (!actual) return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 })
+
+  const nombreNuevo     = parsed.data.nombre     ?? actual.nombre
+  const horaInicioNueva = parsed.data.hora_inicio ?? actual.hora_inicio
+  const horaFinNueva    = parsed.data.hora_fin    ?? actual.hora_fin
+
+  if (horaInicioNueva === horaFinNueva) {
+    return NextResponse.json({ error: 'La hora de inicio y fin no pueden ser iguales.' }, { status: 400 })
+  }
+
+  // Validar nombre duplicado (case-insensitive, excluyendo el propio registro)
+  if (parsed.data.nombre !== undefined) {
+    const { data: existeNombre } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('id')
+      .eq('cliente_id', actual.cliente_id)
+      .ilike('nombre', nombreNuevo.trim())
+      .neq('id', params.id)
+      .maybeSingle()
+    if (existeNombre) {
+      return NextResponse.json(
+        { error: `Ya existe un turno llamado "${nombreNuevo}" en este puesto. Usá un nombre diferente.` },
+        { status: 409 }
+      )
+    }
+  }
+
+  // Validar horario duplicado (excluyendo el propio registro)
+  if (parsed.data.hora_inicio !== undefined || parsed.data.hora_fin !== undefined) {
+    const { data: existeHorario } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('id, nombre')
+      .eq('cliente_id', actual.cliente_id)
+      .eq('hora_inicio', horaInicioNueva)
+      .eq('hora_fin', horaFinNueva)
+      .neq('id', params.id)
+      .maybeSingle()
+    if (existeHorario) {
+      return NextResponse.json(
+        { error: `Ya existe el turno "${existeHorario.nombre}" con la misma franja horaria (${horaInicioNueva.slice(0,5)} – ${horaFinNueva.slice(0,5)}).` },
+        { status: 409 }
+      )
+    }
+  }
+
   const { data, error } = await supabaseAdmin()
     .from('esquemas_cobertura')
     .update(parsed.data)

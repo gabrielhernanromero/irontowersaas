@@ -4,6 +4,8 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { RelevoPSchema, RelevoEspecSchema } from '@/lib/validations/libroTurno'
 import type { LibroNovedad } from '@/types/database'
+import { findEsquemaActivo, type EsquemaVentana } from '@/lib/esquemas/validarVentana'
+import { getArgTime } from '@/lib/cobertura/timeUtils'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,50 @@ export async function PATCH(req: NextRequest) {
   }
   if (turnoSaliente.firma_relevo_url) {
     return NextResponse.json({ error: 'El relevo ya fue firmado' }, { status: 409 })
+  }
+
+  // Guard: solo el encargado dentro de su franja horaria puede firmar el relevo
+  const { data: perfilUser } = await supabaseAdmin()
+    .from('users')
+    .select('rol, cliente_id')
+    .eq('id', user.id)
+    .single()
+
+  if (perfilUser?.rol !== 'admin') {
+    let autorizado = false
+    if (perfilUser?.cliente_id) {
+      const { data: esquemasRaw } = await supabaseAdmin()
+        .from('esquemas_cobertura')
+        .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+        .eq('cliente_id', perfilUser.cliente_id)
+        .eq('activo', true)
+
+      const esquemaActivo = findEsquemaActivo((esquemasRaw ?? []) as EsquemaVentana[])
+      if (esquemaActivo) {
+        const { hoy, ayer } = getArgTime()
+        const esquemaId = (esquemaActivo as EsquemaVentana & { id: string }).id
+
+        const { data: exc } = await supabaseAdmin()
+          .from('asignaciones_turno').select('rol_turno')
+          .eq('esquema_id', esquemaId).eq('usuario_id', user.id)
+          .in('fecha', [hoy, ayer]).maybeSingle()
+
+        if (exc?.rol_turno === 'encargado') {
+          autorizado = true
+        } else if (!exc) {
+          const { data: pers } = await supabaseAdmin()
+            .from('asignaciones_persistentes').select('rol_turno')
+            .eq('esquema_id', esquemaId).eq('usuario_id', user.id).maybeSingle()
+          if (pers?.rol_turno === 'encargado') autorizado = true
+        }
+      }
+    }
+    if (!autorizado) {
+      return NextResponse.json(
+        { error: 'No estás autorizado para firmar el relevo. Solo el encargado entrante dentro de su franja horaria puede hacerlo.' },
+        { status: 403 }
+      )
+    }
   }
 
   const { data: turnoAbierto } = await supabaseAdmin()

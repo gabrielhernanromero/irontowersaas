@@ -56,6 +56,7 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
   let esquemaActivo: { id: string; nombre: string; hora_inicio: string; hora_fin: string } | null = null
   let turnoConfig: 'diurno' | 'nocturno' | null = null
   let validacionBloqueada = false
+  let esApoyoEnVentana = false
   let personalApoyo: PersonalApoyo[] = []
 
   if (clienteIdFijo) {
@@ -66,78 +67,112 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
       .eq('activo', true)
 
     if (esquemasRaw && esquemasRaw.length > 0) {
-      const encontrado = findEsquemaActivo(esquemasRaw as any) as (typeof esquemasRaw[0]) | null
+      const { hoy, ayer } = getArgTime()
 
-      if (encontrado) {
-        // Verificar que el usuario está asignado como encargado de este esquema
-        const { hoy, ayer } = getArgTime()
+      // Buscar el esquema en ventana al que el usuario está asignado como encargado.
+      // Si hay varios esquemas activos simultáneamente (solapamiento de ventanas por la
+      // tolerancia de 30 min), se prioriza el asignado al técnico, no el primero de la lista.
+      let encontrado: typeof esquemasRaw[0] | null = null
 
-        const { data: excepcion } = await supabaseAdmin()
+      for (const esq of esquemasRaw) {
+        const enVentana = findEsquemaActivo([esq as any])
+        if (!enVentana) continue
+
+        const { data: exc } = await supabaseAdmin()
           .from('asignaciones_turno')
           .select('rol_turno')
-          .eq('esquema_id', encontrado.id)
+          .eq('esquema_id', esq.id)
           .eq('usuario_id', user.id)
           .in('fecha', [hoy, ayer])
           .maybeSingle()
 
-        let rolAsignado: string | null = excepcion?.rol_turno ?? null
-
-        if (!rolAsignado) {
-          const { data: persistente } = await supabaseAdmin()
+        let rol = exc?.rol_turno ?? null
+        if (!rol) {
+          const { data: pers } = await supabaseAdmin()
             .from('asignaciones_persistentes')
             .select('rol_turno')
-            .eq('esquema_id', encontrado.id)
+            .eq('esquema_id', esq.id)
             .eq('usuario_id', user.id)
             .maybeSingle()
-          rolAsignado = persistente?.rol_turno ?? null
+          rol = pers?.rol_turno ?? null
         }
 
-        if (rolAsignado === 'encargado' || searchParams.interino === '1') {
-          esquemaActivo = {
-            id:          encontrado.id,
-            nombre:      encontrado.nombre,
-            hora_inicio: encontrado.hora_inicio,
-            hora_fin:    encontrado.hora_fin,
-          }
-          turnoConfig = turnoDesdeHora(encontrado.hora_inicio)
+        if (rol === 'encargado' || searchParams.interino === '1') {
+          encontrado = esq
+          break
+        }
+      }
 
-          // Personal de apoyo: override del día primero, luego persistente.
-          // Se excluye al usuario que abre (para el caso interino que es apoyo del esquema).
-          const { data: excepcionesApoyo } = await supabaseAdmin()
-            .from('asignaciones_turno')
+      if (encontrado) {
+        esquemaActivo = {
+          id:          encontrado.id,
+          nombre:      encontrado.nombre,
+          hora_inicio: encontrado.hora_inicio,
+          hora_fin:    encontrado.hora_fin,
+        }
+        turnoConfig = turnoDesdeHora(encontrado.hora_inicio)
+
+        const { data: excepcionesApoyo } = await supabaseAdmin()
+          .from('asignaciones_turno')
+          .select('usuario:usuario_id(id, nombre, apellido)')
+          .eq('esquema_id', encontrado.id)
+          .eq('rol_turno', 'apoyo')
+          .in('fecha', [hoy, ayer])
+          .neq('usuario_id', user.id)
+
+        let apoyoRaw: { usuario: unknown }[] = excepcionesApoyo ?? []
+
+        if (apoyoRaw.length === 0) {
+          const { data: persistentesApoyo } = await supabaseAdmin()
+            .from('asignaciones_persistentes')
             .select('usuario:usuario_id(id, nombre, apellido)')
             .eq('esquema_id', encontrado.id)
             .eq('rol_turno', 'apoyo')
-            .in('fecha', [hoy, ayer])
             .neq('usuario_id', user.id)
-
-          let apoyoRaw: { usuario: unknown }[] = excepcionesApoyo ?? []
-
-          if (apoyoRaw.length === 0) {
-            const { data: persistentesApoyo } = await supabaseAdmin()
-              .from('asignaciones_persistentes')
-              .select('usuario:usuario_id(id, nombre, apellido)')
-              .eq('esquema_id', encontrado.id)
-              .eq('rol_turno', 'apoyo')
-              .neq('usuario_id', user.id)
-            apoyoRaw = persistentesApoyo ?? []
-          }
-
-          personalApoyo = apoyoRaw
-            .map((a: any) => a.usuario)
-            .filter(Boolean)
-            .map((u: any) => ({ usuario_id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim() }))
-        } else {
-          // Esquema activo pero este usuario no es el encargado asignado
-          validacionBloqueada = true
+          apoyoRaw = persistentesApoyo ?? []
         }
+
+        personalApoyo = apoyoRaw
+          .map((a: any) => a.usuario)
+          .filter(Boolean)
+          .map((u: any) => ({ usuario_id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim() }))
       } else {
-        // Hay esquemas configurados pero ninguno corresponde a este momento → bloquear
-        // Excepto si es modo interino (apoyo abriendo porque el encargado no se presentó)
-        if (searchParams.interino !== '1') validacionBloqueada = true
+        // Ningún esquema en ventana tiene al usuario como encargado
+        const hayAlgunoEnVentana = esquemasRaw.some(esq => findEsquemaActivo([esq as any]) !== null)
+        if (!hayAlgunoEnVentana || searchParams.interino !== '1') validacionBloqueada = true
+
+        // Si hay ventana activa, verificar si el usuario es apoyo en ese esquema
+        if (hayAlgunoEnVentana) {
+          for (const esq of esquemasRaw) {
+            if (!findEsquemaActivo([esq as any])) continue
+
+            const { data: exc } = await supabaseAdmin()
+              .from('asignaciones_turno')
+              .select('rol_turno')
+              .eq('esquema_id', esq.id)
+              .eq('usuario_id', user.id)
+              .in('fecha', [hoy, ayer])
+              .maybeSingle()
+
+            if (exc?.rol_turno === 'apoyo') { esApoyoEnVentana = true; break }
+
+            if (!exc) {
+              const { data: pers } = await supabaseAdmin()
+                .from('asignaciones_persistentes')
+                .select('rol_turno')
+                .eq('esquema_id', esq.id)
+                .eq('usuario_id', user.id)
+                .maybeSingle()
+              if (pers?.rol_turno === 'apoyo') { esApoyoEnVentana = true; break }
+            }
+          }
+        }
       }
     }
-    // Si el cliente no tiene esquemas configurados → no bloqueamos (sin configuración = sin restricción)
+    // Si el cliente no tiene esquemas configurados → bloquear; el supervisor debe configurar el esquema
+    else {
+      if (searchParams.interino !== '1') validacionBloqueada = true
+    }
   }
 
   // Fallback: usar turno_habitual del perfil si no hay esquema activo
@@ -169,6 +204,7 @@ export default async function AbrirGuardiaPage({ searchParams }: Props) {
       esquema={esquemaActivo}
       turnoConfig={turnoConfig}
       validacionBloqueada={validacionBloqueada}
+      esApoyoEnVentana={esApoyoEnVentana}
       elementos={elementos}
       personalApoyo={personalApoyo}
       interino={searchParams.interino === '1'}

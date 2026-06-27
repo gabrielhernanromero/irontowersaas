@@ -106,16 +106,16 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       .eq('cliente_id', clienteId)
       .eq('activo', true)
 
-    // findEsquemaActivo valida hora, día de semana y rango de fechas (a diferencia de isWithinWindow)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const esquema = findEsquemaActivo((esquemas ?? []) as any) as any
+    // Iterar todos los esquemas en ventana hasta encontrar uno asignado al usuario.
+    // Evita el problema de tomar el primer match sin verificar asignación primero.
+    for (const esq of (esquemas ?? [])) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!findEsquemaActivo([esq as any])) continue
 
-    if (esquema) {
-      // 3a. Excepción del día (check hoy y ayer para turnos nocturnos)
       const { data: excepcion } = await supabaseAdmin()
         .from('asignaciones_turno')
         .select('rol_turno')
-        .eq('esquema_id', esquema.id)
+        .eq('esquema_id', esq.id)
         .eq('usuario_id', user.id)
         .in('fecha', [hoy, ayer])
         .order('fecha', { ascending: false })
@@ -123,19 +123,20 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
         .maybeSingle()
 
       if (excepcion) {
-        asignacionHoy = { rol_turno: excepcion.rol_turno as 'encargado' | 'apoyo', cliente_id: clienteId, esquema_id: esquema.id, esquema_nombre: esquema.nombre }
-      } else {
-        // 3b. Asignación persistente
-        const { data: persistente } = await supabaseAdmin()
-          .from('asignaciones_persistentes')
-          .select('rol_turno')
-          .eq('esquema_id', esquema.id)
-          .eq('usuario_id', user.id)
-          .maybeSingle()
+        asignacionHoy = { rol_turno: excepcion.rol_turno as 'encargado' | 'apoyo', cliente_id: clienteId, esquema_id: esq.id, esquema_nombre: esq.nombre }
+        break
+      }
 
-        if (persistente) {
-          asignacionHoy = { rol_turno: persistente.rol_turno as 'encargado' | 'apoyo', cliente_id: clienteId, esquema_id: esquema.id, esquema_nombre: esquema.nombre }
-        }
+      const { data: persistente } = await supabaseAdmin()
+        .from('asignaciones_persistentes')
+        .select('rol_turno')
+        .eq('esquema_id', esq.id)
+        .eq('usuario_id', user.id)
+        .maybeSingle()
+
+      if (persistente) {
+        asignacionHoy = { rol_turno: persistente.rol_turno as 'encargado' | 'apoyo', cliente_id: clienteId, esquema_id: esq.id, esquema_nombre: esq.nombre }
+        break
       }
     }
   }
@@ -281,18 +282,48 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     alertasPendientes = (alertas ?? []) as LibroNovedad[]
   }
 
-  // ── 6. ¿El encargado ya cerró su turno de hoy? ───────────────────────────────
+  // ── 6. ¿El técnico ya cerró un turno hoy como encargado? ────────────────────
+  // Se busca independientemente de la ventana horaria activa para que siga
+  // mostrándose "cerrado" aunque el técnico recargue fuera de su horario.
   let turnoEncargadoCerradoHoy: { id: string; estado: string; folio_numero: number } | null = null
-  if (!turnoEncargado && !turnoActivo && asignacionHoy?.rol_turno === 'encargado' && asignacionHoy?.esquema_id) {
+  if (!turnoEncargado && !turnoActivo) {
     const { data: cerrado } = await supabaseAdmin()
       .from('libro_turno')
       .select('id, estado, folio_numero')
       .eq('tecnico_id', user.id)
-      .eq('esquema_id', asignacionHoy.esquema_id)
       .in('estado', ['cerrado', 'pendiente_relevo'])
       .in('fecha', [hoy, ayer])
       .maybeSingle()
     turnoEncargadoCerradoHoy = cerrado ?? null
+  }
+
+  // ── 6b. Sin asignación activa: ¿el técnico TIENE esquema pero está fuera de horario? ──
+  let proximoEsquema: { nombre: string; hora_inicio: string; hora_fin: string } | null = null
+  if (!asignacionHoy && !turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy && clienteId) {
+    const { data: todosEsquemas } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('id, nombre, hora_inicio, hora_fin')
+      .eq('cliente_id', clienteId)
+      .eq('activo', true)
+
+    for (const esq of (todosEsquemas ?? [])) {
+      const { data: exc } = await supabaseAdmin()
+        .from('asignaciones_turno')
+        .select('rol_turno')
+        .eq('esquema_id', esq.id)
+        .eq('usuario_id', user.id)
+        .in('fecha', [hoy, ayer])
+        .maybeSingle()
+      if (exc) { proximoEsquema = esq; break }
+
+      const { data: pers } = await supabaseAdmin()
+        .from('asignaciones_persistentes')
+        .select('rol_turno')
+        .eq('esquema_id', esq.id)
+        .eq('usuario_id', user.id)
+        .maybeSingle()
+      if (pers) { proximoEsquema = esq; break }
+    }
   }
 
   // ── 7. Turno abierto del esquema — para que el apoyo vea quién lo abrió ─────
@@ -310,21 +341,26 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   }
 
   // ── 8. Relevo pendiente — solo si el usuario no cerró ni participó en turno de hoy ──
-  const { data: pendingReleovRaw } = !turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy && !turnoAbiertoDeEsquema
-    ? await supabaseAdmin()
-        .from('libro_turno')
-        .select('id, tecnico_nombre, tecnico_dni, horario_fin, fecha, turno')
-        .eq('estado', 'pendiente_relevo')
-        .neq('tecnico_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-    : { data: null }
+  let pendingReleovRaw: { id: string; tecnico_nombre: string; tecnico_dni: string; horario_fin: string | null; fecha: string; turno: string } | null = null
+  if (!turnoActivo && !turnoEncargadoCerradoHoy && !turnoApoyoCerradoHoy && !turnoAbiertoDeEsquema) {
+    const q = supabaseAdmin()
+      .from('libro_turno')
+      .select('id, tecnico_nombre, tecnico_dni, horario_fin, fecha, turno')
+      .eq('estado', 'pendiente_relevo')
+      .neq('tecnico_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (clienteId) q.eq('cliente_id', clienteId)
+    const { data } = await q.maybeSingle()
+    pendingReleovRaw = data ?? null
+  }
 
-  // Excluir el caso donde el usuario fue apoyo de ese mismo turno pendiente
-  const pendingRelevo = (pendingReleovRaw && turnoApoyoCerradoHoy?.id !== pendingReleovRaw.id)
-    ? pendingReleovRaw
-    : null
+  // El relevo solo aplica al encargado entrante, nunca al apoyo del turno que cerró
+  const pendingRelevo = (
+    pendingReleovRaw &&
+    asignacionHoy?.rol_turno === 'encargado' &&
+    turnoApoyoCerradoHoy?.id !== pendingReleovRaw.id
+  ) ? pendingReleovRaw : null
 
   return (
     <div className="flex flex-col gap-4 pb-28">
@@ -455,7 +491,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       ) : (
         <>
           {/* ── ESTADO G: Guardia del día ya cerrada — encargado ──────────── */}
-          {turnoEncargadoCerradoHoy && asignacionHoy?.rol_turno === 'encargado' && (
+          {turnoEncargadoCerradoHoy && (
             <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
               <div className="flex items-start gap-3 mb-3">
                 <CheckCircle2 size={20} className="text-gray-400 shrink-0 mt-0.5" />
@@ -621,13 +657,29 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
 
           {/* ── ESTADO F: Sin asignación ──────────────────────────────────── */}
           {!asignacionHoy && !pendingRelevo && (
-            <div className="flex flex-col items-center justify-center gap-4 py-12 text-gray-400">
-              <BookOpen size={56} className="opacity-30" />
-              <div className="text-center">
-                <p className="font-semibold text-brand-ink text-base">Sin guardia activa</p>
-                <p className="text-sm text-gray-400 mt-1">No tenés turno asignado para hoy</p>
+            proximoEsquema ? (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl shrink-0">🕐</span>
+                  <div>
+                    <p className="font-semibold text-amber-800 text-sm">Fuera de horario</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Tu turno <strong>{proximoEsquema.nombre}</strong> es de{' '}
+                      {formatHora(proximoEsquema.hora_inicio)} a {formatHora(proximoEsquema.hora_fin)}.
+                      Podés iniciar hasta 30 minutos antes del comienzo.
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-4 py-12 text-gray-400">
+                <BookOpen size={56} className="opacity-30" />
+                <div className="text-center">
+                  <p className="font-semibold text-brand-ink text-base">Sin guardia activa</p>
+                  <p className="text-sm text-gray-400 mt-1">No tenés turno asignado para hoy. Contactá al supervisor.</p>
+                </div>
+              </div>
+            )
           )}
 
           {/* Historial de turnos anteriores */}

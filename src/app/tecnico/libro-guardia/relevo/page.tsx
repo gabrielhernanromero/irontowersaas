@@ -1,10 +1,13 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import type { Incidencia, LibroNovedad } from '@/types/database'
 import RelevoPForm from './RelevoPForm'
 import type { EstadoAdmin } from '@/types/database'
+import { findEsquemaActivo, type EsquemaVentana } from '@/lib/esquemas/validarVentana'
+import { getArgTime } from '@/lib/cobertura/timeUtils'
 
 type ElementoParaRelevo = {
   id: string
@@ -63,12 +66,56 @@ export default async function RelevoPPage({ searchParams }: Props) {
     )
   }
 
-  // Perfil del técnico entrante para pre-llenar nombre/DNI
+  // Perfil del técnico entrante para pre-llenar nombre/DNI y verificar autorización
   const { data: perfil } = await supabaseAdmin()
     .from('users')
-    .select('nombre, apellido, dni')
+    .select('nombre, apellido, dni, rol, cliente_id')
     .eq('id', me.id)
     .single()
+
+  // Guard: solo el encargado dentro de su franja horaria puede firmar el relevo
+  // Los admins están exentos para permitir operaciones de soporte
+  if (perfil?.rol !== 'admin') {
+    const clienteIdTecnico = perfil?.cliente_id ?? null
+    let autorizado = false
+
+    if (clienteIdTecnico) {
+      const { data: esquemasRaw } = await supabaseAdmin()
+        .from('esquemas_cobertura')
+        .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+        .eq('cliente_id', clienteIdTecnico)
+        .eq('activo', true)
+
+      const esquemaActivo = findEsquemaActivo((esquemasRaw ?? []) as EsquemaVentana[])
+
+      if (esquemaActivo) {
+        const { hoy, ayer } = getArgTime()
+        const esquemaId = (esquemaActivo as EsquemaVentana & { id: string }).id
+
+        const { data: exc } = await supabaseAdmin()
+          .from('asignaciones_turno')
+          .select('rol_turno')
+          .eq('esquema_id', esquemaId)
+          .eq('usuario_id', me.id)
+          .in('fecha', [hoy, ayer])
+          .maybeSingle()
+
+        if (exc?.rol_turno === 'encargado') {
+          autorizado = true
+        } else if (!exc) {
+          const { data: pers } = await supabaseAdmin()
+            .from('asignaciones_persistentes')
+            .select('rol_turno')
+            .eq('esquema_id', esquemaId)
+            .eq('usuario_id', me.id)
+            .maybeSingle()
+          if (pers?.rol_turno === 'encargado') autorizado = true
+        }
+      }
+    }
+
+    if (!autorizado) redirect('/tecnico/libro-guardia')
+  }
 
   const entranteNombre = `${perfil?.nombre ?? ''} ${perfil?.apellido ?? ''}`.trim()
   const entranteDni = perfil?.dni ?? ''

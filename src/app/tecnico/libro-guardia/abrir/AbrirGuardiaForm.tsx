@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, AlertTriangle, Play, User, CreditCard, Clock, Building2, CalendarClock, Ban, Package, CheckCircle2, XCircle, Users, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Play, User, CreditCard, Clock, Building2, CalendarClock, Ban, Package, CheckCircle2, XCircle, Users, ShieldAlert, UserCheck } from 'lucide-react'
 import Link from 'next/link'
 
 function nowTime() { return new Date().toTimeString().slice(0, 5) }
@@ -41,6 +41,7 @@ interface Props {
   esquema?: { id?: string; nombre: string; hora_inicio: string; hora_fin: string } | null
   turnoConfig?: 'diurno' | 'nocturno' | null
   validacionBloqueada?: boolean
+  esApoyoEnVentana?: boolean
   elementos?: Elemento[]
   personalApoyo?: PersonalApoyo[]
   interino?: boolean
@@ -49,7 +50,7 @@ interface Props {
 export default function AbrirGuardiaForm({
   tecnicoNombre, tecnicoDni, turnoSalienteId, salienteNombre,
   clientes, defaultClienteId, clienteIdFijo,
-  esquema, turnoConfig, validacionBloqueada, elementos = [],
+  esquema, turnoConfig, validacionBloqueada, esApoyoEnVentana = false, elementos = [],
   personalApoyo = [], interino = false,
 }: Props) {
   const router = useRouter()
@@ -165,8 +166,22 @@ export default function AbrirGuardiaForm({
         </div>
       )}
 
+      {/* Bloqueo: apoyo en ventana — el encargado aún no abrió */}
+      {esApoyoEnVentana && (
+        <div className="flex items-start gap-3 border-2 border-blue-300 bg-blue-50 rounded-xl p-4">
+          <UserCheck size={18} className="text-blue-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Aguardá al encargado</p>
+            <p className="text-sm text-blue-700 mt-0.5">
+              Estás asignado como apoyo en este turno. Solo el encargado puede iniciar la guardia.
+              Una vez que la abra, podrás confirmar tu presencia desde el Libro de Guardia.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Bloqueo por turno no activo */}
-      {validacionBloqueada && (
+      {validacionBloqueada && !esApoyoEnVentana && (
         <div className="flex items-start gap-3 border-2 border-red-300 bg-red-50 rounded-xl p-4">
           <Ban size={18} className="text-red-600 shrink-0 mt-0.5" />
           <div>
@@ -478,7 +493,7 @@ export default function AbrirGuardiaForm({
           <button
             type="button"
             onClick={handleIniciar}
-            disabled={submitting || !tecnicoNombre || !tecnicoDni || validacionBloqueada || !todosVerificados}
+            disabled={submitting || !tecnicoNombre || !tecnicoDni || validacionBloqueada || esApoyoEnVentana || !todosVerificados}
             className="w-full flex items-center justify-center gap-2 bg-brand-orange text-white font-bold py-4 rounded-xl text-base min-h-[56px] disabled:opacity-60 active:scale-[0.98] transition-transform"
           >
             {submitting ? 'Iniciando...' : (

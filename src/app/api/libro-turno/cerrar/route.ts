@@ -129,6 +129,18 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 2. Verificar planillas enviadas ───────────────────────────────────────────
+  let planillasRequeridas: string[] = ['hidrantes', 'extintores']
+  if (turno.cliente_id) {
+    const { data: cliente } = await supabaseAdmin()
+      .from('clientes')
+      .select('planillas_habilitadas')
+      .eq('id', turno.cliente_id)
+      .single()
+    if (cliente?.planillas_habilitadas?.length) {
+      planillasRequeridas = cliente.planillas_habilitadas
+    }
+  }
+
   const { data: planillasEnviadas } = await supabaseAdmin()
     .from('planillas')
     .select('tipo')
@@ -137,8 +149,8 @@ export async function POST(req: NextRequest) {
 
   const tiposEnviados = (planillasEnviadas ?? []).map((p) => p.tipo)
   const faltantes: string[] = []
-  if (!tiposEnviados.includes('hidrantes')) faltantes.push('Hidrantes')
-  if (!tiposEnviados.includes('extintores')) faltantes.push('Extintores')
+  if (planillasRequeridas.includes('hidrantes') && !tiposEnviados.includes('hidrantes')) faltantes.push('Hidrantes')
+  if (planillasRequeridas.includes('extintores') && !tiposEnviados.includes('extintores')) faltantes.push('Extintores')
 
   if (faltantes.length > 0) {
     return NextResponse.json(

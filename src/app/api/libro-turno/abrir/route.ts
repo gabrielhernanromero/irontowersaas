@@ -63,41 +63,50 @@ export async function POST(req: NextRequest) {
         .eq('activo', true)
 
       if (esquemas && esquemas.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const match = findEsquemaActivo(esquemas as any) as (typeof esquemas[0]) | null
-        if (!match) {
-          return NextResponse.json(
-            { error: 'No estás dentro del horario programado. Podés iniciar hasta 30 minutos antes del comienzo de tu turno.' },
-            { status: 403 }
-          )
-        }
-
-        // Verificar que el usuario es el encargado asignado a este esquema
         const { hoy, ayer } = getArgTime()
 
-        const { data: excepcion } = await supabaseAdmin()
-          .from('asignaciones_turno')
-          .select('rol_turno')
-          .eq('esquema_id', match.id)
-          .eq('usuario_id', user.id)
-          .in('fecha', [hoy, ayer])
-          .maybeSingle()
+        // Iterar esquemas en ventana hasta encontrar uno donde el usuario sea encargado.
+        // Evita el bug de overlap: si hay dos esquemas en ventana simultáneamente (por la
+        // tolerancia de 30 min), findEsquemaActivo(todos) devuelve el primero del DB,
+        // que puede no ser el del usuario.
+        let matchEncargado: (typeof esquemas[0]) | null = null
 
-        let rolAsignado: string | null = excepcion?.rol_turno ?? null
+        for (const esq of esquemas) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (!findEsquemaActivo([esq as any])) continue
 
-        if (!rolAsignado) {
-          const { data: persistente } = await supabaseAdmin()
-            .from('asignaciones_persistentes')
+          const { data: excepcion } = await supabaseAdmin()
+            .from('asignaciones_turno')
             .select('rol_turno')
-            .eq('esquema_id', match.id)
+            .eq('esquema_id', esq.id)
             .eq('usuario_id', user.id)
+            .in('fecha', [hoy, ayer])
             .maybeSingle()
-          rolAsignado = persistente?.rol_turno ?? null
+
+          const rol = excepcion?.rol_turno ?? null
+          if (rol === 'encargado') { matchEncargado = esq; break }
+
+          if (!rol) {
+            const { data: persistente } = await supabaseAdmin()
+              .from('asignaciones_persistentes')
+              .select('rol_turno')
+              .eq('esquema_id', esq.id)
+              .eq('usuario_id', user.id)
+              .maybeSingle()
+            if (persistente?.rol_turno === 'encargado') { matchEncargado = esq; break }
+          }
         }
 
-        if (rolAsignado !== 'encargado') {
+        if (!matchEncargado) {
+          // Distinguir: hay esquema en ventana pero no es encargado vs. nadie en ventana
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const hayVentana = esquemas.some(esq => findEsquemaActivo([esq as any]))
           return NextResponse.json(
-            { error: 'No estás asignado como encargado para este turno.' },
+            {
+              error: hayVentana
+                ? 'No estás asignado como encargado para este turno.'
+                : 'No estás dentro del horario programado. Podés iniciar hasta 30 minutos antes del comienzo de tu turno.',
+            },
             { status: 403 }
           )
         }
@@ -106,7 +115,7 @@ export async function POST(req: NextRequest) {
         const { data: interinoActivo } = await supabaseAdmin()
           .from('libro_turno')
           .select('id, tecnico_nombre')
-          .eq('esquema_id', match.id)
+          .eq('esquema_id', matchEncargado.id)
           .eq('estado', 'abierto')
           .eq('interino', true)
           .maybeSingle()
