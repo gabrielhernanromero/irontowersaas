@@ -15,7 +15,15 @@ type ElementoParaRelevo = {
   codigo_patrimonial: string
   estado_admin: EstadoAdmin
   motivo_mantenimiento: string | null
-  incidencias?: { id: string; estado: string }[]
+  incidencias?: {
+    id: string
+    estado: string
+    titulo: string
+    descripcion: string
+    severidad: 'bajo' | 'medio' | 'alto' | null
+    created_at: string
+    libro_turno: { tecnico_nombre: string; tecnico_dni: string } | null
+  }[]
 }
 
 function formatFecha(f: string | null) {
@@ -77,6 +85,8 @@ export default async function RelevoPPage({ searchParams }: Props) {
   // Los admins están exentos para permitir operaciones de soporte
   // Se itera cada esquema individualmente (como en el hub) para evitar que
   // findEsquemaActivo devuelva el esquema incorrecto en período de solapamiento.
+  let esquemaActivoId: string | null = null
+
   if (perfil?.rol !== 'admin') {
     const clienteIdTecnico = perfil?.cliente_id ?? null
     let autorizado = false
@@ -102,7 +112,7 @@ export default async function RelevoPPage({ searchParams }: Props) {
           .in('fecha', [hoy, ayer])
           .maybeSingle()
 
-        if (exc?.rol_turno === 'encargado') { autorizado = true; break }
+        if (exc?.rol_turno === 'encargado') { autorizado = true; esquemaActivoId = esquemaId; break }
 
         if (!exc) {
           const { data: pers } = await supabaseAdmin()
@@ -111,12 +121,40 @@ export default async function RelevoPPage({ searchParams }: Props) {
             .eq('esquema_id', esquemaId)
             .eq('usuario_id', me.id)
             .maybeSingle()
-          if (pers?.rol_turno === 'encargado') { autorizado = true; break }
+          if (pers?.rol_turno === 'encargado') { autorizado = true; esquemaActivoId = esquemaId; break }
         }
       }
     }
 
     if (!autorizado) redirect('/tecnico/libro-guardia')
+  }
+
+  // Apoyo esperado para el turno entrante (excepción → persistente, excluyendo el encargado)
+  type PersonalApoyoRelevo = { usuario_id: string; nombre: string }
+  let personalApoyoEntrante: PersonalApoyoRelevo[] = []
+  if (esquemaActivoId) {
+    const { hoy: hoyA, ayer: ayerA } = getArgTime()
+    const { data: excApoyo } = await supabaseAdmin()
+      .from('asignaciones_turno')
+      .select('usuario:usuario_id(id, nombre, apellido)')
+      .eq('esquema_id', esquemaActivoId)
+      .eq('rol_turno', 'apoyo')
+      .in('fecha', [hoyA, ayerA])
+      .neq('usuario_id', me.id)
+    let apoyoRaw = (excApoyo ?? []) as { usuario: unknown }[]
+    if (apoyoRaw.length === 0) {
+      const { data: persApoyo } = await supabaseAdmin()
+        .from('asignaciones_persistentes')
+        .select('usuario:usuario_id(id, nombre, apellido)')
+        .eq('esquema_id', esquemaActivoId)
+        .eq('rol_turno', 'apoyo')
+        .neq('usuario_id', me.id)
+      apoyoRaw = (persApoyo ?? []) as { usuario: unknown }[]
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    personalApoyoEntrante = apoyoRaw.map((a: any) => a.usuario).filter(Boolean)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((u: any) => ({ usuario_id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim() }))
   }
 
   const entranteNombre = `${perfil?.nombre ?? ''} ${perfil?.apellido ?? ''}`.trim()
@@ -155,12 +193,12 @@ export default async function RelevoPPage({ searchParams }: Props) {
   const { data: elementosData } = turno.cliente_id
     ? await supabaseAdmin()
         .from('elementos_puesto')
-        .select('id, nombre, codigo_patrimonial, estado_admin, motivo_mantenimiento, incidencias!elemento_afectado_id(id, estado)')
+        .select('id, nombre, codigo_patrimonial, estado_admin, motivo_mantenimiento, incidencias!elemento_afectado_id(id, estado, titulo, descripcion, severidad, created_at, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni))')
         .eq('cliente_id', turno.cliente_id)
         .neq('estado_admin', 'inactivo')
         .order('nombre')
     : { data: [] }
-  const elementos = (elementosData ?? []) as ElementoParaRelevo[]
+  const elementos = (elementosData ?? []) as unknown as ElementoParaRelevo[]
 
   return (
     <div>
@@ -225,6 +263,7 @@ export default async function RelevoPPage({ searchParams }: Props) {
         elementos={elementos}
         entranteNombre={entranteNombre}
         entranteDni={entranteDni}
+        personalApoyo={personalApoyoEntrante}
       />
     </div>
   )

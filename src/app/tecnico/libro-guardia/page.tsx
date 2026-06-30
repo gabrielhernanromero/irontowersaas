@@ -663,7 +663,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
           )}
 
           {/* ── ESTADO E: Encargado asignado sin turno, puede abrir ─────── */}
-          {asignacionHoy?.rol_turno === 'encargado' && !turnoBlockeante && !turnoEncargadoCerradoHoy && (
+          {asignacionHoy?.rol_turno === 'encargado' && !turnoBlockeante && !turnoEncargadoCerradoHoy && !pendingRelevo && (
             <div className="bg-brand-orange/5 border-2 border-brand-orange/30 rounded-xl p-4">
               <div className="flex items-start gap-3 mb-4">
                 <ShieldCheck size={20} className="text-brand-orange shrink-0 mt-0.5" />

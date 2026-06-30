@@ -1,8 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, CheckCircle2, AlertTriangle, Wrench, HelpCircle } from 'lucide-react'
+import { Package, CheckCircle2, AlertTriangle, Wrench, HelpCircle, User, Clock } from 'lucide-react'
 import type { EstadoOperativo } from '@/types/database'
+
+interface IncidenciaElemento {
+  id: string
+  estado: string
+  titulo: string
+  descripcion: string
+  severidad: 'bajo' | 'medio' | 'alto' | null
+  created_at: string
+  libro_turno: { tecnico_nombre: string; tecnico_dni: string } | null
+}
 
 interface Elemento {
   id: string
@@ -10,18 +20,14 @@ interface Elemento {
   codigo_patrimonial: string
   estado_admin: 'activo' | 'en_mantenimiento' | 'inactivo'
   motivo_mantenimiento: string | null
-  incidencias?: { id: string; estado: string }[]
+  incidencias?: IncidenciaElemento[]
 }
 
 export interface ControlItem {
   elementoId: string
   estadoOperativo: EstadoOperativo
   observacion?: string
-}
-
-interface Props {
-  elementos: Elemento[]
-  onChange: (controles: ControlItem[]) => void
+  incidenciaResuelta?: boolean
 }
 
 type EstadoLocal = EstadoOperativo | null
@@ -30,6 +36,26 @@ interface ItemState {
   estado: EstadoLocal
   observacion: string
   obsError: string | null
+  incidenciaResuelta: boolean
+}
+
+const OBS_DEFAULT_PERSISTE = 'Persiste la falla reportada anteriormente.'
+
+function formatFechaHora(iso: string) {
+  // Argentina no tiene horario de verano: UTC-3 fijo. Se evita Intl/toLocaleString
+  // porque produce mismatches de hidratación entre el ICU del servidor y el del navegador.
+  const ar = new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000)
+  const dia = String(ar.getUTCDate()).padStart(2, '0')
+  const mes = String(ar.getUTCMonth() + 1).padStart(2, '0')
+  const anio = ar.getUTCFullYear()
+  const horas = String(ar.getUTCHours()).padStart(2, '0')
+  const minutos = String(ar.getUTCMinutes()).padStart(2, '0')
+  return `${dia}/${mes}/${anio} ${horas}:${minutos}`
+}
+
+interface Props {
+  elementos: Elemento[]
+  onChange: (controles: ControlItem[]) => void
 }
 
 export default function RelevoInventarioChecklist({ elementos, onChange }: Props) {
@@ -43,6 +69,7 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
         estado: e.incidencias?.some((i) => i.estado === 'abierto') ? 'falla' : null,
         observacion: '',
         obsError: null,
+        incidenciaResuelta: false,
       },
     ]))
   )
@@ -50,26 +77,37 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
   // Notificar al padre cada vez que cambia el estado
   useEffect(() => {
     const controles: ControlItem[] = activos
-      .filter((e) => {
-        const it = items[e.id]
-        // Excluir elementos bloqueados por incidencia abierta
-        if (e.incidencias?.some((i) => i.estado === 'abierto')) return false
-        return it?.estado !== null
-      })
+      .filter((e) => items[e.id]?.estado !== null)
       .map((e) => ({
         elementoId: e.id,
         estadoOperativo: items[e.id].estado as EstadoOperativo,
         observacion: items[e.id].observacion || undefined,
+        incidenciaResuelta: items[e.id].incidenciaResuelta || undefined,
       }))
     onChange(controles)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])
 
-  function setEstado(id: string, estado: EstadoLocal) {
-    setItems((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], estado, obsError: null },
-    }))
+  function setEstado(id: string, estado: EstadoLocal, opts?: { incidenciaResuelta?: boolean; obsDefault?: string }) {
+    setItems((prev) => {
+      const prevItem = prev[id]
+      const switching = prevItem.estado !== estado
+      const observacion = opts?.obsDefault !== undefined
+        ? opts.obsDefault          // default explícito (ej. "Sigue igual")
+        : switching
+          ? ''                     // cambio de botón → limpiar observación
+          : prevItem.observacion   // mismo botón → conservar lo escrito
+      return {
+        ...prev,
+        [id]: {
+          ...prevItem,
+          estado,
+          obsError: null,
+          observacion,
+          incidenciaResuelta: opts?.incidenciaResuelta ?? false,
+        },
+      }
+    })
   }
 
   function setObs(id: string, observacion: string) {
@@ -108,10 +146,7 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
       <div className="flex flex-col gap-3">
         {elementos.filter((e) => e.estado_admin !== 'inactivo').map((el) => {
           const enMantenimiento = el.estado_admin === 'en_mantenimiento'
-          const incAbierta = el.incidencias?.some((i) => i.estado === 'abierto')
-          // Solo bloqueado si el supervisor lo sacó de servicio.
-          // Falla con incidencia abierta: el elemento sigue en el puesto, el entrante puede observar.
-          const bloqueado = enMantenimiento
+          const incAbierta = el.incidencias?.find((i) => i.estado === 'abierto') ?? null
           const it = items[el.id]
 
           return (
@@ -156,42 +191,85 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
               ) : (
                 <>
                 {incAbierta && (
-                  <div className="ml-5 mb-2 flex items-center gap-1">
-                    <span className="text-xs bg-orange-100 text-orange-700 font-semibold px-2 py-0.5 rounded-full border border-orange-300">
-                      Falla conocida — verificá el estado actual
-                    </span>
+                  <div className="ml-5 mb-2 rounded-lg bg-orange-100 border border-orange-300 p-2.5">
+                    <p className="text-xs font-bold text-orange-800">{incAbierta.titulo}</p>
+                    {incAbierta.descripcion && (
+                      <p className="text-xs text-orange-700 mt-1">{incAbierta.descripcion}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-orange-600">
+                      {incAbierta.libro_turno?.tecnico_nombre && (
+                        <span className="flex items-center gap-1">
+                          <User size={11} /> {incAbierta.libro_turno.tecnico_nombre}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Clock size={11} /> {formatFechaHora(incAbierta.created_at)}
+                      </span>
+                    </div>
                   </div>
                 )}
                 <div className="ml-5 flex flex-col gap-2">
-                  {/* Botones OK / Falla / Faltante */}
+                  {/* Botones de control */}
                   <div className="flex gap-2">
-                    {(['ok', 'falla', 'faltante'] as EstadoOperativo[]).map((est) => {
-                      const labels: Record<EstadoOperativo, string> = { ok: 'OK', falla: 'Falla', faltante: 'Faltante' }
-                      const colors: Record<EstadoOperativo, string> = {
-                        ok:       'bg-green-500 text-white',
-                        falla:    'bg-amber-500 text-white',
-                        faltante: 'bg-red-600 text-white',
-                      }
-                      const idle: Record<EstadoOperativo, string> = {
-                        ok:       'border-green-300 text-green-700',
-                        falla:    'border-amber-300 text-amber-700',
-                        faltante: 'border-red-300 text-red-700',
-                      }
-                      const selected = it?.estado === est
-
-                      return (
+                    {incAbierta ? (
+                      <>
                         <button
-                          key={est}
                           type="button"
-                          onClick={() => setEstado(el.id, est)}
+                          onClick={() => setEstado(el.id, 'falla', { obsDefault: OBS_DEFAULT_PERSISTE })}
                           className={`flex-1 text-sm font-semibold py-2.5 rounded-lg border min-h-[44px] transition-colors ${
-                            selected ? colors[est] : `bg-white ${idle[est]}`
+                            it?.estado === 'falla' ? 'bg-amber-500 text-white' : 'bg-white border-amber-300 text-amber-700'
                           }`}
                         >
-                          {labels[est]}
+                          Sigue igual
                         </button>
-                      )
-                    })}
+                        <button
+                          type="button"
+                          onClick={() => setEstado(el.id, 'ok', { incidenciaResuelta: true })}
+                          className={`flex-1 text-sm font-semibold py-2.5 rounded-lg border min-h-[44px] transition-colors ${
+                            it?.estado === 'ok' ? 'bg-green-500 text-white' : 'bg-white border-green-300 text-green-700'
+                          }`}
+                        >
+                          Se resolvió
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEstado(el.id, 'faltante')}
+                          className={`flex-1 text-sm font-semibold py-2.5 rounded-lg border min-h-[44px] transition-colors ${
+                            it?.estado === 'faltante' ? 'bg-red-600 text-white' : 'bg-white border-red-300 text-red-700'
+                          }`}
+                        >
+                          Faltante
+                        </button>
+                      </>
+                    ) : (
+                      (['ok', 'falla', 'faltante'] as EstadoOperativo[]).map((est) => {
+                        const labels: Record<EstadoOperativo, string> = { ok: 'OK', falla: 'Falla', faltante: 'Faltante' }
+                        const colors: Record<EstadoOperativo, string> = {
+                          ok:       'bg-green-500 text-white',
+                          falla:    'bg-amber-500 text-white',
+                          faltante: 'bg-red-600 text-white',
+                        }
+                        const idle: Record<EstadoOperativo, string> = {
+                          ok:       'border-green-300 text-green-700',
+                          falla:    'border-amber-300 text-amber-700',
+                          faltante: 'border-red-300 text-red-700',
+                        }
+                        const selected = it?.estado === est
+
+                        return (
+                          <button
+                            key={est}
+                            type="button"
+                            onClick={() => setEstado(el.id, est)}
+                            className={`flex-1 text-sm font-semibold py-2.5 rounded-lg border min-h-[44px] transition-colors ${
+                              selected ? colors[est] : `bg-white ${idle[est]}`
+                            }`}
+                          >
+                            {labels[est]}
+                          </button>
+                        )
+                      })
+                    )}
                   </div>
 
                   {/* Observación obligatoria cuando no es OK */}
@@ -203,6 +281,9 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
                         onBlur={() => validarObs(el.id)}
                         placeholder="Describí el problema con al menos 10 caracteres..."
                         rows={2}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         className={`w-full border rounded-lg p-2.5 text-sm resize-none ${
                           it.obsError ? 'border-red-400' : 'border-gray-300'
                         }`}

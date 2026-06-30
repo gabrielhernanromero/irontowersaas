@@ -15,7 +15,7 @@ export default async function RondaPage() {
     .from('libro_turno')
     .select('id, estado, cliente_id, clientes(id, nombre_empresa, frecuencia_ronda_minutos)')
     .eq('tecnico_id', user!.id)
-    .in('estado', ['abierto', 'pendiente_relevo'])
+    .eq('estado', 'abierto')
     .order('horario_inicio', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -30,7 +30,7 @@ export default async function RondaPage() {
       .eq('usuario_id', user!.id)
       .maybeSingle()
     const lt = (participacion as any)?.libro_turno
-    if (lt && ['abierto', 'pendiente_relevo'].includes(lt.estado)) turno = lt
+    if (lt && lt.estado === 'abierto') turno = lt
   }
 
   // Verificar configuración de ronda para el cliente

@@ -118,6 +118,7 @@ export default function AbrirGuardiaForm({
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al abrir la guardia'); return }
       router.push('/tecnico/libro-guardia?ok=1')
+      router.refresh()
     } catch {
       setError('Error de conexión. Intentá de nuevo.')
     } finally {

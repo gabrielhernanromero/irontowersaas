@@ -78,6 +78,7 @@ export default function CerrarGuardiaForm({ turnoId, horaFinEsquema }: Props) {
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al cerrar el turno'); return }
       router.push('/tecnico/libro-guardia')
+      router.refresh()
     } catch {
       setError('Error de conexión. Intentá de nuevo.')
     } finally {

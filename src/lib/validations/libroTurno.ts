@@ -69,6 +69,8 @@ export const RelevoPSchema = z.object({
   horario_inicio: z.string().regex(hora, 'Formato HH:MM'),
   fecha: z.string().min(1, 'La fecha es obligatoria'),
   turno: z.enum(['diurno', 'nocturno']),
+  // Personal de apoyo del turno entrante
+  personal_apoyo: z.array(PersonalApoyoSchema).optional(),
 })
 
 // ── Relevo por Especificación Técnica (PIN auth + SHA-256 + firmas-relevos) ──

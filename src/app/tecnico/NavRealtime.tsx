@@ -72,7 +72,7 @@ export default function NavRealtime({ userId, initialGuardia, initialRondas, ini
   }, [userId])
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
       <div className="max-w-[430px] mx-auto flex">
         <NavItem href="/tecnico/home"          icon={<Home     size={22} />} label="Inicio"    />
         <NavItem href="/tecnico/elementos"     icon={<Package  size={22} />} label="Elementos" badge={elementos} />

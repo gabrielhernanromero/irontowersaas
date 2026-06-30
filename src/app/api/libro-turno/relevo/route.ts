@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno } = parsed.data
+  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno, personal_apoyo } = parsed.data
 
   const { data: turnoSaliente } = await supabaseAdmin()
     .from('libro_turno')
@@ -193,13 +193,37 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Error al crear el nuevo turno' }, { status: 500 })
   }
 
+  // Alertar supervisores por apoyo ausente — el apoyo se une por su cuenta (Estado D → JoinTurnoButton)
+  if (personal_apoyo?.length) {
+    const ausentes = personal_apoyo.filter(p => !p.presente)
+    for (const a of ausentes) {
+      await supabaseAdmin()
+        .from('alertas')
+        .insert({
+          tipo:     'novedad_apoyo',
+          turno_id: nuevoTurno.id,
+          mensaje:  `${a.nombre} no se presentó al turno de ${relevo_nombre} (relevo).`,
+          leida:    false,
+        })
+    }
+  }
+
+  // Novedad de apertura — enriquecida con presencia del apoyo
+  let descripcionApertura = `Apertura de guardia por relevo — ${relevo_nombre}, DNI ${relevo_dni}`
+  if (personal_apoyo?.length) {
+    const presentes = personal_apoyo.filter(p => p.presente).map(p => p.nombre)
+    const ausentes  = personal_apoyo.filter(p => !p.presente).map(p => p.nombre)
+    if (presentes.length) descripcionApertura += `. Personal de apoyo presente: ${presentes.join(', ')}.`
+    if (ausentes.length)  descripcionApertura += ` Ausente: ${ausentes.join(', ')}.`
+  }
+
   await supabaseAdmin()
     .from('libro_novedad')
     .insert({
       turno_id: nuevoTurno.id,
       tipo: 'apertura',
       hora: horario_inicio,
-      descripcion: `Apertura de guardia por relevo — ${relevo_nombre}, DNI ${relevo_dni}`,
+      descripcion: descripcionApertura,
     })
 
   return NextResponse.json(nuevoTurno, { status: 201 })

@@ -34,9 +34,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: insError.message }, { status: 400 })
       }
 
-      if (control.estadoOperativo === 'ok') continue
-
-      // 2. Verificar que no exista ya una incidencia abierta para este elemento
+      // 2. Verificar si ya existe una incidencia abierta para este elemento
       //    (evita crear tickets duplicados si el turno anterior ya la reportó)
       const { data: incExistente } = await supabaseAdmin()
         .from('incidencias')
@@ -45,6 +43,18 @@ export async function POST(request: Request) {
         .eq('estado', 'abierto')
         .maybeSingle()
 
+      // El entrante confirmó que la falla conocida se resolvió: cerrar la incidencia.
+      if (incExistente && control.estadoOperativo === 'ok' && control.incidenciaResuelta) {
+        await supabaseAdmin()
+          .from('incidencias')
+          .update({ estado: 'resuelto', turno_cierre_id: validated.turnoNuevoId })
+          .eq('id', incExistente.id)
+        continue
+      }
+
+      if (control.estadoOperativo === 'ok') continue
+
+      // Falla conocida que persiste: no crear un nuevo ticket duplicado.
       if (incExistente) continue
 
       // 3. Obtener metadata del elemento para armar el ticket

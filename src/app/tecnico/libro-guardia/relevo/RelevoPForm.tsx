@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import {
   Lock, UserCheck, XCircle, CheckCircle2, ChevronDown,
   X, Clock, AlertTriangle, TriangleAlert, ClipboardList, Eye,
-  CheckCircle,
+  CheckCircle, Users,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 const FirmaCanvas = dynamic(() => import('@/components/signature/FirmaCanvas'), {
@@ -63,7 +63,20 @@ interface ElementoRelevo {
   codigo_patrimonial: string
   estado_admin: EstadoAdmin
   motivo_mantenimiento: string | null
-  incidencias?: { id: string; estado: string }[]
+  incidencias?: {
+    id: string
+    estado: string
+    titulo: string
+    descripcion: string
+    severidad: 'bajo' | 'medio' | 'alto' | null
+    created_at: string
+    libro_turno: { tecnico_nombre: string; tecnico_dni: string } | null
+  }[]
+}
+
+interface PersonalApoyoProp {
+  usuario_id: string
+  nombre: string
 }
 
 interface Props {
@@ -76,12 +89,14 @@ interface Props {
   elementos: ElementoRelevo[]
   entranteNombre?: string
   entranteDni?: string
+  personalApoyo?: PersonalApoyoProp[]
 }
 
 export default function RelevoPForm({
   turnoSalienteId, salienteNombre, salienteDNI, clienteId,
   novedades, incidenciasActivas, elementos,
   entranteNombre = '', entranteDni = '',
+  personalApoyo = [],
 }: Props) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
@@ -94,6 +109,9 @@ export default function RelevoPForm({
   const [planillaLoading, setPlanillaLoading] = useState(false)
   const [planillaError, setPlanillaError] = useState(false)
   const [inventarioControles, setInventarioControles] = useState<ControlItem[]>([])
+  const [presencia, setPresencia] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(personalApoyo.map(p => [p.usuario_id, true]))
+  )
   const novedadesRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<RelevoPInput>({
@@ -153,7 +171,16 @@ export default function RelevoPForm({
       const res = await fetch('/api/libro-turno/relevo', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          personal_apoyo: personalApoyo.length > 0
+            ? personalApoyo.map(p => ({
+                usuario_id: p.usuario_id,
+                nombre:     p.nombre,
+                presente:   presencia[p.usuario_id] ?? true,
+              }))
+            : undefined,
+        }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al registrar el relevo'); return }
@@ -203,8 +230,8 @@ export default function RelevoPForm({
           </div>
         </div>
 
-        {/* Incidencias activas del puesto */}
-        <IncidenciasActivas incidencias={incidenciasActivas} />
+        {/* Incidencias activas del puesto — las ligadas a un elemento se muestran en el checklist de inventario */}
+        <IncidenciasActivas incidencias={incidenciasActivas.filter((i) => !i.elemento_afectado_id)} />
 
         {/* Control de inventario del puesto */}
         {elementos.length > 0 && (
@@ -315,6 +342,72 @@ export default function RelevoPForm({
             )}
           </div>
         </div>
+
+        {/* Personal de apoyo entrante */}
+        {personalApoyo.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-gray-100">
+              <Users size={16} className="text-brand-blue" />
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Personal de apoyo
+              </p>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {personalApoyo.map(persona => {
+                const pres = presencia[persona.usuario_id] ?? true
+                return (
+                  <div
+                    key={persona.usuario_id}
+                    className={`flex items-center justify-between px-4 py-3.5 gap-3 transition-colors ${!pres ? 'bg-red-50' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${pres ? 'bg-green-100' : 'bg-red-100'}`}>
+                        {pres
+                          ? <CheckCircle2 size={18} className="text-green-600" />
+                          : <XCircle      size={18} className="text-red-500"   />
+                        }
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold transition-colors ${pres ? 'text-brand-ink' : 'text-red-700'}`}>
+                          {persona.nombre}
+                        </p>
+                        <p className={`text-xs font-medium transition-colors ${pres ? 'text-green-600' : 'text-red-500'}`}>
+                          {pres ? 'Presente' : 'Ausente'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPresencia(p => ({ ...p, [persona.usuario_id]: true }))}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border-2 min-h-[44px] min-w-[76px] justify-center transition-all ${
+                          pres
+                            ? 'bg-green-500 border-green-500 text-white shadow-sm'
+                            : 'border-gray-200 text-gray-400 bg-white'
+                        }`}
+                      >
+                        <CheckCircle2 size={14} />
+                        Presente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPresencia(p => ({ ...p, [persona.usuario_id]: false }))}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border-2 min-h-[44px] min-w-[76px] justify-center transition-all ${
+                          !pres
+                            ? 'bg-red-500 border-red-500 text-white shadow-sm'
+                            : 'border-gray-200 text-gray-400 bg-white'
+                        }`}
+                      >
+                        <XCircle size={14} />
+                        Ausente
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Mis datos + firma — bloqueados hasta leer todo */}
         <div className={`transition-opacity duration-300 flex flex-col gap-4 ${
