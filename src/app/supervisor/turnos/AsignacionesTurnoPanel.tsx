@@ -349,7 +349,7 @@ export default function AsignacionesTurnoPanel({ tecnicos, clientes }: Props) {
                             className={`relative w-9 h-5 rounded-full transition-colors ${editandoEsquema.requiere_relevo ? 'bg-brand-orange' : 'bg-gray-200'}`}>
                             <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editandoEsquema.requiere_relevo ? 'translate-x-4' : ''}`} />
                           </div>
-                          <span className="text-xs text-gray-600 font-medium">Requiere relevo del saliente</span>
+                          <span className="text-xs text-gray-600 font-medium">Este turno tiene relevo</span>
                         </label>
                         <div className="flex gap-2">
                           <button onClick={guardarEdicion} disabled={guardandoEdit}
@@ -564,7 +564,7 @@ export default function AsignacionesTurnoPanel({ tecnicos, clientes }: Props) {
                   className={`relative w-9 h-5 rounded-full transition-colors ${crearForm.requiere_relevo ? 'bg-brand-orange' : 'bg-gray-200'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${crearForm.requiere_relevo ? 'translate-x-4' : ''}`} />
                 </div>
-                <span className="text-xs text-gray-600 font-medium">Requiere relevo del saliente</span>
+                <span className="text-xs text-gray-600 font-medium">Este turno tiene relevo</span>
               </label>
 
               {errorEsquema && <p className="text-red-600 text-xs">{errorEsquema}</p>}
