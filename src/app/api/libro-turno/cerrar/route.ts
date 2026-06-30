@@ -53,98 +53,27 @@ export async function POST(req: NextRequest) {
   if (turno.tecnico_id !== user.id) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   if (turno.estado !== 'abierto') return NextResponse.json({ error: 'El turno no está abierto' }, { status: 409 })
 
-  // ── 1. Cierre anticipado y auto-detect relevo ─────────────────────────────────
+  // ── 1. Cierre anticipado + relevo configurado por supervisor ─────────────────
   let esAnticipado = false
   let minsRestantes = 0
   let hayRelevo = false
 
-  const { hours, minutes, hoy, ayer } = getArgTime()
+  const { hours, minutes } = getArgTime()
 
-  if (turno.esquema_id && turno.cliente_id) {
+  if (turno.esquema_id) {
     const { data: esquemaActual } = await supabaseAdmin()
       .from('esquemas_cobertura')
-      .select('hora_fin')
+      .select('hora_fin, requiere_relevo')
       .eq('id', turno.esquema_id)
       .single()
 
     if (esquemaActual?.hora_fin) {
-      const horaFin = esquemaActual.hora_fin.slice(0, 5)
-      minsRestantes = minutosHastaFin(horaFin, hours, minutes)
+      minsRestantes = minutosHastaFin(esquemaActual.hora_fin.slice(0, 5), hours, minutes)
       esAnticipado = minsRestantes > 30
-
-      // Buscar esquema siguiente: inicia dentro de ±60 min del fin de este
-      const { data: otrosEsquemas } = await supabaseAdmin()
-        .from('esquemas_cobertura')
-        .select('id, hora_inicio, dias_semana')
-        .eq('cliente_id', turno.cliente_id)
-        .eq('activo', true)
-        .neq('id', turno.esquema_id)
-
-      const [finH, finM] = horaFin.split(':').map(Number)
-      const finTotalMin = finH * 60 + finM
-
-      const siguienteEsquema = (otrosEsquemas ?? []).find(e => {
-        const [iniH, iniM] = e.hora_inicio.slice(0, 5).split(':').map(Number)
-        const iniTotalMin = iniH * 60 + iniM
-        let diff = Math.abs(iniTotalMin - finTotalMin)
-        if (diff > 720) diff = 1440 - diff // cross-midnight
-        return diff <= 60
-      })
-
-      if (siguienteEsquema) {
-        // Buscar encargado del siguiente esquema (excepción → persistente)
-        const { data: excepcion } = await supabaseAdmin()
-          .from('asignaciones_turno')
-          .select('id, usuario_id')
-          .eq('esquema_id', siguienteEsquema.id)
-          .eq('rol_turno', 'encargado')
-          .in('fecha', [hoy, ayer])
-          .maybeSingle()
-
-        let encargadoSiguienteId: string | null = excepcion?.usuario_id ?? null
-
-        if (!encargadoSiguienteId) {
-          const { data: persistente } = await supabaseAdmin()
-            .from('asignaciones_persistentes')
-            .select('id, usuario_id')
-            .eq('esquema_id', siguienteEsquema.id)
-            .eq('rol_turno', 'encargado')
-            .maybeSingle()
-          encargadoSiguienteId = persistente?.usuario_id ?? null
-        }
-
-        if (encargadoSiguienteId) {
-          // Verificar que el encargado del siguiente esquema no trabajó ya hoy
-          const { data: turnoHoyEncargado } = await supabaseAdmin()
-            .from('libro_turno')
-            .select('id')
-            .eq('tecnico_id', encargadoSiguienteId)
-            .eq('fecha', hoy)
-            .maybeSingle()
-
-          if (turnoHoyEncargado) {
-            // Ya trabajó hoy → cierre circular, no hay relevo pendiente
-            hayRelevo = false
-          } else {
-            // Verificar que el siguiente esquema opera el PRÓXIMO día aplicable.
-            // Evita pendiente_relevo cuando el turno siguiente es días o semanas después.
-            const [iniH, iniM] = siguienteEsquema.hora_inicio.slice(0, 5).split(':').map(Number)
-            const iniTotalMin = iniH * 60 + iniM
-            const nowTotalMin = hours * 60 + minutes
-            // Si la hora de inicio del siguiente ya pasó en el día actual → aplica mañana
-            const diasOffset = iniTotalMin < nowTotalMin ? 1 : 0
-            const todayDate = new Date(hoy + 'T00:00:00Z')
-            const nextDow = (todayDate.getUTCDay() + diasOffset) % 7
-            const diasSemana: number[] = (siguienteEsquema as { dias_semana?: number[] | null }).dias_semana ?? [0, 1, 2, 3, 4, 5, 6]
-            hayRelevo = diasSemana.includes(nextDow)
-          }
-        }
-      }
     }
-  }
 
-  // Si no hay esquema configurado, asumir pendiente_relevo (comportamiento anterior)
-  if (!turno.esquema_id) hayRelevo = true
+    hayRelevo = esquemaActual?.requiere_relevo ?? false
+  }
 
   // Cierre anticipado requiere motivo
   if (esAnticipado && !motivo_cierre_anticipado?.trim()) {

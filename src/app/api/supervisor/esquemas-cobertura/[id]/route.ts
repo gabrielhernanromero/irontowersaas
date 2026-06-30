@@ -6,13 +6,14 @@ import { z } from 'zod'
 const HoraRx = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/
 
 const UpdateSchema = z.object({
-  nombre:      z.string().min(1).max(100).optional(),
-  hora_inicio: z.string().regex(HoraRx).optional(),
-  hora_fin:    z.string().regex(HoraRx).optional(),
-  activo:      z.boolean().optional(),
-  dias_semana: z.array(z.number().int().min(0).max(6)).min(1).optional(),
-  fecha_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  fecha_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  nombre:          z.string().min(1).max(100).optional(),
+  hora_inicio:     z.string().regex(HoraRx).optional(),
+  hora_fin:        z.string().regex(HoraRx).optional(),
+  activo:          z.boolean().optional(),
+  dias_semana:     z.array(z.number().int().min(0).max(6)).min(1).optional(),
+  fecha_desde:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fecha_hasta:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  requiere_relevo: z.boolean().optional(),
 })
 
 export async function PATCH(
@@ -83,7 +84,7 @@ export async function PATCH(
     .from('esquemas_cobertura')
     .update(parsed.data)
     .eq('id', params.id)
-    .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+    .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, requiere_relevo, fecha_desde, fecha_hasta')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

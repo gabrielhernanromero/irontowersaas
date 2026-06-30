@@ -7,13 +7,14 @@ import { z } from 'zod'
 const HoraRx = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/
 
 const CreateSchema = z.object({
-  cliente_id:  z.string().uuid(),
-  nombre:      z.string().min(1, 'Nombre requerido').max(100),
-  hora_inicio: z.string().regex(HoraRx, 'Formato HH:MM'),
-  hora_fin:    z.string().regex(HoraRx, 'Formato HH:MM'),
-  fecha_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD').optional(),
-  fecha_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD').nullable().optional(),
-  dias_semana: z.array(z.number().int().min(0).max(6)).min(1, 'Seleccioná al menos un día').default([0,1,2,3,4,5,6]),
+  cliente_id:      z.string().uuid(),
+  nombre:          z.string().min(1, 'Nombre requerido').max(100),
+  hora_inicio:     z.string().regex(HoraRx, 'Formato HH:MM'),
+  hora_fin:        z.string().regex(HoraRx, 'Formato HH:MM'),
+  fecha_desde:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD').optional(),
+  fecha_hasta:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD').nullable().optional(),
+  dias_semana:     z.array(z.number().int().min(0).max(6)).min(1, 'Seleccioná al menos un día').default([0,1,2,3,4,5,6]),
+  requiere_relevo: z.boolean().default(false),
 })
 
 export async function GET(req: NextRequest) {
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin()
     .from('esquemas_cobertura')
     .select(`
-      id, nombre, hora_inicio, hora_fin, fecha_desde, fecha_hasta, activo, dias_semana, created_at,
+      id, nombre, hora_inicio, hora_fin, fecha_desde, fecha_hasta, activo, dias_semana, requiere_relevo, created_at,
       asignaciones:asignaciones_persistentes (
         id, rol_turno,
         usuario:usuario_id ( id, nombre, apellido, dni )
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin()
     .from('esquemas_cobertura')
     .insert(parsed.data)
-    .select('id, nombre, hora_inicio, hora_fin, fecha_desde, fecha_hasta, activo, dias_semana, created_at')
+    .select('id, nombre, hora_inicio, hora_fin, fecha_desde, fecha_hasta, activo, dias_semana, requiere_relevo, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
