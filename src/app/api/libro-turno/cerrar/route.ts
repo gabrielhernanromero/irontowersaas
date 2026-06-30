@@ -92,26 +92,38 @@ export async function POST(req: NextRequest) {
       })
 
       if (siguienteEsquema) {
-        // Primero buscar excepción del día
+        // Buscar encargado del siguiente esquema (excepción → persistente)
         const { data: excepcion } = await supabaseAdmin()
           .from('asignaciones_turno')
-          .select('id')
+          .select('id, usuario_id')
           .eq('esquema_id', siguienteEsquema.id)
           .eq('rol_turno', 'encargado')
           .in('fecha', [hoy, ayer])
           .maybeSingle()
 
-        if (excepcion) {
-          hayRelevo = true
-        } else {
-          // Fallback: asignación persistente
+        let encargadoSiguienteId: string | null = excepcion?.usuario_id ?? null
+
+        if (!encargadoSiguienteId) {
           const { data: persistente } = await supabaseAdmin()
             .from('asignaciones_persistentes')
-            .select('id')
+            .select('id, usuario_id')
             .eq('esquema_id', siguienteEsquema.id)
             .eq('rol_turno', 'encargado')
             .maybeSingle()
-          hayRelevo = !!persistente
+          encargadoSiguienteId = persistente?.usuario_id ?? null
+        }
+
+        if (encargadoSiguienteId) {
+          // Si el encargado del turno siguiente ya trabajó hoy (tiene libro_turno con fecha=hoy)
+          // no hay relevo pendiente — evita el cierre circular en el último turno del día.
+          const { data: turnoHoyEncargado } = await supabaseAdmin()
+            .from('libro_turno')
+            .select('id')
+            .eq('tecnico_id', encargadoSiguienteId)
+            .eq('fecha', hoy)
+            .maybeSingle()
+
+          hayRelevo = !turnoHoyEncargado
         }
       }
     }
