@@ -12,6 +12,7 @@ import {
 import { getArgTime, deriveTurno } from '@/lib/cobertura/timeUtils'
 import { findEsquemaActivo } from '@/lib/esquemas/validarVentana'
 import type { Incidencia, LibroTurno, LibroNovedad } from '@/types/database'
+import AvisarSupervisorButton from './AvisarSupervisorButton'
 import NovedadesTimeline from './NovedadesTimeline'
 import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
 import JoinTurnoButton from './JoinTurnoButton'
@@ -142,13 +143,13 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   }
 
   // ── 4. Para encargado asignado: ¿hay un turno previo sin cerrar que bloquee? ─
-  let turnoBlockeante: { tecnico_nombre: string; folio_numero: number; interino: boolean } | null = null
+  let turnoBlockeante: { id: string; tecnico_nombre: string; folio_numero: number; interino: boolean; horario_fin: string | null; aviso_supervisor_at: string | null } | null = null
   if (asignacionHoy?.rol_turno === 'encargado' && !turnoEncargado && asignacionHoy.cliente_id) {
     const esquemaId      = asignacionHoy.esquema_id
     const derivedTurno_  = deriveTurno('08:00') // fallback
     const { data: bloq } = await supabaseAdmin()
       .from('libro_turno')
-      .select('tecnico_nombre, folio_numero, estado, interino')
+      .select('id, tecnico_nombre, folio_numero, estado, interino, horario_fin, aviso_supervisor_at')
       .eq('cliente_id', asignacionHoy.cliente_id)
       .neq('tecnico_id', user.id)
       .in('estado', ['abierto', 'pendiente_relevo'])
@@ -162,8 +163,18 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
   }
 
   // Distinguir: interino activo (apoyo cubriendo) vs turno previo sin cerrar
-  const interinoActivo  = turnoBlockeante?.interino === true  ? turnoBlockeante : null
+  const interinoActivo     = turnoBlockeante?.interino === true ? turnoBlockeante : null
   const turnoPrevNoCerrado = turnoBlockeante?.interino !== true && turnoBlockeante ? turnoBlockeante : null
+
+  // Mostrar el botón de avisar solo si pasaron 15 min del horario_fin del turno bloqueante
+  const puedeAvisarSupervisor = (() => {
+    if (!turnoPrevNoCerrado?.horario_fin) return false
+    const [h, m] = turnoPrevNoCerrado.horario_fin.split(':').map(Number)
+    const { hours, minutes } = getArgTime()
+    const ahoraMin  = hours * 60 + minutes
+    const finMin    = h * 60 + m
+    return ahoraMin >= finMin + 15
+  })()
 
   // ── 5. Datos del turno activo (encargado o apoyo) ─────────────────────────────
   const turnoActivo: LibroTurno | null = (turnoEncargado as LibroTurno | null) ?? turnoApoyo
@@ -357,10 +368,13 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
     pendingReleovRaw = data ?? null
   }
 
-  // El relevo aplica al encargado entrante (incluye mismo usuario cubriendo turno siguiente)
+  // El relevo aplica al encargado entrante, pero nunca para el propio turno que acaba de cerrar.
+  // Si pendingReleovRaw.id === turnoEncargadoCerradoHoy.id significa que el sistema encontró
+  // el turno propio en pendiente_relevo — en ese caso debe mostrar Estado G, no Estado B.
   const pendingRelevo = (
     pendingReleovRaw &&
-    asignacionHoy?.rol_turno === 'encargado'
+    asignacionHoy?.rol_turno === 'encargado' &&
+    pendingReleovRaw.id !== turnoEncargadoCerradoHoy?.id
   ) ? pendingReleovRaw : null
 
   return (
@@ -568,12 +582,23 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
             <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <ShieldAlert size={20} className="text-red-600 shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1">
                   <p className="font-semibold text-red-800 text-sm">Turno anterior no cerrado</p>
                   <p className="text-xs text-red-700 mt-1">
                     El turno de <strong>{turnoPrevNoCerrado.tecnico_nombre}</strong> (folio #{turnoPrevNoCerrado.folio_numero})
-                    aún no fue cerrado. No podés abrir un nuevo turno hasta que el encargado saliente cierre el suyo.
+                    aún no fue cerrado. No podés abrir un nuevo turno hasta que un supervisor lo resuelva.
                   </p>
+                  {puedeAvisarSupervisor && (
+                    <AvisarSupervisorButton
+                      turnoBlockeanteId={turnoPrevNoCerrado.id}
+                      yaAvisado={!!turnoPrevNoCerrado.aviso_supervisor_at}
+                    />
+                  )}
+                  {!puedeAvisarSupervisor && (
+                    <p className="text-xs text-red-500 mt-2 italic">
+                      El encargado saliente todavía puede cerrar su turno. Si no lo hace en los próximos minutos podrás avisar al supervisor.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

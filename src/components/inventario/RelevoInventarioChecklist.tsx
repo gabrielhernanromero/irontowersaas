@@ -36,7 +36,15 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
   const activos = elementos.filter((e) => e.estado_admin === 'activo')
 
   const [items, setItems] = useState<Record<string, ItemState>>(() =>
-    Object.fromEntries(activos.map((e) => [e.id, { estado: null, observacion: '', obsError: null }]))
+    Object.fromEntries(activos.map((e) => [
+      e.id,
+      {
+        // Pre-seleccionar "falla" si hay incidencia abierta conocida
+        estado: e.incidencias?.some((i) => i.estado === 'abierto') ? 'falla' : null,
+        observacion: '',
+        obsError: null,
+      },
+    ]))
   )
 
   // Notificar al padre cada vez que cambia el estado
@@ -101,7 +109,9 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
         {elementos.filter((e) => e.estado_admin !== 'inactivo').map((el) => {
           const enMantenimiento = el.estado_admin === 'en_mantenimiento'
           const incAbierta = el.incidencias?.some((i) => i.estado === 'abierto')
-          const bloqueado = enMantenimiento || !!incAbierta
+          // Solo bloqueado si el supervisor lo sacó de servicio.
+          // Falla con incidencia abierta: el elemento sigue en el puesto, el entrante puede observar.
+          const bloqueado = enMantenimiento
           const it = items[el.id]
 
           return (
@@ -110,12 +120,12 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
               className={`rounded-xl border p-3 ${
                 enMantenimiento
                   ? 'bg-slate-100 border-slate-200 opacity-60'
-                  : incAbierta
-                  ? 'bg-orange-50 border-orange-200'
                   : it?.estado === 'ok'
                   ? 'bg-green-50 border-green-200'
                   : it?.estado === 'falla' || it?.estado === 'faltante'
                   ? 'bg-red-50 border-red-200'
+                  : incAbierta
+                  ? 'bg-orange-50 border-orange-200'
                   : 'bg-white border-gray-200'
               }`}
             >
@@ -143,13 +153,15 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
                 <p className="text-xs text-slate-500 ml-5">
                   En mantenimiento — {el.motivo_mantenimiento ?? 'sin detalle'}
                 </p>
-              ) : incAbierta ? (
-                <div className="ml-5 flex items-center gap-1">
-                  <span className="text-xs bg-orange-100 text-orange-700 font-semibold px-2 py-0.5 rounded-full border border-orange-300">
-                    Reparación pendiente
-                  </span>
-                </div>
               ) : (
+                <>
+                {incAbierta && (
+                  <div className="ml-5 mb-2 flex items-center gap-1">
+                    <span className="text-xs bg-orange-100 text-orange-700 font-semibold px-2 py-0.5 rounded-full border border-orange-300">
+                      Falla conocida — verificá el estado actual
+                    </span>
+                  </div>
+                )}
                 <div className="ml-5 flex flex-col gap-2">
                   {/* Botones OK / Falla / Faltante */}
                   <div className="flex gap-2">
@@ -201,6 +213,7 @@ export default function RelevoInventarioChecklist({ elementos, onChange }: Props
                     </div>
                   )}
                 </div>
+                </>
               )}
             </div>
           )

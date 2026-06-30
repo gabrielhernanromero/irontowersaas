@@ -59,7 +59,7 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
       })
       const json = await res.json()
       if (!res.ok) { setForceError(json.error ?? 'Error al cerrar'); return }
-      setTurno(prev => prev ? { ...prev, estado: 'cerrado' } : prev)
+      setTurno(prev => prev ? { ...prev, estado: json.nuevoEstado ?? 'cerrado' } : prev)
       setForceMotivo('')
     } catch { setForceError('Error de conexión') }
     finally  { setForcingClose(false) }
@@ -166,7 +166,35 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
 
               <div className="h-px bg-gray-100 mx-5" />
 
-              {/* Force-close — solo si está pendiente de relevo */}
+              {/* Force-close — turno abierto sin cerrar */}
+              {turno.estado === 'abierto' && (
+                <div className="p-5 bg-amber-50 border-b border-amber-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldAlert size={16} className="text-amber-600 shrink-0" />
+                    <p className="text-sm font-semibold text-amber-700">Turno sin cerrar</p>
+                  </div>
+                  <p className="text-xs text-amber-700 mb-3">
+                    El encargado no cerró su turno. Al forzar el cierre quedará <strong>pendiente de relevo</strong> para que el entrante pueda firmar antes de abrir el suyo.
+                  </p>
+                  <textarea
+                    value={forceMotivo}
+                    onChange={e => setForceMotivo(e.target.value)}
+                    placeholder="Motivo del cierre forzado..."
+                    rows={2}
+                    className="w-full border border-amber-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+                  />
+                  {forceError && <p className="text-xs text-red-600 mt-1">{forceError}</p>}
+                  <button
+                    onClick={handleForceClose}
+                    disabled={forcingClose}
+                    className="mt-2 w-full bg-amber-600 text-white text-sm font-semibold py-2.5 rounded-lg active:bg-amber-700 disabled:opacity-50"
+                  >
+                    {forcingClose ? 'Cerrando...' : 'Cerrar y dejar pendiente de relevo'}
+                  </button>
+                </div>
+              )}
+
+              {/* Force-close — turno pendiente de relevo (cierre final sin relevo) */}
               {turno.estado === 'pendiente_relevo' && (
                 <div className="p-5 bg-red-50 border-b border-red-100">
                   <div className="flex items-center gap-2 mb-3">

@@ -1,7 +1,7 @@
 export type Rol = 'admin' | 'supervisor' | 'tecnico' | 'cliente'
 export type TipoPlanilla = 'hidrantes' | 'extintores'
 export type Turno = 'diurno' | 'nocturno'
-export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado'
+export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado' | 'turno_sin_cerrar'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
 export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
@@ -105,6 +105,7 @@ export interface LibroTurno {
   cliente_id: string | null
   esquema_id: string | null
   interino: boolean
+  aviso_supervisor_at: string | null
   created_at: string
   novedades?: LibroNovedad[]
 }

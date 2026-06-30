@@ -174,39 +174,45 @@ export default async function RelevoPPage({ searchParams }: Props) {
       {/* Datos del turno saliente */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-5 shadow-sm">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Turno saliente</p>
-        <div className="grid grid-cols-2 gap-y-2 text-sm">
-          <div>
-            <p className="text-xs text-gray-400">Técnico</p>
-            <p className="font-semibold text-brand-ink">{turno.tecnico_nombre}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">DNI</p>
-            <p className="font-semibold text-brand-ink">{turno.tecnico_dni}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Folio / Turno</p>
-            <p className="font-medium text-brand-ink capitalize">#{turno.folio_numero} — {turno.turno}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Fecha / Hora</p>
-            <p className="font-medium text-brand-ink">
-              {formatFecha(turno.fecha)} {turno.horario_inicio?.slice(0, 5)}–{turno.horario_fin?.slice(0, 5) ?? '?'}
-            </p>
-          </div>
-        </div>
-        {apoyosSalientes.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs text-gray-400 mb-2">Apoyo</p>
-            <div className="space-y-1">
-              {apoyosSalientes.map(a => (
-                <div key={a.id} className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-brand-ink">{a.nombre}</span>
-                  {a.dni && <span className="text-gray-500 text-xs">DNI {a.dni}</span>}
-                </div>
-              ))}
+        <div className="flex flex-col gap-3 text-sm">
+          {/* Encargado */}
+          <div className="grid grid-cols-2 gap-y-1">
+            <div>
+              <p className="text-xs text-gray-400">Técnico</p>
+              <p className="font-semibold text-brand-ink">{turno.tecnico_nombre}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">DNI</p>
+              <p className="font-semibold text-brand-ink">{turno.tecnico_dni}</p>
             </div>
           </div>
-        )}
+          {/* Apoyo(s) */}
+          {apoyosSalientes.map(a => (
+            <div key={a.id} className="grid grid-cols-2 gap-y-1">
+              <div>
+                <p className="text-xs text-gray-400">Apoyo</p>
+                <p className="font-medium text-brand-ink">{a.nombre}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">DNI</p>
+                <p className="font-medium text-brand-ink">{a.dni ?? '—'}</p>
+              </div>
+            </div>
+          ))}
+          {/* Folio y fecha al final con separador */}
+          <div className="grid grid-cols-2 gap-y-1 pt-2 border-t border-gray-100">
+            <div>
+              <p className="text-xs text-gray-400">Folio / Turno</p>
+              <p className="font-medium text-brand-ink capitalize">#{turno.folio_numero} — {turno.turno}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Fecha / Hora</p>
+              <p className="font-medium text-brand-ink">
+                {formatFecha(turno.fecha)} {turno.horario_inicio?.slice(0, 5)}–{turno.horario_fin?.slice(0, 5) ?? '?'}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <RelevoPForm
