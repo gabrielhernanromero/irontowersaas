@@ -1181,6 +1181,7 @@ interface EsquemaRow {
   fecha_hasta: string | null
   activo: boolean
   dias_semana: number[]
+  requiere_relevo: boolean
   asignaciones: {
     id: string
     rol_turno: 'encargado' | 'apoyo'
@@ -1196,10 +1197,10 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
   const [esquemas,         setEsquemas]         = useState<EsquemaRow[]>([])
   const [loading,          setLoading]          = useState(true)
   const [error,            setError]            = useState<string | null>(null)
-  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string; fecha_hasta: string; dias_semana: number[] } | null>(null)
+  const [crearForm,        setCrearForm]        = useState<{ nombre: string; hora_inicio: string; hora_fin: string; fecha_desde: string; fecha_hasta: string; dias_semana: number[]; requiere_relevo: boolean } | null>(null)
   const [guardandoEsquema, setGuardandoEsquema] = useState(false)
   const [errorEsquema,     setErrorEsquema]     = useState<string | null>(null)
-  const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string; dias_semana: number[]; fecha_desde: string; fecha_hasta: string } | null>(null)
+  const [editandoEsquema,  setEditandoEsquema]  = useState<{ id: string; nombre: string; hora_inicio: string; hora_fin: string; dias_semana: number[]; fecha_desde: string; fecha_hasta: string; requiere_relevo: boolean } | null>(null)
   const [guardandoEdit,    setGuardandoEdit]    = useState(false)
   const [asignandoEn,      setAsignandoEn]      = useState<{ esquema_id: string; rol: 'encargado' | 'apoyo' } | null>(null)
   const [selectedTecnico,  setSelectedTecnico]  = useState('')
@@ -1379,6 +1380,14 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                           className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
                       </div>
                     </div>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
+                      <div
+                        onClick={() => setEditandoEsquema(p => p ? { ...p, requiere_relevo: !p.requiere_relevo } : p)}
+                        className={`relative w-9 h-5 rounded-full transition-colors ${editandoEsquema.requiere_relevo ? 'bg-brand-orange' : 'bg-gray-200'}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editandoEsquema.requiere_relevo ? 'translate-x-4' : ''}`} />
+                      </div>
+                      <span className="text-xs text-gray-600 font-medium">Requiere relevo del saliente</span>
+                    </label>
                     <div className="flex gap-2">
                       <button onClick={guardarEdicion} disabled={guardandoEdit}
                         className="bg-brand-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60 flex items-center gap-1">
@@ -1401,6 +1410,11 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                     <span className="ml-2 text-xs text-brand-orange font-medium">
                       {diasLabel(esquema.dias_semana ?? [0,1,2,3,4,5,6])}
                     </span>
+                    {esquema.requiere_relevo && (
+                      <span className="ml-2 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">
+                        Relevo
+                      </span>
+                    )}
                     {esquema.fecha_desde && (
                       <span className="ml-2 text-xs text-gray-400">
                         · {new Date(esquema.fecha_desde + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -1412,7 +1426,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setEditandoEsquema({ id: esquema.id, nombre: esquema.nombre, hora_inicio: fmtT(esquema.hora_inicio), hora_fin: fmtT(esquema.hora_fin), dias_semana: esquema.dias_semana ?? [0,1,2,3,4,5,6], fecha_desde: esquema.fecha_desde ?? '', fecha_hasta: esquema.fecha_hasta ?? '' })}
+                      onClick={() => setEditandoEsquema({ id: esquema.id, nombre: esquema.nombre, hora_inicio: fmtT(esquema.hora_inicio), hora_fin: fmtT(esquema.hora_fin), dias_semana: esquema.dias_semana ?? [0,1,2,3,4,5,6], fecha_desde: esquema.fecha_desde ?? '', fecha_hasta: esquema.fecha_hasta ?? '', requiere_relevo: esquema.requiere_relevo })}
                       className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors">
                       <Edit2 size={13} />
                     </button>
@@ -1576,6 +1590,15 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
             <p className="text-xs text-gray-400 mt-1">Sin fecha de fin = turno permanente</p>
           </div>
 
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <div
+              onClick={() => setCrearForm(p => p ? { ...p, requiere_relevo: !p.requiere_relevo } : p)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${crearForm.requiere_relevo ? 'bg-brand-orange' : 'bg-gray-200'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${crearForm.requiere_relevo ? 'translate-x-4' : ''}`} />
+            </div>
+            <span className="text-xs text-gray-600 font-medium">Requiere relevo del saliente</span>
+          </label>
+
           {errorEsquema && <p className="text-red-600 text-xs">{errorEsquema}</p>}
           <div className="flex gap-2">
             <button onClick={crearEsquema} disabled={guardandoEsquema || !crearForm.nombre.trim()}
@@ -1590,7 +1613,7 @@ function CoberturaTab({ clienteId, allTecnicos, onEsquemasChange }: {
         </div>
       ) : (
         <button
-          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10), fecha_hasta: '', dias_semana: [0,1,2,3,4,5,6] })}
+          onClick={() => setCrearForm({ nombre: '', hora_inicio: '08:00', hora_fin: '20:00', fecha_desde: new Date().toISOString().slice(0, 10), fecha_hasta: '', dias_semana: [0,1,2,3,4,5,6], requiere_relevo: false })}
           className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-orange/40 hover:text-brand-orange transition-colors">
           <Plus size={16} /> Agregar bloque horario
         </button>
