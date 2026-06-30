@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       // Buscar esquema siguiente: inicia dentro de ±60 min del fin de este
       const { data: otrosEsquemas } = await supabaseAdmin()
         .from('esquemas_cobertura')
-        .select('id, hora_inicio')
+        .select('id, hora_inicio, dias_semana')
         .eq('cliente_id', turno.cliente_id)
         .eq('activo', true)
         .neq('id', turno.esquema_id)
@@ -114,8 +114,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (encargadoSiguienteId) {
-          // Si el encargado del turno siguiente ya trabajó hoy (tiene libro_turno con fecha=hoy)
-          // no hay relevo pendiente — evita el cierre circular en el último turno del día.
+          // Verificar que el encargado del siguiente esquema no trabajó ya hoy
           const { data: turnoHoyEncargado } = await supabaseAdmin()
             .from('libro_turno')
             .select('id')
@@ -123,7 +122,22 @@ export async function POST(req: NextRequest) {
             .eq('fecha', hoy)
             .maybeSingle()
 
-          hayRelevo = !turnoHoyEncargado
+          if (turnoHoyEncargado) {
+            // Ya trabajó hoy → cierre circular, no hay relevo pendiente
+            hayRelevo = false
+          } else {
+            // Verificar que el siguiente esquema opera el PRÓXIMO día aplicable.
+            // Evita pendiente_relevo cuando el turno siguiente es días o semanas después.
+            const [iniH, iniM] = siguienteEsquema.hora_inicio.slice(0, 5).split(':').map(Number)
+            const iniTotalMin = iniH * 60 + iniM
+            const nowTotalMin = hours * 60 + minutes
+            // Si la hora de inicio del siguiente ya pasó en el día actual → aplica mañana
+            const diasOffset = iniTotalMin < nowTotalMin ? 1 : 0
+            const todayDate = new Date(hoy + 'T00:00:00Z')
+            const nextDow = (todayDate.getUTCDay() + diasOffset) % 7
+            const diasSemana: number[] = (siguienteEsquema as { dias_semana?: number[] | null }).dias_semana ?? [0, 1, 2, 3, 4, 5, 6]
+            hayRelevo = diasSemana.includes(nextDow)
+          }
         }
       }
     }
