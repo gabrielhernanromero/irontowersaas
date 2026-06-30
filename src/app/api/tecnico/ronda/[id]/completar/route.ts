@@ -11,13 +11,18 @@ export async function POST(
 
   const { data: ronda } = await supabaseAdmin()
     .from('rondas')
-    .select('id, tecnico_id, completa, turno_id, numero_ronda, puntos_escaneados, total_puntos')
+    .select('id, tecnico_id, completa, turno_id, numero_ronda, puntos_escaneados, total_puntos, libro_turno!turno_id(estado)')
     .eq('id', params.id)
     .single()
 
   if (!ronda)                  return NextResponse.json({ error: 'Ronda no encontrada' }, { status: 404 })
   if (ronda.tecnico_id !== user.id) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   if (ronda.completa)          return NextResponse.json({ error: 'La ronda ya está completa' }, { status: 409 })
+
+  const turnoEstado = (ronda as any).libro_turno?.estado
+  if (turnoEstado !== 'abierto') {
+    return NextResponse.json({ error: 'No podés completar la ronda: el turno ya no está abierto' }, { status: 409 })
+  }
 
   const { data, error } = await supabaseAdmin()
     .from('rondas')

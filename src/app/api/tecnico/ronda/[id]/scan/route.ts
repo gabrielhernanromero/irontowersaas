@@ -24,13 +24,18 @@ export async function POST(
   // Verificar que la ronda pertenece al técnico y está activa
   const { data: ronda } = await supabaseAdmin()
     .from('rondas')
-    .select('id, tecnico_id, cliente_id, total_puntos, puntos_escaneados, completa, hora_fin, turno_id, numero_ronda')
+    .select('id, tecnico_id, cliente_id, total_puntos, puntos_escaneados, completa, hora_fin, turno_id, numero_ronda, libro_turno!turno_id(estado)')
     .eq('id', params.id)
     .single()
 
   if (!ronda)                  return NextResponse.json({ error: 'Ronda no encontrada' }, { status: 404 })
   if (ronda.tecnico_id !== user.id) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   if (ronda.completa || ronda.hora_fin) return NextResponse.json({ error: 'La ronda ya está cerrada' }, { status: 409 })
+
+  const turnoEstado = (ronda as any).libro_turno?.estado
+  if (turnoEstado !== 'abierto') {
+    return NextResponse.json({ error: 'No podés escanear: el turno ya no está abierto' }, { status: 409 })
+  }
 
   // Buscar el punto de control por codigo_qr
   const { data: punto } = await supabaseAdmin()

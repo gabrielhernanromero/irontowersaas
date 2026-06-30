@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!turno) return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 })
-  if (!['abierto', 'pendiente_relevo'].includes(turno.estado)) {
-    return NextResponse.json({ error: 'El turno no está activo' }, { status: 409 })
+  if (turno.estado !== 'abierto') {
+    return NextResponse.json({ error: 'Solo podés iniciar rondas con el turno abierto' }, { status: 409 })
   }
 
   // El usuario debe ser el tecnico_id del turno (encargado/interino) o un participante (apoyo)

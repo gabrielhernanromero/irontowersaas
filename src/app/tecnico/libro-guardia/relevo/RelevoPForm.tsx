@@ -250,7 +250,7 @@ export default function RelevoPForm({
                       onClick={() => setSelectedNovedad(n)}
                       className="flex gap-4 items-start pl-1 text-left w-full active:opacity-70 ml-4"
                     >
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 bg-gray-400 ring-2 ring-white" />
+                      <div className="relative z-10 w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 bg-gray-400 ring-4 ring-white" />
                       <div className="flex-1 rounded-xl border border-gray-200 p-2.5 shadow-sm bg-slate-50">
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -275,7 +275,7 @@ export default function RelevoPForm({
                     onClick={() => setSelectedNovedad(n)}
                     className="flex gap-4 items-start pl-1 text-left w-full active:opacity-70"
                   >
-                    <div className={`w-3.5 h-3.5 rounded-full shrink-0 mt-1 ring-2 ring-white ${esInc ? 'bg-red-500' : cfg.dot}`} />
+                    <div className={`relative z-10 w-3.5 h-3.5 rounded-full shrink-0 mt-1 ring-4 ring-white ${esInc ? 'bg-red-500' : cfg.dot}`} />
                     <div className={`flex-1 rounded-xl border p-3 shadow-sm text-left ${esInc ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
