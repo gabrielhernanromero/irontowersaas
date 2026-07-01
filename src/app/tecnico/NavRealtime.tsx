@@ -3,16 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Home, Package, BookOpen, QrCode } from 'lucide-react'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase/client'
 import { LogoutButton } from './LogoutButton'
-
-// Singleton: un solo cliente y una sola conexión WebSocket por pestaña
-function getSupabase() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 interface Props {
   userId: string
@@ -31,7 +23,7 @@ export default function NavRealtime({ userId, initialGuardia, initialRondas, ini
 
   useEffect(() => {
     mounted.current = true
-    const sb = getSupabase()
+    const sb = supabase()
 
     async function refresh() {
       try {

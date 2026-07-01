@@ -10,6 +10,14 @@ export default function SessionGuard() {
   useEffect(() => {
     const client = supabase()
 
+    // Refrescar sesión cuando el usuario vuelve a la pestaña (mobile background → foreground)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        client.auth.getSession().catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
       // TOKEN_REFRESHED se dispara cuando Supabase renueva el token.
       // SIGNED_OUT cuando la sesión vence definitivamente y no puede renovarse.
@@ -46,6 +54,7 @@ export default function SessionGuard() {
     return () => {
       subscription.unsubscribe()
       window.fetch = originalFetch
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 
