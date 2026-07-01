@@ -4,6 +4,8 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { RelevoPSchema, RelevoEspecSchema } from '@/lib/validations/libroTurno'
 import type { LibroNovedad } from '@/types/database'
+import { findEsquemaActivo, type EsquemaVentana } from '@/lib/esquemas/validarVentana'
+import { getArgTime } from '@/lib/cobertura/timeUtils'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -67,7 +69,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno } = parsed.data
+  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno, personal_apoyo } = parsed.data
 
   const { data: turnoSaliente } = await supabaseAdmin()
     .from('libro_turno')
@@ -81,6 +83,52 @@ export async function PATCH(req: NextRequest) {
   }
   if (turnoSaliente.firma_relevo_url) {
     return NextResponse.json({ error: 'El relevo ya fue firmado' }, { status: 409 })
+  }
+
+  // Guard: solo el encargado dentro de su franja horaria puede firmar el relevo
+  const { data: perfilUser } = await supabaseAdmin()
+    .from('users')
+    .select('rol, cliente_id')
+    .eq('id', user.id)
+    .single()
+
+  if (perfilUser?.rol !== 'admin') {
+    let autorizado = false
+    if (perfilUser?.cliente_id) {
+      const { data: esquemasRaw } = await supabaseAdmin()
+        .from('esquemas_cobertura')
+        .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+        .eq('cliente_id', perfilUser.cliente_id)
+        .eq('activo', true)
+
+      // Iterar cada esquema individualmente para no asumir el primero activo
+      // cuando hay solapamiento de horarios (mañana/tarde ambos en ventana).
+      const { hoy, ayer } = getArgTime()
+      for (const esq of (esquemasRaw ?? [])) {
+        if (!findEsquemaActivo([esq as EsquemaVentana])) continue
+        const esquemaId = (esq as EsquemaVentana & { id: string }).id
+
+        const { data: exc } = await supabaseAdmin()
+          .from('asignaciones_turno').select('rol_turno')
+          .eq('esquema_id', esquemaId).eq('usuario_id', user.id)
+          .in('fecha', [hoy, ayer]).maybeSingle()
+
+        if (exc?.rol_turno === 'encargado') { autorizado = true; break }
+
+        if (!exc) {
+          const { data: pers } = await supabaseAdmin()
+            .from('asignaciones_persistentes').select('rol_turno')
+            .eq('esquema_id', esquemaId).eq('usuario_id', user.id).maybeSingle()
+          if (pers?.rol_turno === 'encargado') { autorizado = true; break }
+        }
+      }
+    }
+    if (!autorizado) {
+      return NextResponse.json(
+        { error: 'No estás autorizado para firmar el relevo. Solo el encargado entrante dentro de su franja horaria puede hacerlo.' },
+        { status: 403 }
+      )
+    }
   }
 
   const { data: turnoAbierto } = await supabaseAdmin()
@@ -108,14 +156,65 @@ export async function PATCH(req: NextRequest) {
 
   if (closeErr) return NextResponse.json({ error: 'Error al cerrar el turno saliente' }, { status: 500 })
 
+  // Detectar el esquema activo para el usuario entrante, para que el nuevo turno
+  // quede vinculado al esquema correcto y el cierre detecte el relevo siguiente.
+  let esquemaIdNuevoTurno: string | null = null
+  if (perfilUser?.cliente_id) {
+    const { data: esqRaw } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('id, nombre, hora_inicio, hora_fin, activo, dias_semana, fecha_desde, fecha_hasta')
+      .eq('cliente_id', perfilUser.cliente_id)
+      .eq('activo', true)
+    const { hoy: hoyEsq, ayer: ayerEsq } = getArgTime()
+    for (const esq of (esqRaw ?? [])) {
+      if (!findEsquemaActivo([esq as EsquemaVentana])) continue
+      const eId = (esq as EsquemaVentana & { id: string }).id
+      const { data: eExc } = await supabaseAdmin()
+        .from('asignaciones_turno').select('rol_turno')
+        .eq('esquema_id', eId).eq('usuario_id', user.id)
+        .in('fecha', [hoyEsq, ayerEsq]).maybeSingle()
+      if (eExc?.rol_turno === 'encargado') { esquemaIdNuevoTurno = eId; break }
+      if (!eExc) {
+        const { data: ePers } = await supabaseAdmin()
+          .from('asignaciones_persistentes').select('rol_turno')
+          .eq('esquema_id', eId).eq('usuario_id', user.id).maybeSingle()
+        if (ePers?.rol_turno === 'encargado') { esquemaIdNuevoTurno = eId; break }
+      }
+    }
+  }
+
   const { data: nuevoTurno, error: insertErr } = await supabaseAdmin()
     .from('libro_turno')
-    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null })
+    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null, esquema_id: esquemaIdNuevoTurno })
     .select()
     .single()
 
   if (insertErr || !nuevoTurno) {
     return NextResponse.json({ error: 'Error al crear el nuevo turno' }, { status: 500 })
+  }
+
+  // Alertar supervisores por apoyo ausente — el apoyo se une por su cuenta (Estado D → JoinTurnoButton)
+  if (personal_apoyo?.length) {
+    const ausentes = personal_apoyo.filter(p => !p.presente)
+    for (const a of ausentes) {
+      await supabaseAdmin()
+        .from('alertas')
+        .insert({
+          tipo:     'novedad_apoyo',
+          turno_id: nuevoTurno.id,
+          mensaje:  `${a.nombre} no se presentó al turno de ${relevo_nombre} (relevo).`,
+          leida:    false,
+        })
+    }
+  }
+
+  // Novedad de apertura — enriquecida con presencia del apoyo
+  let descripcionApertura = `Apertura de guardia por relevo — ${relevo_nombre}, DNI ${relevo_dni}`
+  if (personal_apoyo?.length) {
+    const presentes = personal_apoyo.filter(p => p.presente).map(p => p.nombre)
+    const ausentes  = personal_apoyo.filter(p => !p.presente).map(p => p.nombre)
+    if (presentes.length) descripcionApertura += `. Personal de apoyo presente: ${presentes.join(', ')}.`
+    if (ausentes.length)  descripcionApertura += ` Ausente: ${ausentes.join(', ')}.`
   }
 
   await supabaseAdmin()
@@ -124,7 +223,7 @@ export async function PATCH(req: NextRequest) {
       turno_id: nuevoTurno.id,
       tipo: 'apertura',
       hora: horario_inicio,
-      descripcion: `Apertura de guardia por relevo — ${relevo_nombre}, DNI ${relevo_dni}`,
+      descripcion: descripcionApertura,
     })
 
   return NextResponse.json(nuevoTurno, { status: 201 })

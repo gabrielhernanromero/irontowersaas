@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useForm, FormProvider, FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, XCircle, ClipboardList, Eye, EyeOff } from 'lucide-react'
-import type { Cliente } from '@/types/database'
+import { AlertTriangle, XCircle, ClipboardList, Eye, EyeOff, Building2 } from 'lucide-react'
 import {
   PlanillaExtintoresSubmitSchema,
   type PlanillaExtintoresSubmit,
@@ -45,10 +44,13 @@ function buildSummary(errors: FieldErrors<PlanillaExtintoresSubmit>): string[] {
 }
 
 interface Props {
-  clientes: Cliente[]
+  clienteId: string | null
+  clienteNombre: string | null
+  turnoDefault: 'diurno' | 'nocturno'
+  aclaracion?: string
 }
 
-export default function ExtintoresForm({ clientes }: Props) {
+export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault, aclaracion }: Props) {
   const router = useRouter()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -61,14 +63,20 @@ export default function ExtintoresForm({ clientes }: Props) {
   const methods = useForm<PlanillaExtintoresSubmit>({
     resolver: zodResolver(PlanillaExtintoresSubmitSchema),
     defaultValues: {
-      cliente_id: '',
+      cliente_id: clienteId ?? '',
       fecha: new Date().toISOString().split('T')[0],
-      turno: new Date().getHours() < 18 ? 'diurno' : 'nocturno',
+      turno: turnoDefault,
       items: Array.from({ length: DEFAULT_TOTAL }, (_, i) => buildItem(i)),
       firma_dataurl: '',
-      firma_aclaracion: '',
+      firma_aclaracion: aclaracion ?? '',
     },
   })
+
+  useEffect(() => {
+    if (clienteId) methods.setValue('cliente_id', clienteId, { shouldValidate: true })
+    methods.setValue('turno', turnoDefault, { shouldValidate: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = methods
 
@@ -124,7 +132,7 @@ export default function ExtintoresForm({ clientes }: Props) {
         }
         return
       }
-      router.push('/tecnico/home')
+      router.refresh()
     } catch {
       setSubmitError('Error de conexión. Revisá tu internet e intentá de nuevo.')
     } finally {
@@ -180,44 +188,26 @@ export default function ExtintoresForm({ clientes }: Props) {
       <form onSubmit={handleSubmit(onSubmit, onValidationError)} className="pb-44">
         {/* Encabezado */}
         <div className="flex flex-col gap-4 mb-6">
-          <div>
-            <label htmlFor="cliente_id" className="block text-sm font-medium mb-1">Cliente</label>
-            <select
-              id="cliente_id"
-              {...register('cliente_id')}
-              className="w-full border border-gray-300 rounded p-3 text-base min-h-[44px]"
-            >
-              <option value="">Seleccioná un cliente</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>{c.nombre_empresa}</option>
-              ))}
-            </select>
-            {errors.cliente_id && (
-              <p className="text-red-600 text-sm mt-1">{errors.cliente_id.message}</p>
-            )}
+          {/* Puesto y turno — vienen del turno activo, no editables */}
+          <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-3 min-h-[52px]">
+            <Building2 size={16} className="text-gray-400 shrink-0" />
+            <div>
+              <p className="text-xs text-gray-400">Puesto</p>
+              <p className="font-semibold text-brand-ink text-sm">{clienteNombre ?? '—'}</p>
+            </div>
+            <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
+              turnoDefault === 'diurno' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
+            }`}>{turnoDefault}</span>
           </div>
 
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label htmlFor="fecha" className="block text-sm font-medium mb-1">Fecha</label>
-              <input
-                id="fecha"
-                type="date"
-                {...register('fecha')}
-                className="w-full border border-gray-300 rounded p-3 text-base min-h-[44px]"
-              />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="turno" className="block text-sm font-medium mb-1">Turno</label>
-              <select
-                id="turno"
-                {...register('turno')}
-                className="w-full border border-gray-300 rounded p-3 text-base min-h-[44px]"
-              >
-                <option value="diurno">Diurno</option>
-                <option value="nocturno">Nocturno</option>
-              </select>
-            </div>
+          <div>
+            <label htmlFor="fecha" className="block text-sm font-medium mb-1">Fecha</label>
+            <input
+              id="fecha"
+              type="date"
+              {...register('fecha')}
+              className="w-full border border-gray-300 rounded p-3 text-base min-h-[44px]"
+            />
           </div>
         </div>
 
@@ -297,7 +287,7 @@ export default function ExtintoresForm({ clientes }: Props) {
         {/* Firma */}
         <div className="mb-6 mt-6">
           <h2 className="text-base font-semibold mb-2 text-brand-ink">Firma del técnico</h2>
-          <SignatureCanvas onChange={handleFirma} onAclaracionChange={handleAclaracion} />
+          <SignatureCanvas onChange={handleFirma} onAclaracionChange={handleAclaracion} aclaracion={aclaracion} />
           {errors.firma_dataurl && (
             <p className="text-red-600 text-sm mt-1">{errors.firma_dataurl.message}</p>
           )}

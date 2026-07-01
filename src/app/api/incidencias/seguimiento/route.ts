@@ -31,8 +31,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!turno) return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 })
-  if (turno.tecnico_id !== user.id) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
   if (turno.estado !== 'abierto') return NextResponse.json({ error: 'El turno no está abierto' }, { status: 409 })
+
+  if (turno.tecnico_id !== user.id) {
+    const { data: participacion } = await supabaseAdmin()
+      .from('participaciones_turno')
+      .select('id')
+      .eq('turno_id', turno_id)
+      .eq('usuario_id', user.id)
+      .maybeSingle()
+    if (!participacion) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  }
 
   const { data: incidencia } = await supabaseAdmin()
     .from('incidencias')

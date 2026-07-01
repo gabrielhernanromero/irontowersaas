@@ -18,12 +18,42 @@ export default async function CerrarGuardiaPage({ searchParams }: Props) {
   // Verificar que el turno existe y pertenece al usuario
   const { data: turno } = await supabaseAdmin()
     .from('libro_turno')
-    .select('id, estado, tecnico_id')
+    .select('id, estado, tecnico_id, esquema_id')
     .eq('id', turnoId)
     .single()
 
   if (!turno || turno.tecnico_id !== user.id || turno.estado !== 'abierto') {
     redirect('/tecnico/libro-guardia')
+  }
+
+  // Hora fin programada del esquema (para detectar cierre anticipado en el form)
+  let horaFinEsquema: string | null = null
+  if (turno.esquema_id) {
+    const { data: esquema } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .select('hora_fin')
+      .eq('id', turno.esquema_id)
+      .single()
+    horaFinEsquema = esquema?.hora_fin?.slice(0, 5) ?? null
+  }
+
+  // Planillas habilitadas para este cliente
+  const { data: perfilTecnico } = await supabaseAdmin()
+    .from('users')
+    .select('cliente_id')
+    .eq('id', user.id)
+    .single()
+
+  let planillasHabilitadas: string[] = ['hidrantes', 'extintores']
+  if (perfilTecnico?.cliente_id) {
+    const { data: cliente } = await supabaseAdmin()
+      .from('clientes')
+      .select('planillas_habilitadas')
+      .eq('id', perfilTecnico.cliente_id)
+      .single()
+    if (cliente?.planillas_habilitadas?.length) {
+      planillasHabilitadas = cliente.planillas_habilitadas
+    }
   }
 
   // Verificar planillas enviadas para este turno
@@ -34,8 +64,8 @@ export default async function CerrarGuardiaPage({ searchParams }: Props) {
     .eq('inmutable', true)
 
   const tiposEnviados = (planillas ?? []).map((p) => p.tipo)
-  const faltaHidrantes = !tiposEnviados.includes('hidrantes')
-  const faltaExtintores = !tiposEnviados.includes('extintores')
+  const faltaHidrantes = planillasHabilitadas.includes('hidrantes') && !tiposEnviados.includes('hidrantes')
+  const faltaExtintores = planillasHabilitadas.includes('extintores') && !tiposEnviados.includes('extintores')
   const planillasPendientes = faltaHidrantes || faltaExtintores
 
   return (
@@ -109,7 +139,7 @@ export default async function CerrarGuardiaPage({ searchParams }: Props) {
             </p>
           </div>
 
-          <CerrarGuardiaForm turnoId={turnoId} />
+          <CerrarGuardiaForm turnoId={turnoId} horaFinEsquema={horaFinEsquema} />
         </>
       )}
     </div>

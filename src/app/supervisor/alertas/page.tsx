@@ -7,8 +7,9 @@ export default async function AlertasPage() {
 
   const { data: alertas } = await supabaseServer()
     .from('alertas')
-    .select('*')
+    .select('id, tipo, mensaje, leida, destinatario_id, planilla_id, turno_id, novedad_id, resuelta, resuelta_en, resolucion_observacion, resuelta_por, created_at')
     .eq('destinatario_id', user!.id)
+    .order('resuelta', { ascending: true })
     .order('created_at', { ascending: false })
     .limit(100)
 

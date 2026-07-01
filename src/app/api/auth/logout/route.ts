@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase/server'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   await supabaseServer().auth.signOut()
-  return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_APP_URL!))
+  const origin = req.nextUrl.origin
+  return NextResponse.redirect(new URL('/login', origin), { status: 303 })
 }

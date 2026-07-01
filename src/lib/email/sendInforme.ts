@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 import type { Cliente, Planilla } from '@/types/database'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResend() { return new Resend(process.env.RESEND_API_KEY) }
 
 interface SendInformeParams {
   planilla: Planilla
@@ -18,7 +18,7 @@ export async function sendInforme({
 }: SendInformeParams): Promise<void> {
   const tipo = planilla.tipo === 'hidrantes' ? 'Hidrantes' : 'Extintores'
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: 'informes@irontowerarg.com',
     to: cliente.contacto_email,
     subject: `Informe de ${tipo} — ${planilla.fecha} · Iron Tower`,

@@ -1,0 +1,22 @@
+# Desarrollo del Panel de Administración: Módulo de Estructura (Puestos y Elementos)
+
+Vamos a iniciar el desarrollo del Panel Web de Administración (para escritorio) de Iron Tower OS, enfocado en los roles `supervisor` o `dueño`. Necesitamos empezar por el ABM (Alta, Baja, Modificación) de los Datos Maestros.
+
+Por favor, implementá lo siguiente utilizando Next.js, Tailwind CSS y Supabase:
+
+### 1. Layout de Administración (UI)
+* Creá un layout base para las rutas de administración (ej. `/admin` o `/supervisor`).
+* Debe incluir un menú lateral (Sidebar) clásico de software B2B. Por ahora, agregá un solo ítem de navegación llamado "Estructura (Puestos e Inventario)". El resto de la pantalla será el área de contenido principal.
+
+### 2. Vista de Gestión de Puestos (Objetivos)
+* Creá una página/componente que liste los puestos desde la tabla `puestos` usando una tabla limpia (estilo tabla de datos corporativa).
+* Las columnas deben mostrar: Nombre del Puesto, Dirección/Ubicación, y un botón de "Editar".
+* Agregá un botón superior de "+ Nuevo Puesto" que abra un Modal (o un formulario simple en pantalla) para hacer el `INSERT` en Supabase.
+
+### 3. Vista de Gestión de Elementos (Asignación de Inventario)
+* En la misma pantalla (podés usar Pestañas/Tabs para separar "Puestos" de "Elementos"), creá la tabla para el maestro de `elementos`.
+* Las columnas deben mostrar: Nombre del equipo, Categoría/Tipo, Estado, y el **Puesto Asignado**.
+* Agregá el botón "+ Nuevo Elemento". 
+* **Lógica Crucial del Formulario:** Cuando el supervisor crea un nuevo elemento, el formulario DEBE tener un campo `<select>` que traiga dinámicamente la lista de Puestos creados en el paso anterior. De esta manera, garantizamos que el nuevo celular o handy quede asociado a un `puesto_id` específico en la base de datos.
+
+*Nota técnica: Manejá los estados de carga (loading) en los botones al guardar para darle feedback visual al supervisor, y asegurate de que la UI sea ancha, pensada para monitores de escritorio, no para celulares.*

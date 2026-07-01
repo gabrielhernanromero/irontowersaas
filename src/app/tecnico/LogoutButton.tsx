@@ -8,8 +8,9 @@ export function LogoutButton() {
   const router = useRouter()
 
   async function handleLogout() {
+    sessionStorage.setItem('logout_intencional', '1')
     await supabase().auth.signOut()
-    router.push('/login')
+    window.location.href = '/login'
   }
 
   return (

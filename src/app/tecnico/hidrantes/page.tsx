@@ -1,36 +1,47 @@
 import { requireRole } from '@/lib/auth/requireRole'
-import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import HidrantesForm from '@/components/forms/HidrantesForm'
-import type { Cliente } from '@/types/database'
 import Link from 'next/link'
 import { CheckCircle2, Eye } from 'lucide-react'
+
+export const dynamic = 'force-dynamic'
 
 export default async function HidrantesPage() {
   const user = await requireRole('tecnico', 'admin')
 
-  const { data: turnoActivo } = await supabaseAdmin()
+  let turnoActivo = (await supabaseAdmin()
     .from('libro_turno')
-    .select('id, turno, fecha')
+    .select('id, turno, fecha, cliente_id, clientes(nombre_empresa)')
     .eq('tecnico_id', user.id)
     .eq('estado', 'abierto')
-    .maybeSingle()
+    .maybeSingle()).data
 
-  const [{ data: clientes }, { data: planillaEnviada }] = await Promise.all([
-    supabaseServer()
-      .from('clientes')
-      .select('id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono')
-      .order('nombre_empresa'),
-    turnoActivo
-      ? supabaseAdmin()
-          .from('planillas')
-          .select('id, tipo')
-          .eq('turno_id', turnoActivo.id)
-          .eq('tipo', 'hidrantes')
-          .eq('inmutable', true)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
+  // Apoyo: si no tiene turno propio, usar el del encargado en el mismo cliente
+  if (!turnoActivo) {
+    const { data: perfil } = await supabaseAdmin()
+      .from('users').select('cliente_id').eq('id', user.id).single()
+    if (perfil?.cliente_id) {
+      turnoActivo = (await supabaseAdmin()
+        .from('libro_turno')
+        .select('id, turno, fecha, cliente_id, clientes(nombre_empresa)')
+        .eq('cliente_id', perfil.cliente_id)
+        .eq('estado', 'abierto')
+        .neq('tecnico_id', user.id)
+        .maybeSingle()).data
+    }
+  }
+
+  // Busca por turno_id — más robusto que cliente+fecha+turno
+  const planillaEnviada = turnoActivo
+    ? (await supabaseAdmin()
+        .from('planillas')
+        .select('id, tipo')
+        .eq('turno_id', turnoActivo.id)
+        .eq('tipo', 'hidrantes')
+        .eq('inmutable', true)
+        .maybeSingle()
+      ).data
+    : null
 
   if (planillaEnviada) {
     return (
@@ -58,12 +69,26 @@ export default async function HidrantesPage() {
     )
   }
 
+  const { data: perfil } = await supabaseAdmin()
+    .from('users').select('nombre, apellido, dni').eq('id', user.id).single()
+
+  const aclaracion = perfil
+    ? `${perfil.nombre} ${perfil.apellido} — DNI ${perfil.dni}`
+    : undefined
+
+  const clienteData = turnoActivo?.clientes as unknown as { nombre_empresa: string } | null
+
   return (
     <div>
       <h1 className="text-xl font-condensed font-bold text-brand-ink mb-4">
         Planilla de Hidrantes
       </h1>
-      <HidrantesForm clientes={(clientes as Cliente[]) ?? []} />
+      <HidrantesForm
+        clienteId={turnoActivo?.cliente_id ?? null}
+        clienteNombre={clienteData?.nombre_empresa ?? null}
+        turnoDefault={(turnoActivo?.turno as 'diurno' | 'nocturno') ?? (new Date().getHours() < 18 ? 'diurno' : 'nocturno')}
+        aclaracion={aclaracion}
+      />
     </div>
   )
 }

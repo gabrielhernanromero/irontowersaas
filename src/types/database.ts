@@ -1,9 +1,9 @@
 export type Rol = 'admin' | 'supervisor' | 'tecnico' | 'cliente'
 export type TipoPlanilla = 'hidrantes' | 'extintores'
 export type Turno = 'diurno' | 'nocturno'
-export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence'
+export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado' | 'turno_sin_cerrar'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
-export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta'
+export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
 export type EstadoOperativo = 'ok' | 'falla' | 'faltante'
 
@@ -16,6 +16,7 @@ export interface User {
   rol: Rol
   activo: boolean
   turno_habitual: Turno | null
+  rol_habitual: 'encargado' | 'apoyo' | null
   cliente_id: string | null
   created_at: string
 }
@@ -32,6 +33,10 @@ export interface Cliente {
   contacto_nombre: string
   contacto_email: string
   contacto_telefono: string
+  activo: boolean
+  frecuencia_ronda_minutos: number | null
+  aviso_ronda_minutos: number
+  planillas_habilitadas: string[]
 }
 
 export interface Planilla {
@@ -98,6 +103,9 @@ export interface LibroTurno {
   relevo_dni: string | null
   hash_novedades: string | null
   cliente_id: string | null
+  esquema_id: string | null
+  interino: boolean
+  aviso_supervisor_at: string | null
   created_at: string
   novedades?: LibroNovedad[]
 }
@@ -116,8 +124,53 @@ export interface Incidencia {
   tecnico_detector_id: string | null
   tecnico_imputado_id: string | null
   turno_imputado_id: string | null
+  // Flujo de aprobación del encargado (agregado en migración turnos_bicefalo)
+  requiere_aprobacion: boolean
+  estado_aprobacion: 'pendiente_revision' | 'aprobada' | 'rechazada'
+  aprobada_por: string | null
+  aprobada_at: string | null
   created_at: string
   libro_turno?: { tecnico_nombre: string; tecnico_dni: string } | null
+  detector?: { nombre: string; apellido: string } | null
+}
+
+export interface EsquemaCobertura {
+  id: string
+  cliente_id: string
+  nombre: string
+  hora_inicio: string  // "HH:MM:SS"
+  hora_fin: string
+  activo: boolean
+  created_at: string
+  asignaciones?: AsignacionPersistente[]
+}
+
+export interface AsignacionPersistente {
+  id: string
+  esquema_id: string
+  usuario_id: string
+  rol_turno: 'encargado' | 'apoyo'
+  created_at: string
+  usuario?: Pick<User, 'id' | 'nombre' | 'apellido' | 'dni'>
+}
+
+// Excepción diaria (reemplaza a la asignación persistente para un día concreto)
+export interface AsignacionTurno {
+  id: string
+  esquema_id: string
+  usuario_id: string
+  rol_turno: 'encargado' | 'apoyo'
+  fecha: string
+  created_by: string
+  created_at: string
+}
+
+export interface ParticipacionTurno {
+  id: string
+  turno_id: string
+  usuario_id: string
+  rol_turno: 'apoyo'
+  joined_at: string
 }
 
 export interface ElementoPuesto {
@@ -147,6 +200,7 @@ export interface ControlInventarioTurno {
 export interface LibroNovedad {
   id: string
   turno_id: string
+  tecnico_id: string
   tipo: TipoNovedad
   hora: string
   descripcion: string
@@ -156,13 +210,17 @@ export interface LibroNovedad {
   foto_url: string | null
   incidencia_id: string | null
   planilla_id: string | null
-  // Populated when fetched with join: select('*, incidencias(*)')
+  // Populated when fetched with joins
   incidencias?: {
     id: string
     titulo: string
     severidad: 'bajo' | 'medio' | 'alto' | null
     estado: 'abierto' | 'resuelto'
   } | null
+  users?: { nombre: string; apellido: string } | null
+  libro_turno?: { rol_turno: 'encargado' | 'apoyo' | null; tecnico_nombre: string | null } | null
+  acusado_en?: string | null
+  acusado_por?: string | null
   created_at: string
 }
 
@@ -193,6 +251,12 @@ export interface Alerta {
   leida: boolean
   destinatario_id: string
   planilla_id: string | null
+  turno_id: string | null
+  novedad_id: string | null
+  resuelta: boolean
+  resuelta_en: string | null
+  resolucion_observacion: string | null
+  resuelta_por: string | null
   created_at: string
 }
 

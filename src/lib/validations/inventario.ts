@@ -4,6 +4,7 @@ export const ItemControlSchema = z.object({
   elementoId: z.string().uuid(),
   estadoOperativo: z.enum(['ok', 'falla', 'faltante']),
   observacion: z.string().optional(),
+  incidenciaResuelta: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.estadoOperativo !== 'ok' && (!data.observacion || data.observacion.trim().length < 10)) {

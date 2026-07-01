@@ -33,7 +33,14 @@ export async function middleware(req: NextRequest) {
     user = result.data.user
     authError = result.error
   } catch (e) {
-    console.error('[middleware] getUser threw:', e)
+    // Red caída — leer sesión del cookie sin llamar a Supabase
+    console.error('[middleware] getUser threw (network?):', (e as Error).message)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (sessionData.session) user = sessionData.session.user
+    } catch {
+      // Sin sesión local tampoco — user queda null
+    }
   }
 
   const path = req.nextUrl.pathname
