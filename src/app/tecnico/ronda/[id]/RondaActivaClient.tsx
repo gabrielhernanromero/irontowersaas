@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, Circle, MapPin, Loader2, Trophy, Flag, QrCode, AlertCircle, Camera, X } from 'lucide-react'
 import jsQR from 'jsqr'
@@ -43,66 +43,104 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
   const [scanningId,     setScanningId]     = useState<string | null>(null)
   const [uploadingFoto,  setUploadingFoto]  = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
+  const [liveScanning,   setLiveScanning]   = useState(false)
+  const [camError,       setCamError]       = useState<string | null>(null)
 
-  const qrInputRef   = useRef<HTMLInputElement>(null)
-  const fotoInputRef = useRef<HTMLInputElement>(null)
+  const videoRef       = useRef<HTMLVideoElement>(null)
+  const canvasRef      = useRef<HTMLCanvasElement>(null)
+  const streamRef      = useRef<MediaStream | null>(null)
+  const scanLoopRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const fotoInputRef   = useRef<HTMLInputElement>(null)
   const pendingPuntoId = useRef<string | null>(null)
 
   const escaneadosIds = new Set(scans.map(s => s.punto_control_id))
   const pct = ronda.total_puntos > 0 ? Math.round((escaneados / ronda.total_puntos) * 100) : 0
 
-  function handlePuntoClick(puntoId: string) {
-    if (escaneadosIds.has(puntoId)) return
-    setError(null)
-    pendingPuntoId.current = puntoId
-    qrInputRef.current?.click()
-  }
+  // ── Ciclo de vida del escáner en vivo ────────────────────────────────────────
+  useEffect(() => {
+    if (!liveScanning) return
 
-  async function handleQrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file || !pendingPuntoId.current) return
+    let cancelled = false
+    setCamError(null)
 
-    const puntoId = pendingPuntoId.current
-    pendingPuntoId.current = null
-    setScanningId(puntoId)
-    setError(null)
-
-    try {
-      const bitmap  = await createImageBitmap(file)
-      const canvas  = document.createElement('canvas')
-      canvas.width  = bitmap.width
-      canvas.height = bitmap.height
-      const ctx     = canvas.getContext('2d')!
-      ctx.drawImage(bitmap, 0, 0)
-      const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
-      const result    = jsQR(imageData.data, imageData.width, imageData.height)
-
-      setScanningId(null)
-
-      if (!result) {
-        setError('No se detectó un código QR. Apuntá bien la cámara al código e intentá de nuevo.')
-        return
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+    }).then(stream => {
+      if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
       }
+    }).catch(() => {
+      if (!cancelled) setCamError('No se pudo acceder a la cámara. Verificá los permisos.')
+    })
+
+    return () => {
+      cancelled = true
+      stopCamera()
+    }
+  }, [liveScanning]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startScanLoop() {
+    if (scanLoopRef.current) return
+    scanLoopRef.current = setInterval(() => {
+      const video  = videoRef.current
+      const canvas = canvasRef.current
+      if (!video || !canvas || video.readyState < 2 || !pendingPuntoId.current) return
+
+      canvas.width  = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(video, 0, 0)
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const result    = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+      })
+
+      if (!result) return
+
+      const puntoId = pendingPuntoId.current
+      if (!puntoId) return
+      pendingPuntoId.current = null
+
+      stopCamera()
+      setLiveScanning(false)
 
       let codigoQr = result.data
       try {
         const url = new URL(result.data)
         const c   = url.searchParams.get('c') ?? url.searchParams.get('codigo')
         if (c) codigoQr = c
-      } catch {
-        // no es URL — usar tal cual
-      }
+      } catch { /* no es URL — usar raw */ }
 
       const puntoNombre = puntos.find(p => p.id === puntoId)?.nombre ?? 'Punto de control'
       setPendingConfirm({ puntoId, puntoNombre, codigoQr, fotoFile: null, fotoPreview: null })
-    } catch (err) {
-      console.error('Error jsQR:', err)
-      setError('Error al leer la imagen. Intentá de nuevo.')
-      setScanningId(null)
-    }
+    }, 300)
   }
 
+  function stopCamera() {
+    if (scanLoopRef.current) { clearInterval(scanLoopRef.current); scanLoopRef.current = null }
+    if (streamRef.current)   { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
+  }
+
+  function closeLiveScanner() {
+    pendingPuntoId.current = null
+    stopCamera()
+    setLiveScanning(false)
+    setCamError(null)
+  }
+
+  function handlePuntoClick(puntoId: string) {
+    if (escaneadosIds.has(puntoId)) return
+    setError(null)
+    pendingPuntoId.current = puntoId
+    setLiveScanning(true)
+  }
+
+  // ── Foto opcional post-scan ───────────────────────────────────────────────────
   function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -131,7 +169,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
         fd.append('file', fotoFile)
         const res = await fetch('/api/upload/foto', { method: 'POST', body: fd })
         if (res.ok) { const { path } = await res.json(); foto_url = path }
-      } catch { /* si falla la foto, continuamos sin ella */ }
+      } catch { /* foto falla — continuamos sin ella */ }
       setUploadingFoto(false)
     }
 
@@ -192,17 +230,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Input QR — cámara trasera */}
-      <input
-        ref={qrInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleQrFileChange}
-      />
-
-      {/* Input foto del estado del punto */}
+      {/* Input foto del punto (post-scan) */}
       <input
         ref={fotoInputRef}
         type="file"
@@ -211,6 +239,72 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
         className="hidden"
         onChange={handleFotoChange}
       />
+
+      {/* Canvas oculto para análisis de frames */}
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* ── Modal escáner QR en vivo ─────────────────────────────────────── */}
+      {liveScanning && (
+        <div className="fixed inset-0 z-[200] bg-black flex flex-col">
+          {/* Video fullscreen */}
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            onCanPlay={startScanLoop}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+
+          {/* Overlay oscuro con ventana central */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            {/* Sombra alrededor del recuadro */}
+            <div className="relative">
+              <div
+                className="w-64 h-64 relative"
+                style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }}
+              >
+                {/* Esquinas del recuadro */}
+                <span className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-orange rounded-tl-md" />
+                <span className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-orange rounded-tr-md" />
+                <span className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-orange rounded-bl-md" />
+                <span className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-orange rounded-br-md" />
+
+                {/* Línea de escaneo animada */}
+                <div className="absolute inset-x-0 top-0 h-0.5 bg-brand-orange opacity-80 animate-[scan_2s_linear_infinite]" />
+              </div>
+            </div>
+          </div>
+
+          {/* Error de cámara */}
+          {camError && (
+            <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 bg-red-900/90 text-white rounded-xl p-4 text-sm text-center z-10">
+              {camError}
+            </div>
+          )}
+
+          {/* Texto inferior */}
+          <div className="absolute bottom-0 left-0 right-0 pb-12 flex flex-col items-center gap-3">
+            <p className="text-white text-sm font-semibold drop-shadow">
+              Apuntá la cámara al código QR
+            </p>
+            <button
+              onClick={closeLiveScanner}
+              className="flex items-center gap-2 bg-white/20 backdrop-blur text-white font-semibold px-6 py-3 rounded-full min-h-[48px]"
+            >
+              <X size={16} />
+              Cancelar
+            </button>
+          </div>
+
+          {/* Botón X arriba */}
+          <button
+            onClick={closeLiveScanner}
+            className="absolute top-4 right-4 bg-black/40 text-white rounded-full p-2 min-w-[44px] min-h-[44px] flex items-center justify-center z-10"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div>
