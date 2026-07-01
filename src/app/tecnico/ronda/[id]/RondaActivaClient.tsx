@@ -112,8 +112,16 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
       let codigoQr = result.data
       try {
         const url = new URL(result.data)
-        const c   = url.searchParams.get('c') ?? url.searchParams.get('codigo')
-        if (c) codigoQr = c
+        // Intentar query params primero (legacy)
+        const c = url.searchParams.get('c') ?? url.searchParams.get('codigo')
+        if (c) {
+          codigoQr = c
+        } else {
+          // Extraer del path: /ronda/scan/{codigo}
+          const parts   = url.pathname.split('/')
+          const scanIdx = parts.indexOf('scan')
+          if (scanIdx !== -1 && parts[scanIdx + 1]) codigoQr = parts[scanIdx + 1]
+        }
       } catch { /* no es URL — usar raw */ }
 
       const puntoNombre = puntos.find(p => p.id === puntoId)?.nombre ?? 'Punto de control'
