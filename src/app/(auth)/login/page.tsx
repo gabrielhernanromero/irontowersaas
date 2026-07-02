@@ -1,17 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
-const ROLE_REDIRECTS: Record<string, string> = {
-  tecnico:    '/tecnico/home',
-  supervisor: '/supervisor/dashboard',
-  admin:      '/supervisor/dashboard',
-}
-
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -29,22 +21,20 @@ export default function LoginPage() {
       password: passwordVal,
     })
 
-    if (authError || !data.user) {
+    if (authError || !data.session) {
       setError('Email o contraseña incorrectos')
       setLoading(false)
       return
     }
 
-    // Leer rol desde la tabla propia — sin depender del servidor para leer cookies
-    const { data: perfil } = await sb
-      .from('users')
-      .select('rol')
-      .eq('id', data.user.id)
-      .single()
-
-    const destino = ROLE_REDIRECTS[perfil?.rol ?? ''] ?? '/login'
-    router.push(destino)
-    router.refresh()
+    // Pasar el token directamente — el servidor no necesita leer cookies
+    // Esto evita el problema de timing en mobile donde las cookies no
+    // están disponibles inmediatamente después del signIn
+    const res = await fetch('/api/auth/role-redirect', {
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    })
+    const { redirectTo } = await res.json()
+    window.location.href = redirectTo ?? '/login'
   }
 
   async function handleSubmit(e: React.FormEvent) {
