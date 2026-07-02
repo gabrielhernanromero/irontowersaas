@@ -433,8 +433,8 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
         </div>
       )}
 
-      {/* Instrucción o botón finalizar */}
-      {escaneados < ronda.total_puntos ? (
+      {/* Instrucción o botón finalizar — usa scans.length (real) no el contador del DB */}
+      {scans.length < ronda.total_puntos ? (
         <div className="bg-brand-ink rounded-2xl p-4 text-white text-center">
           <p className="text-sm font-semibold">Tocá un punto de control para escanear su QR</p>
           <p className="text-xs text-white/60 mt-1">La cámara se abrirá automáticamente</p>
