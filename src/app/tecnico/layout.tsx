@@ -46,7 +46,7 @@ export default async function TecnicoLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50">
       <OfflineBanner />
       <PushNotificationSetup />
       {user && <RondaAlertBanner tecnicoId={user.id} />}

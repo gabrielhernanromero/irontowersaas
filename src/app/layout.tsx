@@ -6,7 +6,6 @@ import SessionGuard from '@/components/SessionGuard'
 import { ToastProvider } from '@/lib/toast/context'
 import ToastContainer from '@/components/ui/ToastContainer'
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt'
-import { ThemeProvider } from '@/lib/theme/ThemeProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -34,17 +33,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es">
       <body className={inter.className}>
-        <ThemeProvider>
-          <ToastProvider>
-            <ServiceWorkerRegister />
-            <SessionGuard />
-            <PWAUpdatePrompt />
-            <ToastContainer />
-            {children}
-          </ToastProvider>
-        </ThemeProvider>
+        <ToastProvider>
+          <ServiceWorkerRegister />
+          <SessionGuard />
+          <PWAUpdatePrompt />
+          <ToastContainer />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   )

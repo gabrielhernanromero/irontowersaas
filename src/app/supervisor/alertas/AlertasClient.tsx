@@ -34,13 +34,13 @@ function AlertaCard({ alerta, onRead }: { alerta: Alerta; onRead: (id: string) =
   return (
     <div className={`rounded-xl border p-4 flex justify-between items-start gap-4 ${
       alerta.leida
-        ? 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800'
-        : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800'
+        ? 'bg-white border-gray-100'
+        : 'bg-red-50 border-red-200'
     }`}>
       <div className="flex items-start gap-3 flex-1 min-w-0">
         <Bell size={16} className={`shrink-0 mt-0.5 ${alerta.leida ? 'text-gray-400' : 'text-red-500'}`} />
         <div className="min-w-0">
-          <p className={`text-sm leading-snug ${alerta.leida ? 'text-gray-600 dark:text-gray-400' : 'text-red-800 dark:text-red-300'}`}>
+          <p className={`text-sm leading-snug ${alerta.leida ? 'text-gray-600' : 'text-red-800'}`}>
             {alerta.mensaje}
           </p>
           <p className="text-xs text-gray-400 mt-1">{formatRelativo(alerta.created_at)}</p>
@@ -50,7 +50,7 @@ function AlertaCard({ alerta, onRead }: { alerta: Alerta; onRead: (id: string) =
         <button
           onClick={handleRead}
           disabled={marking}
-          className="shrink-0 text-xs bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg min-h-[36px] hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 transition-colors"
+          className="shrink-0 text-xs bg-white border border-red-300 text-red-700 px-3 py-2 rounded-lg min-h-[36px] hover:bg-red-50 disabled:opacity-50 transition-colors"
         >
           {marking ? '...' : 'Leída'}
         </button>
@@ -97,16 +97,16 @@ function RondaVencidaCard({
   // ── Resuelta ──────────────────────────────────────────────────────────────
   if (alerta.resuelta) {
     return (
-      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
         <div className="flex items-start gap-3">
-          <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-0.5">
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-0.5">
               Resuelta
             </p>
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{alerta.mensaje}</p>
+            <p className="text-sm text-gray-700 leading-snug">{alerta.mensaje}</p>
             {alerta.resolucion_observacion && (
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 border border-emerald-100 dark:border-emerald-900 rounded-lg px-3 py-2">
+              <p className="mt-2 text-sm text-gray-600 bg-white border border-emerald-100 rounded-lg px-3 py-2">
                 "{alerta.resolucion_observacion}"
               </p>
             )}
@@ -121,20 +121,20 @@ function RondaVencidaCard({
 
   // ── Pendiente de resolución ───────────────────────────────────────────────
   return (
-    <div className="rounded-xl border-2 border-red-400 dark:border-red-700 bg-red-50 dark:bg-red-950/40 overflow-hidden">
+    <div className="rounded-xl border-2 border-red-400 bg-red-50 overflow-hidden">
       {/* Cabecera */}
       <div className="px-4 pt-4 pb-3 flex items-start gap-3">
         <div className="relative shrink-0 mt-0.5">
-          <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
+          <AlertTriangle size={18} className="text-red-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-wide leading-none mb-1">
+          <p className="text-xs font-black text-red-700 uppercase tracking-wide leading-none mb-1">
             Ronda vencida — acción requerida
           </p>
-          <p className="text-sm font-medium text-red-900 dark:text-red-200 leading-snug">
+          <p className="text-sm font-medium text-red-900 leading-snug">
             {alerta.mensaje}
           </p>
-          <div className="flex items-center gap-1 text-xs text-red-500 dark:text-red-400 mt-1">
+          <div className="flex items-center gap-1 text-xs text-red-500 mt-1">
             <Clock size={11} />
             {formatRelativo(alerta.created_at)}
           </div>
@@ -152,9 +152,9 @@ function RondaVencidaCard({
           </button>
         </div>
       ) : (
-        <div className="border-t border-red-200 dark:border-red-800 bg-white dark:bg-gray-900 px-4 py-4 flex flex-col gap-3">
+        <div className="border-t border-red-200 bg-white px-4 py-4 flex flex-col gap-3">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               ¿Cómo se resolvió la situación? <span className="text-red-500">*</span>
             </label>
             <textarea
@@ -162,22 +162,22 @@ function RondaVencidaCard({
               onChange={e => { setObservacion(e.target.value); setError(null) }}
               placeholder="Ej: Me comuniqué con el técnico. Reportó que el acceso al sector estaba bloqueado temporalmente. Ronda reprogramada."
               rows={4}
-              className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-red-400 dark:focus:ring-red-600"
+              className="w-full text-sm border border-gray-300 rounded-xl px-3 py-2.5 bg-white text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
             />
-            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => { setExpandido(false); setError(null) }}
               disabled={enviando}
-              className="flex-1 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700 rounded-xl py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[44px] disabled:opacity-50"
+              className="flex-1 text-sm text-gray-600 border border-gray-300 rounded-xl py-2.5 hover:bg-gray-50 transition-colors min-h-[44px] disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               onClick={handleResolver}
               disabled={enviando || observacion.trim().length < 10}
-              className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900 text-white text-sm font-bold rounded-xl py-2.5 transition-colors min-h-[44px]"
+              className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-bold rounded-xl py-2.5 transition-colors min-h-[44px]"
             >
               {enviando ? 'Guardando...' : 'Confirmar resolución'}
             </button>
@@ -225,7 +225,7 @@ export default function AlertasClient({ initialAlertas }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {!hayPendientes && (
-        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-sm text-emerald-700 dark:text-emerald-400 font-medium">
+        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700 font-medium">
           <CheckCircle2 size={15} className="shrink-0" />
           Todas las alertas están atendidas
         </div>
@@ -234,7 +234,7 @@ export default function AlertasClient({ initialAlertas }: Props) {
       {/* Rondas vencidas pendientes de resolución — máxima prioridad */}
       {rondaVencidaPendientes.length > 0 && (
         <section>
-          <h2 className="text-sm font-bold text-red-700 dark:text-red-400 mb-3 uppercase tracking-wide flex items-center gap-2">
+          <h2 className="text-sm font-bold text-red-700 mb-3 uppercase tracking-wide flex items-center gap-2">
             <AlertTriangle size={14} />
             Rondas vencidas ({rondaVencidaPendientes.length})
           </h2>
@@ -249,7 +249,7 @@ export default function AlertasClient({ initialAlertas }: Props) {
       {/* Otras alertas sin leer */}
       {otrasNoLeidas.length > 0 && (
         <section>
-          <h2 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-3 uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-red-700 mb-3 uppercase tracking-wide">
             Sin leer ({otrasNoLeidas.length})
           </h2>
           <div className="flex flex-col gap-2">

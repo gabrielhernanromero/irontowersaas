@@ -634,7 +634,7 @@ export default function DashboardClient({
               <p className="text-sm text-gray-400">Sin incidencias abiertas</p>
             </div>
           ) : (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden divide-y divide-gray-50 dark:divide-gray-700">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
               {incidenciasFiltradas.map(inc => {
                 const s = SEV[inc.severidad ?? 'bajo']
                 return (
@@ -673,7 +673,7 @@ export default function DashboardClient({
           <LiveBadge />
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {novedadesFiltradas.length === 0 ? (
             <div className="p-8 text-center">
               <MessageSquare size={24} className="mx-auto mb-2 text-gray-200" />
@@ -801,7 +801,7 @@ function KpiCard({
   live?: boolean
 }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
         <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon size={17} className={accentClass} />
@@ -814,7 +814,7 @@ function KpiCard({
         )}
       </div>
       <p className={`text-4xl font-black ${accentClass}`}>{value}</p>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-tight">{label}</p>
+      <p className="text-sm text-gray-500 mt-1 leading-tight">{label}</p>
     </div>
   )
 }
@@ -828,16 +828,16 @@ function KpiCardPct({
 }) {
   const color = value === null ? 'text-gray-400' : value >= 90 ? 'text-emerald-600' : value >= 70 ? 'text-amber-500' : 'text-red-500'
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center">
+        <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center">
           <Icon size={17} className={color} />
         </div>
       </div>
       <p className={`text-4xl font-black ${color}`}>
         {value === null ? '—' : `${value}%`}
       </p>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-tight">{label}</p>
+      <p className="text-sm text-gray-500 mt-1 leading-tight">{label}</p>
     </div>
   )
 }
@@ -851,11 +851,11 @@ function ResumenCard({
   color: string
 }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 flex items-center gap-4">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
       <Icon size={20} className={`${color} shrink-0`} />
       <div>
         <p className={`text-2xl font-black ${color}`}>{value}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
       </div>
     </div>
   )
@@ -864,7 +864,7 @@ function ResumenCard({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{children}</p>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{children}</p>
     </div>
   )
 }
