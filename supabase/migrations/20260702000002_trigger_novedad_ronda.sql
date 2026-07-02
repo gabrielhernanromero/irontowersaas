@@ -20,20 +20,22 @@ BEGIN
       duracion_str := duracion_min::text || ' min';
     END IF;
 
-    INSERT INTO public.libro_novedad (turno_id, tecnico_id, tipo, hora, descripcion)
-    VALUES (
-      NEW.turno_id,
-      NEW.tecnico_id,
-      'ronda',
-      TO_CHAR(NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI'),
-      'Ronda #' || NEW.numero_ronda
-        || ' completada — '
-        || NEW.puntos_escaneados || '/' || NEW.total_puntos || ' puntos · '
-        || TO_CHAR(NEW.hora_inicio AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI')
-        || ' → '
-        || TO_CHAR(NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI')
-        || ' (' || duracion_str || ')'
-    );
+      INSERT INTO public.libro_novedad (turno_id, tecnico_id, tipo, hora, descripcion)
+      VALUES (
+        NEW.turno_id,
+        NEW.tecnico_id,
+        'ronda',
+        (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::time,
+        'Ronda #' || NEW.numero_ronda
+          || ' completada — '
+          || COALESCE(NEW.puntos_escaneados::text, '?') || '/' || COALESCE(NEW.total_puntos::text, '?') || ' puntos · '
+          || COALESCE(TO_CHAR(NEW.hora_inicio AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI'), '—')
+          || ' → '
+          || TO_CHAR(NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI')
+          || ' (' || duracion_str || ')'
+      );
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'fn_novedad_ronda_completada falló: %', SQLERRM;
   END IF;
 
   RETURN NEW;
