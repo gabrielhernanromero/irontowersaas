@@ -1,33 +1,55 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
+const ROLE_REDIRECTS: Record<string, string> = {
+  tecnico:    '/tecnico/home',
+  supervisor: '/supervisor/dashboard',
+  admin:      '/supervisor/dashboard',
+}
+
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function doLogin(emailVal: string, passwordVal: string) {
     setError(null)
     setLoading(true)
 
-    const { error: authError } = await supabase().auth.signInWithPassword({
-      email,
-      password,
+    const sb = supabase()
+    await sb.auth.signOut()
+
+    const { data, error: authError } = await sb.auth.signInWithPassword({
+      email: emailVal,
+      password: passwordVal,
     })
 
-    if (authError) {
+    if (authError || !data.user) {
       setError('Email o contraseña incorrectos')
       setLoading(false)
       return
     }
 
-    const res = await fetch('/api/auth/role-redirect')
-    const { redirectTo } = await res.json()
-    window.location.href = redirectTo ?? '/login'
+    // Leer rol desde la tabla propia — sin depender del servidor para leer cookies
+    const { data: perfil } = await sb
+      .from('users')
+      .select('rol')
+      .eq('id', data.user.id)
+      .single()
+
+    const destino = ROLE_REDIRECTS[perfil?.rol ?? ''] ?? '/login'
+    router.push(destino)
+    router.refresh()
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    await doLogin(email, password)
   }
 
   const TEST_USERS = [
@@ -40,17 +62,8 @@ export default function LoginPage() {
     { label: 'Natalia',     sub: 'Herrera',          email: 'natalia.herrera@irontower.com',  password: 'IronTec6!', color: 'bg-blue-50 border-blue-200 text-blue-800' },
   ]
 
-  async function loginDirecto(email: string, password: string) {
-    setError(null)
-    setLoading(true)
-    // Cerrar sesión previa si existe
-    await supabase().auth.signOut()
-    const { error: authError } = await supabase().auth.signInWithPassword({ email, password })
-    if (authError) { setError('Email o contraseña incorrectos'); setLoading(false); return }
-    // Pedir al servidor el redirect según el rol (evita problemas de RLS en client)
-    const res = await fetch('/api/auth/role-redirect')
-    const { redirectTo } = await res.json()
-    window.location.href = redirectTo ?? '/login'
+  async function loginDirecto(emailVal: string, passwordVal: string) {
+    await doLogin(emailVal, passwordVal)
   }
 
   return (
