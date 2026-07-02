@@ -92,8 +92,8 @@ export default function RondaAlertBanner({ tecnicoId }: Props) {
   if (!alerta) return null
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 animate-slide-down">
-      <div className="max-w-[430px] mx-auto px-3 pt-3">
+    <div className="fixed top-0 left-0 right-0 md:left-56 z-50 animate-slide-down">
+      <div className="max-w-2xl mx-auto px-3 pt-3">
 
         {alerta.tipo === 'ronda_vencida' && (
           // ── Banner rojo urgente (ronda vencida) ──────────────────────────

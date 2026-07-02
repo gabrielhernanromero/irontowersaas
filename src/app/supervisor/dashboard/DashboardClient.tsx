@@ -681,8 +681,9 @@ export default function DashboardClient({
             </div>
           ) : (
             <>
+              <div className="overflow-x-auto">
               {/* Table header */}
-              <div className="grid grid-cols-[72px_140px_1fr_130px] px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+              <div className="grid grid-cols-[72px_140px_1fr_130px] min-w-[500px] px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                 {['HORA', 'CATEGORÍA', 'DETALLE / OBSERVACIÓN', 'ESTADO'].map(h => (
                   <span key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wide last:text-right">
                     {h}
@@ -703,7 +704,7 @@ export default function DashboardClient({
                   return (
                     <div
                       key={nov.id}
-                      className={`grid grid-cols-[72px_140px_1fr_130px] px-4 py-3 items-center transition-colors ${
+                      className={`grid grid-cols-[72px_140px_1fr_130px] min-w-[500px] px-4 py-3 items-center transition-colors ${
                         i === 0 ? 'bg-blue-50/20' : 'hover:bg-gray-50/50'
                       }`}
                     >
@@ -740,6 +741,7 @@ export default function DashboardClient({
                   )
                 })}
               </div>
+              </div>{/* end overflow-x-auto */}
             </>
           )}
         </div>

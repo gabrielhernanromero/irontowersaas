@@ -45,8 +45,8 @@ export default function ReportarFallaSheet({
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-[60]" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 z-[70] bg-white rounded-t-2xl shadow-xl">
-        <div className="max-w-[430px] mx-auto">
+      <div className="fixed inset-x-0 md:left-56 bottom-0 z-[70] bg-white rounded-t-2xl shadow-xl">
+        <div className="max-w-2xl mx-auto">
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-gray-300 rounded-full" />
           </div>

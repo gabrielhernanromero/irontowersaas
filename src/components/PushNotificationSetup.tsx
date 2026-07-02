@@ -68,8 +68,8 @@ export default function PushNotificationSetup() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] bg-brand-ink text-white shadow-lg animate-slide-down">
-      <div className="max-w-[430px] mx-auto flex items-center gap-3 px-4 py-3">
+    <div className="fixed top-0 left-0 right-0 md:left-56 z-[100] bg-brand-ink text-white shadow-lg animate-slide-down">
+      <div className="flex items-center gap-3 px-4 py-3">
         <Bell size={18} className="shrink-0 text-brand-orange" />
         <p className="flex-1 text-sm font-medium leading-tight">
           Activar notificaciones para recibir alertas

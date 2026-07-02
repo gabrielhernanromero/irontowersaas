@@ -472,8 +472,8 @@ export default function RelevoPForm({
           </div>
         )}
 
-        <div className="fixed bottom-16 left-0 right-0 z-50 bg-white border-t border-gray-200 p-3">
-          <div className="max-w-[430px] mx-auto">
+        <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-56 z-50 bg-white border-t border-gray-200 p-3">
+          <div className="max-w-2xl mx-auto">
             <button
               type="submit"
               disabled={submitting || !scrolledToBottom || !firmaDataUrl}
@@ -489,8 +489,8 @@ export default function RelevoPForm({
       {selectedNovedad && (
         <>
           <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSelectedNovedad(null)} />
-          <div className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-y-auto">
-            <div className="max-w-[430px] mx-auto">
+          <div className="fixed bottom-0 left-0 right-0 md:left-56 z-[70] bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-y-auto">
+            <div className="max-w-2xl mx-auto">
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 bg-gray-300 rounded-full" />
               </div>

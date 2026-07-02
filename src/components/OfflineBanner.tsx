@@ -12,8 +12,8 @@ export default function OfflineBanner() {
   // Sincronizando
   if (isOnline && syncing) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-[200] bg-blue-600 text-white">
-        <div className="max-w-[430px] mx-auto flex items-center gap-3 px-4 py-2.5">
+      <div className="fixed top-0 left-0 right-0 md:left-56 z-[200] bg-blue-600 text-white">
+        <div className="flex items-center gap-3 px-4 py-2.5">
           <RefreshCw size={15} className="shrink-0 animate-spin" />
           <p className="text-xs font-semibold">Enviando datos guardados offline...</p>
         </div>
@@ -24,8 +24,8 @@ export default function OfflineBanner() {
   // Online con pendientes listos para enviar (se disparará solo)
   if (isOnline && pendingCount > 0) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-[200] bg-emerald-600 text-white">
-        <div className="max-w-[430px] mx-auto flex items-center gap-3 px-4 py-2.5">
+      <div className="fixed top-0 left-0 right-0 md:left-56 z-[200] bg-emerald-600 text-white">
+        <div className="flex items-center gap-3 px-4 py-2.5">
           <CheckCircle2 size={15} className="shrink-0" />
           <p className="text-xs font-semibold">
             {pendingCount} {pendingCount === 1 ? 'registro enviado' : 'registros enviados'} correctamente
@@ -37,8 +37,8 @@ export default function OfflineBanner() {
 
   // Offline
   return (
-    <div className="fixed top-0 left-0 right-0 z-[200] bg-gray-900 text-white">
-      <div className="max-w-[430px] mx-auto flex items-center gap-3 px-4 py-2.5">
+    <div className="fixed top-0 left-0 right-0 md:left-56 z-[200] bg-gray-900 text-white">
+      <div className="flex items-center gap-3 px-4 py-2.5">
         <WifiOff size={15} className="shrink-0 text-red-400" />
         <p className="text-xs font-semibold">
           Sin conexión — los datos se guardan localmente

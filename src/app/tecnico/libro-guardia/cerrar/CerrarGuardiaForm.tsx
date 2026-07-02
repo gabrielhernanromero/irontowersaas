@@ -144,8 +144,8 @@ export default function CerrarGuardiaForm({ turnoId, horaFinEsquema }: Props) {
           </div>
         )}
 
-        <div className="fixed bottom-16 left-0 right-0 z-50 bg-white border-t border-gray-200 p-3">
-          <div className="max-w-[430px] mx-auto">
+        <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-56 z-50 bg-white border-t border-gray-200 p-3">
+          <div className="max-w-2xl mx-auto">
             <button
               type="submit"
               disabled={submitting}
@@ -160,7 +160,7 @@ export default function CerrarGuardiaForm({ turnoId, horaFinEsquema }: Props) {
       {/* Modal cierre anticipado */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50">
-          <div className="bg-white rounded-t-2xl p-6 w-full max-w-[430px] pb-safe">
+          <div className="bg-white rounded-t-2xl p-6 w-full max-w-lg pb-safe">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle size={20} className="text-amber-500 shrink-0" />
               <h3 className="font-bold text-brand-ink text-base">Cierre anticipado</h3>

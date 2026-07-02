@@ -8,17 +8,17 @@ import { LogoutButton } from './LogoutButton'
 
 interface Props {
   userId: string
+  userName: string
   initialGuardia: number
   initialRondas: number
   initialElementos: number
 }
 
-export default function NavRealtime({ userId, initialGuardia, initialRondas, initialElementos }: Props) {
+export default function NavRealtime({ userId, userName, initialGuardia, initialRondas, initialElementos }: Props) {
   const [guardia,   setGuardia]   = useState(initialGuardia)
   const [rondas,    setRondas]    = useState(initialRondas)
   const [elementos, setElementos] = useState(initialElementos)
 
-  // Ref para evitar actualizar estado en componente desmontado
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -39,8 +39,6 @@ export default function NavRealtime({ userId, initialGuardia, initialRondas, ini
       } catch { /* ignorar errores de red */ }
     }
 
-    // Realtime: recibe eventos de INSERT y UPDATE en alertas
-    // RLS garantiza que solo llegan las del usuario autenticado
     const channel = sb
       .channel(`nav-badges-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alertas' }, refresh)
@@ -49,10 +47,7 @@ export default function NavRealtime({ userId, initialGuardia, initialRondas, ini
         if (status === 'SUBSCRIBED') refresh()
       })
 
-    // Evento custom: GuardiaAlertsReader lo dispara al marcar alertas como leídas
     window.addEventListener('guardia-alertas-read', refresh)
-
-    // Polling cada 6s como red de seguridad
     const interval = setInterval(refresh, 6000)
 
     return () => {
@@ -64,15 +59,61 @@ export default function NavRealtime({ userId, initialGuardia, initialRondas, ini
   }, [userId])
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200">
-      <div className="max-w-[430px] mx-auto flex">
-        <NavItem href="/tecnico/home"          icon={<Home     size={22} />} label="Inicio"    />
-        <NavItem href="/tecnico/elementos"     icon={<Package  size={22} />} label="Elementos" badge={elementos} />
-        <NavItem href="/tecnico/libro-guardia" icon={<BookOpen size={22} />} label="Guardia"   badge={guardia}   />
-        <NavItem href="/tecnico/ronda"         icon={<QrCode   size={22} />} label="Rondas"    badge={rondas}    />
-        <LogoutButton />
+    <>
+      {/* Sidebar — tablet/desktop */}
+      <aside className="hidden md:flex flex-col w-56 bg-brand-ink text-white shrink-0">
+        <div className="p-5 border-b border-white/10">
+          <p className="font-condensed font-bold text-lg">Iron Tower</p>
+          <p className="text-xs text-white/60 mt-1 truncate">{userName}</p>
+        </div>
+        <nav className="flex flex-col gap-1 p-3 flex-1">
+          <SideItem href="/tecnico/home"          icon={<Home     size={18} />} label="Inicio"           />
+          <SideItem href="/tecnico/elementos"     icon={<Package  size={18} />} label="Elementos"        badge={elementos} />
+          <SideItem href="/tecnico/libro-guardia" icon={<BookOpen size={18} />} label="Libro de Guardia" badge={guardia}   />
+          <SideItem href="/tecnico/ronda"         icon={<QrCode   size={18} />} label="Rondas"           badge={rondas}    />
+        </nav>
+        <div className="p-3 border-t border-white/10">
+          <LogoutButton variant="sidebar" />
+        </div>
+      </aside>
+
+      {/* Bottom nav — móvil */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200">
+        <div className="flex">
+          <NavItem href="/tecnico/home"          icon={<Home     size={22} />} label="Inicio"    />
+          <NavItem href="/tecnico/elementos"     icon={<Package  size={22} />} label="Elementos" badge={elementos} />
+          <NavItem href="/tecnico/libro-guardia" icon={<BookOpen size={22} />} label="Guardia"   badge={guardia}   />
+          <NavItem href="/tecnico/ronda"         icon={<QrCode   size={22} />} label="Rondas"    badge={rondas}    />
+          <LogoutButton />
+        </div>
+      </nav>
+    </>
+  )
+}
+
+function SideItem({
+  href, icon, label, badge = 0,
+}: {
+  href: string
+  icon: React.ReactNode
+  label: string
+  badge?: number
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 px-3 py-2 rounded text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm"
+    >
+      <div className="relative shrink-0">
+        {icon}
+        {badge > 0 && (
+          <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 bg-brand-orange text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
       </div>
-    </nav>
+      <span>{label}</span>
+    </Link>
   )
 }
 

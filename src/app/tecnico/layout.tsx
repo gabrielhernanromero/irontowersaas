@@ -46,21 +46,26 @@ export default async function TecnicoLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 md:flex">
       <OfflineBanner />
       <PushNotificationSetup />
-      {user && <RondaAlertBanner tecnicoId={user.id} />}
-
-      <main className="max-w-[430px] mx-auto pb-20 px-4 pt-4">{children}</main>
 
       {user && (
         <NavRealtime
           userId={user.id}
+          userName={`${user.nombre} ${user.apellido}`}
           initialGuardia={guardiaCount}
           initialRondas={rondasCount}
           initialElementos={elementosCount}
         />
       )}
+
+      <div className="flex-1 flex flex-col min-h-screen">
+        {user && <RondaAlertBanner tecnicoId={user.id} />}
+        <main className="flex-1 max-w-2xl w-full mx-auto pb-20 md:pb-8 px-4 pt-4">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

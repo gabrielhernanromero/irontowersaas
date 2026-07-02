@@ -484,8 +484,8 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
           </div>
 
           {/* Botones de acción fijos */}
-          <div className="fixed bottom-16 left-0 right-0 z-50 bg-white border-t border-gray-200 p-3">
-            <div className="max-w-[430px] mx-auto flex gap-3">
+          <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-56 z-50 bg-white border-t border-gray-200 p-3">
+            <div className="max-w-2xl mx-auto flex gap-3">
               <Link
                 href={`/tecnico/libro-guardia/novedad?turno_id=${turnoActivo.id}&rol=${rolActivo}`}
                 className="flex-1 flex items-center justify-center gap-2 bg-brand-orange text-white font-bold py-3 rounded-lg text-sm min-h-[48px]"

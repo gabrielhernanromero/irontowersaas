@@ -97,7 +97,7 @@ function ModalPuesto({
         <Field label="Dirección *">
           <input className={inputCls} value={form.direccion} onChange={e => set('direccion', e.target.value)} placeholder="Av. del Trabajo 1234, La Plata" required />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Contacto *">
             <input className={inputCls} value={form.contacto_nombre} onChange={e => set('contacto_nombre', e.target.value)} placeholder="Juan García" required />
           </Field>
@@ -164,7 +164,7 @@ function ModalElemento({
         <Field label="Nombre del equipo *">
           <input className={inputCls} value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Handy Motorola EP450" required />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Código patrimonial *">
             <input className={inputCls} value={form.codigo_patrimonial} onChange={e => set('codigo_patrimonial', e.target.value)} placeholder="MOT-001" required />
           </Field>

@@ -297,8 +297,8 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
         </div>
 
         {/* Botón sticky */}
-        <div className="fixed bottom-16 left-0 right-0 z-50 bg-white border-t border-gray-200 p-3">
-          <div className="max-w-[430px] mx-auto space-y-2">
+        <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-56 z-50 bg-white border-t border-gray-200 p-3">
+          <div className="max-w-2xl mx-auto space-y-2">
             {validationMessages.length > 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 flex gap-2 items-start">
                 <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />

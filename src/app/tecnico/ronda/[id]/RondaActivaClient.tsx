@@ -456,7 +456,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
       {pendingConfirm && (
         <>
           <div className="fixed inset-0 bg-black/40 z-[60]" onClick={cancelarConfirm} />
-          <div className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-xl p-5 max-w-[430px] mx-auto pb-8">
+          <div className="fixed bottom-0 left-0 right-0 md:left-56 z-[70] bg-white rounded-t-2xl shadow-xl p-5 pb-8">
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1 bg-gray-200 rounded-full" />
             </div>

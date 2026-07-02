@@ -131,8 +131,8 @@ export default function IncidenciaDetailSheet({ incidencia, turnoId, onClose, on
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-[60]" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-xl max-h-[88vh] flex flex-col">
-        <div className="max-w-[430px] mx-auto w-full flex flex-col flex-1 min-h-0">
+      <div className="fixed bottom-0 left-0 right-0 md:left-56 z-[70] bg-white rounded-t-2xl shadow-xl max-h-[88vh] flex flex-col">
+        <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
           {/* Handle */}
           <div className="flex justify-center pt-3 pb-1 shrink-0">
             <div className="w-10 h-1 bg-gray-300 rounded-full" />
