@@ -6,7 +6,7 @@ import { CheckCircle, Circle, MapPin, Loader2, Trophy, Flag, QrCode, AlertCircle
 import jsQR from 'jsqr'
 
 interface Scan  { id: string; punto_control_id: string }
-interface Punto { id: string; nombre: string; ubicacion: string | null; orden: number }
+interface Punto { id: string; nombre: string; ubicacion: string | null; orden: number; codigo_qr: string }
 
 interface Ronda {
   id: string
@@ -45,6 +45,8 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
   const [liveScanning,   setLiveScanning]   = useState(false)
   const [camError,       setCamError]       = useState<string | null>(null)
+  const [wrongQr,        setWrongQr]        = useState(false)
+  const wrongQrTimer                        = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const videoRef       = useRef<HTMLVideoElement>(null)
   const canvasRef      = useRef<HTMLCanvasElement>(null)
@@ -104,27 +106,41 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
 
       const puntoId = pendingPuntoId.current
       if (!puntoId) return
-      pendingPuntoId.current = null
-
-      stopCamera()
-      setLiveScanning(false)
 
       let codigoQr = result.data
       try {
         const url = new URL(result.data)
-        // Intentar query params primero (legacy)
         const c = url.searchParams.get('c') ?? url.searchParams.get('codigo')
         if (c) {
           codigoQr = c
         } else {
-          // Extraer del path: /ronda/scan/{codigo}
           const parts   = url.pathname.split('/')
           const scanIdx = parts.indexOf('scan')
           if (scanIdx !== -1 && parts[scanIdx + 1]) codigoQr = parts[scanIdx + 1]
         }
       } catch { /* no es URL — usar raw */ }
 
-      const puntoNombre = puntos.find(p => p.id === puntoId)?.nombre ?? 'Punto de control'
+      // Validar que el QR corresponde al punto tapeado
+      const puntoEsperado = puntos.find(p => p.id === puntoId)
+      if (puntoEsperado && puntoEsperado.codigo_qr !== codigoQr) {
+        // QR incorrecto — mostrar aviso y seguir escaneando
+        if (!wrongQrTimer.current) {
+          setWrongQr(true)
+          wrongQrTimer.current = setTimeout(() => {
+            setWrongQr(false)
+            wrongQrTimer.current = null
+          }, 2000)
+        }
+        return
+      }
+
+      pendingPuntoId.current = null
+      stopCamera()
+      setLiveScanning(false)
+      setWrongQr(false)
+      if (wrongQrTimer.current) { clearTimeout(wrongQrTimer.current); wrongQrTimer.current = null }
+
+      const puntoNombre = puntoEsperado?.nombre ?? 'Punto de control'
       setPendingConfirm({ puntoId, puntoNombre, codigoQr, fotoFile: null, fotoPreview: null })
     }, 300)
   }
@@ -139,6 +155,8 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
     stopCamera()
     setLiveScanning(false)
     setCamError(null)
+    setWrongQr(false)
+    if (wrongQrTimer.current) { clearTimeout(wrongQrTimer.current); wrongQrTimer.current = null }
   }
 
   function handlePuntoClick(puntoId: string) {
@@ -202,7 +220,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
         return
       }
 
-      setScans(prev => [...prev, { id: json.scan.id, punto_control_id: puntoId }])
+      setScans(prev => [...prev, { id: json.scan.id, punto_control_id: json.scan.punto_control_id ?? puntoId }])
       setEscaneados(json.escaneados)
       if (json.rondaCompleta) setCompleta(true)
     } catch {
@@ -287,6 +305,13 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
           {camError && (
             <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 bg-red-900/90 text-white rounded-xl p-4 text-sm text-center z-10">
               {camError}
+            </div>
+          )}
+
+          {/* QR incorrecto — aviso temporal */}
+          {wrongQr && (
+            <div className="absolute top-24 left-4 right-4 bg-red-600/90 text-white rounded-xl p-3 text-sm text-center font-semibold z-10 animate-pulse">
+              ✗ QR incorrecto — escaneá el código de este punto
             </div>
           )}
 
