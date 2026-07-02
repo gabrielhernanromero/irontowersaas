@@ -13,7 +13,7 @@ export default async function RondaPage() {
   // Turno activo: primero como encargado/interino, luego como apoyo (participaciones_turno)
   const { data: turnoPropio } = await supabaseAdmin()
     .from('libro_turno')
-    .select('id, estado, cliente_id, clientes(id, nombre_empresa, frecuencia_ronda_minutos)')
+    .select('id, estado, cliente_id, horario_inicio, horario_fin, created_at, clientes(id, nombre_empresa, frecuencia_ronda_minutos, aviso_ronda_minutos)')
     .eq('tecnico_id', user!.id)
     .eq('estado', 'abierto')
     .order('horario_inicio', { ascending: false })
@@ -26,7 +26,7 @@ export default async function RondaPage() {
   if (!turno) {
     const { data: participacion } = await supabaseAdmin()
       .from('participaciones_turno')
-      .select('libro_turno!turno_id(id, estado, cliente_id, clientes(id, nombre_empresa, frecuencia_ronda_minutos))')
+      .select('libro_turno!turno_id(id, estado, cliente_id, horario_inicio, horario_fin, created_at, clientes(id, nombre_empresa, frecuencia_ronda_minutos, aviso_ronda_minutos))')
       .eq('usuario_id', user!.id)
       .maybeSingle()
     const lt = (participacion as any)?.libro_turno
@@ -72,6 +72,25 @@ export default async function RondaPage() {
         .then(r => r.data)
     : null
 
+  // Rondas completadas del turno (para el programa de rondas)
+  const { data: rondasDelTurno } = turno
+    ? await supabaseAdmin()
+        .from('rondas')
+        .select('id, numero_ronda, hora_inicio, hora_fin, puntos_escaneados, total_puntos, completa')
+        .eq('turno_id', turno.id)
+        .order('numero_ronda', { ascending: true })
+    : { data: [] }
+
+  // Puntos de control del cliente
+  const { data: puntosList } = turno?.cliente_id
+    ? await supabaseAdmin()
+        .from('puntos_control')
+        .select('id, nombre, ubicacion, orden')
+        .eq('cliente_id', turno.cliente_id)
+        .eq('activo', true)
+        .order('orden', { ascending: true })
+    : { data: [] }
+
   return (
     <>
       <RondaAlertsReader />
@@ -81,6 +100,8 @@ export default async function RondaPage() {
         rondaEnCurso={!!rondaDelTurnoEnCurso}
         frecuenciaConfigurada={frecuenciaConfigurada}
         totalPuntosActivos={totalPuntosActivos}
+        rondasDelTurno={(rondasDelTurno ?? []) as any}
+        puntosList={(puntosList ?? []) as any}
       />
     </>
   )

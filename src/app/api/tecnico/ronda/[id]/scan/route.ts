@@ -24,7 +24,7 @@ export async function POST(
   // Verificar que la ronda pertenece al técnico y está activa
   const { data: ronda } = await supabaseAdmin()
     .from('rondas')
-    .select('id, tecnico_id, cliente_id, total_puntos, puntos_escaneados, completa, hora_fin, turno_id, numero_ronda, libro_turno!turno_id(estado)')
+    .select('id, tecnico_id, cliente_id, total_puntos, puntos_escaneados, completa, hora_fin, hora_inicio, turno_id, numero_ronda, libro_turno!turno_id(estado)')
     .eq('id', params.id)
     .single()
 
@@ -89,20 +89,30 @@ export async function POST(
     })
     .eq('id', params.id)
 
-  // Novedad de cierre cuando la ronda se auto-completa al escanear el último punto
+  // Novedad tipo 'ronda' cuando se auto-completa al escanear el último punto
   if (esCompleta && ronda.turno_id) {
-    const hora = new Date().toLocaleTimeString('es-AR', {
+    const ahora = new Date()
+    const hora = ahora.toLocaleTimeString('es-AR', {
       hour: '2-digit', minute: '2-digit',
       timeZone: 'America/Argentina/Buenos_Aires',
     })
+    const horaInicioStr = new Date(ronda.hora_inicio).toLocaleTimeString('es-AR', {
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Argentina/Buenos_Aires',
+    })
+    const duracionMin = Math.round((ahora.getTime() - new Date(ronda.hora_inicio).getTime()) / 60_000)
+    const duracionStr = duracionMin >= 60
+      ? `${Math.floor(duracionMin / 60)}h ${duracionMin % 60} min`
+      : `${duracionMin} min`
+
     await supabaseAdmin()
       .from('libro_novedad')
       .insert({
         turno_id:    ronda.turno_id,
         tecnico_id:  user.id,
-        tipo:        'novedad',
+        tipo:        'ronda',
         hora,
-        descripcion: `Ronda #${ronda.numero_ronda} finalizada — ${nuevosEscaneados}/${ronda.total_puntos} puntos verificados`,
+        descripcion: `Ronda #${ronda.numero_ronda} completada — ${nuevosEscaneados}/${ronda.total_puntos} puntos · ${horaInicioStr} → ${hora} (${duracionStr})`,
       })
   }
 

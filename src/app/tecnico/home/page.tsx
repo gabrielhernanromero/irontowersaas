@@ -111,7 +111,19 @@ export default async function TecnicoHome() {
     }
   }
 
-  // Referencia para buscar planillas: propio > encargado
+  // Verificar si el apoyo ya se unió al turno del encargado
+  let apoyoUnido = false
+  if (!turnoActivo && turnoEncargado) {
+    const { data: participacion } = await supabaseAdmin()
+      .from('participaciones_turno')
+      .select('id')
+      .eq('turno_id', turnoEncargado.id)
+      .eq('usuario_id', user!.id)
+      .maybeSingle()
+    apoyoUnido = !!participacion
+  }
+
+  // Referencia para buscar planillas: propio > encargado (siempre, para mostrar planilla ya enviada)
   const turnoRef = turnoActivo ?? turnoEncargado
 
   // Planillas habilitadas para el cliente
@@ -138,7 +150,8 @@ export default async function TecnicoHome() {
   const hidrantesEnviada  = enviada('hidrantes')
   const extintoresEnviada = enviada('extintores')
   const turnoPropio       = !!turnoActivo
-  const hayTurnoActivo    = !!(turnoActivo ?? turnoEncargado)
+  // Apoyo solo puede acceder a planillas si ya se unió al turno del encargado
+  const hayTurnoActivo    = turnoPropio || apoyoUnido
 
   return (
     <div className="flex flex-col gap-5 pt-2">

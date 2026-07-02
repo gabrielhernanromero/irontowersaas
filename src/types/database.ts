@@ -3,7 +3,7 @@ export type TipoPlanilla = 'hidrantes' | 'extintores'
 export type Turno = 'diurno' | 'nocturno'
 export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado' | 'turno_sin_cerrar'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
-export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema'
+export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema' | 'ronda'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
 export type EstadoOperativo = 'ok' | 'falla' | 'faltante'
 

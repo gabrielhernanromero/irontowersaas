@@ -20,6 +20,7 @@ const TIPO_CONFIG = {
   cierre:   { label: 'Cierre de guardia',    colorDot: 'bg-gray-500',   colorText: 'text-gray-700',   bg: 'bg-gray-50 border-gray-200'    },
   alerta:   { label: 'Alerta de inventario', colorDot: 'bg-red-500',    colorText: 'text-red-700',    bg: 'bg-red-50 border-red-200'      },
   sistema:  { label: 'Aviso del sistema',    colorDot: 'bg-violet-500', colorText: 'text-violet-700', bg: 'bg-violet-50 border-violet-200' },
+  ronda:    { label: 'Ronda',                colorDot: 'bg-teal-500',   colorText: 'text-teal-700',   bg: 'bg-teal-50 border-teal-200'    },
 }
 
 export default async function LibroTurnoDetallePage({ params }: Props) {

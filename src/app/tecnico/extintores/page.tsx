@@ -16,19 +16,55 @@ export default async function ExtintoresPage() {
     .eq('estado', 'abierto')
     .maybeSingle()).data
 
-  // Apoyo: si no tiene turno propio, usar el del encargado en el mismo cliente
+  // Apoyo: si no tiene turno propio, usar el del encargado SOLO si ya se unió al turno
+  let turnoEncargadoSinUnir = false
   if (!turnoActivo) {
     const { data: perfil } = await supabaseAdmin()
       .from('users').select('cliente_id').eq('id', user.id).single()
     if (perfil?.cliente_id) {
-      turnoActivo = (await supabaseAdmin()
+      const { data: turnoEnc } = await supabaseAdmin()
         .from('libro_turno')
         .select('id, turno, fecha, cliente_id, clientes(nombre_empresa)')
         .eq('cliente_id', perfil.cliente_id)
         .eq('estado', 'abierto')
         .neq('tecnico_id', user.id)
-        .maybeSingle()).data
+        .maybeSingle()
+      if (turnoEnc) {
+        const { data: participacion } = await supabaseAdmin()
+          .from('participaciones_turno')
+          .select('id')
+          .eq('turno_id', turnoEnc.id)
+          .eq('usuario_id', user.id)
+          .maybeSingle()
+        if (participacion) {
+          turnoActivo = turnoEnc
+        } else {
+          turnoEncargadoSinUnir = true
+        }
+      }
     }
+  }
+
+  if (turnoEncargadoSinUnir) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-5 py-16 text-center px-4">
+        <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+          <CheckCircle2 className="text-amber-500" size={36} />
+        </div>
+        <div>
+          <h1 className="text-xl font-condensed font-bold text-brand-ink">Primero uníte al turno</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Debés registrarte como apoyo antes de poder enviar planillas.
+          </p>
+        </div>
+        <Link
+          href="/tecnico/libro-guardia"
+          className="flex items-center gap-2 bg-brand-ink text-white font-bold px-6 py-3 rounded-xl text-sm min-h-[48px]"
+        >
+          Ir al Libro de Guardia
+        </Link>
+      </div>
+    )
   }
 
   // Busca por turno_id — más robusto que cliente+fecha+turno

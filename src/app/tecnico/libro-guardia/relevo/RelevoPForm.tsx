@@ -47,6 +47,7 @@ const TIPO_CONFIG = {
   cierre:   { label: 'Cierre',   color: 'text-gray-600',   dot: 'bg-gray-500'   },
   alerta:   { label: 'Alerta',   color: 'text-red-600',    dot: 'bg-red-500'    },
   sistema:  { label: 'Sistema',  color: 'text-violet-600', dot: 'bg-violet-500' },
+  ronda:    { label: 'Ronda',    color: 'text-teal-700',   dot: 'bg-teal-500'   },
 }
 
 const SEVERIDAD_CONFIG = {

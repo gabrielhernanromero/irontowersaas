@@ -115,20 +115,5 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Novedad de apertura en el libro de guardia
-  const hora = new Date().toLocaleTimeString('es-AR', {
-    hour: '2-digit', minute: '2-digit',
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
-  await supabaseAdmin()
-    .from('libro_novedad')
-    .insert({
-      turno_id,
-      tecnico_id:  user.id,
-      tipo:        'novedad',
-      hora,
-      descripcion: `Inicio de ronda #${ronda.numero_ronda}`,
-    })
-
   return NextResponse.json({ ok: true, ronda }, { status: 201 })
 }

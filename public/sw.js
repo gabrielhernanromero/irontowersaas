@@ -1,18 +1,13 @@
 // Iron Tower OS — Service Worker
-// Estrategias: cache-first (estáticos), stale-while-revalidate (páginas), network-first (API)
+// Estrategias: cache-first (estáticos), network-first (páginas + API), sin pre-cache dinámico
 
 const STATIC_CACHE  = 'it-static-v3'
-const PAGES_CACHE   = 'it-pages-v3'
+const PAGES_CACHE   = 'it-pages-v4'
 const API_CACHE     = 'it-api-v3'
 const KNOWN_CACHES  = [STATIC_CACHE, PAGES_CACHE, API_CACHE]
 
-// URLs de páginas a pre-cachear en install
-const PRECACHE_PAGES = [
-  '/tecnico/home',
-  '/tecnico/libro-guardia',
-  '/tecnico/ronda',
-  '/tecnico/elementos',
-]
+// No pre-cacheamos páginas dinámicas (server-rendered con sesión y datos en tiempo real)
+const PRECACHE_PAGES = []
 
 // Patrones de assets estáticos (Next.js los hashea → nunca cambian)
 const STATIC_RE = /^\/_next\/static\//
@@ -76,9 +71,10 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Páginas HTML: stale-while-revalidate
+  // Páginas HTML: network-first (son server-rendered con datos dinámicos de sesión)
+  // stale-while-revalidate causaba mostrar estado obsoleto (turno ya abierto aparecía como cerrado)
   if (request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(staleWhileRevalidate(request))
+    event.respondWith(networkFirstPage(request))
     return
   }
 })
@@ -167,15 +163,17 @@ async function networkFirstAPI(request) {
   }
 }
 
-async function staleWhileRevalidate(request) {
-  const cache  = await caches.open(PAGES_CACHE)
-  const cached = await cache.match(request)
-
-  const fetchPromise = fetch(request)
-    .then(res => { if (res.ok) cache.put(request, res.clone()); return res })
-    .catch(() => null)
-
-  return cached ?? (await fetchPromise) ?? offlinePage()
+// Network-first para páginas HTML dinámicas: siempre va a la red, cache solo como fallback offline
+async function networkFirstPage(request) {
+  const cache = await caches.open(PAGES_CACHE)
+  try {
+    const response = await fetch(request)
+    if (response.ok) cache.put(request, response.clone())
+    return response
+  } catch {
+    const cached = await cache.match(request)
+    return cached ?? offlinePage()
+  }
 }
 
 // ── Utilidades ───────────────────────────────────────────────────────────────

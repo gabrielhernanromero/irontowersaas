@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  color-scheme: light;
+}
+
 body {
   @apply font-body text-brand-ink bg-brand-light-bg;
 }

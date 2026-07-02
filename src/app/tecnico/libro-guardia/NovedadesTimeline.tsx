@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Clock, Eye, FileText } from 'lucide-react'
+import { X, Clock, Eye, FileText, Route } from 'lucide-react'
 import type { LibroNovedad, Incidencia } from '@/types/database'
 import IncidenciaDetailSheet from '@/components/libro/IncidenciaDetailSheet'
 
@@ -13,6 +13,8 @@ const TIPO_CONFIG = {
   cierre:         { label: 'Cierre de guardia',   color: 'text-brand-ink',   dot: 'bg-gray-500'              },
   alerta:         { label: 'Alerta del apoyo',    color: 'text-red-600',     dot: 'bg-red-500 animate-pulse' },
   alerta_acusada: { label: 'Alerta (acusada)',    color: 'text-gray-400',    dot: 'bg-gray-400'              },
+  ronda:          { label: 'Ronda',               color: 'text-teal-700',    dot: 'bg-teal-500'              },
+  sistema:        { label: 'Sistema',             color: 'text-slate-500',   dot: 'bg-slate-400'             },
 }
 
 // ── Parseo estricto por regex ──────────────────────────────────────────────────
@@ -203,9 +205,13 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                       ? sevStyle.card
                       : parsed
                         ? `${INVENTARIO_ESTILO[parsed.estilo].card} ${INVENTARIO_ESTILO[parsed.estilo].borderLeft}`
-                        : esDeApoyo
-                          ? 'bg-blue-50/40 border-blue-100 border-l-4 border-l-blue-300'
-                          : 'bg-white border-gray-100'
+                        : n.tipo === 'ronda'
+                          ? 'bg-teal-50/40 border-teal-200 border-l-4 border-l-teal-500'
+                          : n.tipo === 'sistema'
+                            ? 'bg-slate-50 border-slate-200'
+                            : esDeApoyo
+                              ? 'bg-blue-50/40 border-blue-100 border-l-4 border-l-blue-300'
+                              : 'bg-white border-gray-100'
                 }`}>
                   {/* Header */}
                   <div className="flex items-center justify-between gap-2">
@@ -219,9 +225,15 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                         ⚠ INCIDENCIA{tituloInc ? ` — ${tituloInc}` : ''}
                       </span>
                     )}
-                    {!esIncidencia && !parsed && (
+                    {!esIncidencia && !parsed && n.tipo !== 'ronda' && (
                       <span className={`text-xs font-semibold uppercase tracking-wide ${cfg.color}`}>
                         {cfg.label}
+                      </span>
+                    )}
+                    {n.tipo === 'ronda' && (
+                      <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-teal-700">
+                        <Route size={11} />
+                        Ronda
                       </span>
                     )}
                     <span className="text-xs text-gray-400 shrink-0 ml-auto">{formatHora(n.hora)}</span>
