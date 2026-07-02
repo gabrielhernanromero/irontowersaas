@@ -23,7 +23,7 @@ export default function LoginPage() {
       })
 
       if (authError || !data.session) {
-        setError(`Auth: ${authError?.message ?? 'sin sesión'}`)
+        setError('Email o contraseña incorrectos')
         setLoading(false)
         return
       }
@@ -32,23 +32,10 @@ export default function LoginPage() {
         headers: { Authorization: `Bearer ${data.session.access_token}` },
       })
 
-      if (!res.ok) {
-        setError(`API error ${res.status}`)
-        setLoading(false)
-        return
-      }
-
       const { redirectTo } = await res.json()
-
-      if (!redirectTo || redirectTo === '/login') {
-        setError(`Sin rol asignado (redirectTo=${redirectTo})`)
-        setLoading(false)
-        return
-      }
-
-      window.location.href = redirectTo
-    } catch (e) {
-      setError(`Excepción: ${e instanceof Error ? e.message : String(e)}`)
+      window.location.href = redirectTo ?? '/login'
+    } catch {
+      setError('Error de conexión. Intentá de nuevo.')
       setLoading(false)
     }
   }

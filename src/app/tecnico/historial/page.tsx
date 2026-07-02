@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { supabaseServer } from '@/lib/supabase/server'
 import { getSession } from '@/lib/auth/getSession'
 import Link from 'next/link'
