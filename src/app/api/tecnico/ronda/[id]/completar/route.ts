@@ -33,38 +33,7 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Novedad tipo 'ronda' al completar manualmente
-  if (ronda.turno_id) {
-    const ahora = new Date()
-    const hora = ahora.toLocaleTimeString('es-AR', {
-      hour: '2-digit', minute: '2-digit',
-      timeZone: 'America/Argentina/Buenos_Aires',
-    })
-    const horaInicioStr = ronda.hora_inicio
-      ? new Date(ronda.hora_inicio).toLocaleTimeString('es-AR', {
-          hour: '2-digit', minute: '2-digit',
-          timeZone: 'America/Argentina/Buenos_Aires',
-        })
-      : hora
-    const duracionMin = ronda.hora_inicio
-      ? Math.round((ahora.getTime() - new Date(ronda.hora_inicio).getTime()) / 60_000)
-      : 0
-    const duracionStr = duracionMin >= 60
-      ? `${Math.floor(duracionMin / 60)}h ${duracionMin % 60} min`
-      : `${duracionMin} min`
-    const completitudStr = ronda.puntos_escaneados < ronda.total_puntos ? 'incompleta' : 'completada'
-
-    const { error: novedadErr } = await supabaseAdmin()
-      .from('libro_novedad')
-      .insert({
-        turno_id:    ronda.turno_id,
-        tecnico_id:  user.id,
-        tipo:        'ronda',
-        hora,
-        descripcion: `Ronda #${ronda.numero_ronda} ${completitudStr} — ${ronda.puntos_escaneados}/${ronda.total_puntos} puntos · ${horaInicioStr} → ${hora} (${duracionStr})`,
-      })
-    if (novedadErr) console.error('[ronda/completar] Error al insertar novedad ronda:', novedadErr)
-  }
+  // La novedad se crea automáticamente via trigger fn_novedad_ronda_completada
 
   return NextResponse.json({ ok: true, ronda: data })
 }
