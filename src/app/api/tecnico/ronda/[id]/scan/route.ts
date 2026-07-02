@@ -96,16 +96,20 @@ export async function POST(
       hour: '2-digit', minute: '2-digit',
       timeZone: 'America/Argentina/Buenos_Aires',
     })
-    const horaInicioStr = new Date(ronda.hora_inicio).toLocaleTimeString('es-AR', {
-      hour: '2-digit', minute: '2-digit',
-      timeZone: 'America/Argentina/Buenos_Aires',
-    })
-    const duracionMin = Math.round((ahora.getTime() - new Date(ronda.hora_inicio).getTime()) / 60_000)
+    const horaInicioStr = ronda.hora_inicio
+      ? new Date(ronda.hora_inicio).toLocaleTimeString('es-AR', {
+          hour: '2-digit', minute: '2-digit',
+          timeZone: 'America/Argentina/Buenos_Aires',
+        })
+      : hora
+    const duracionMin = ronda.hora_inicio
+      ? Math.round((ahora.getTime() - new Date(ronda.hora_inicio).getTime()) / 60_000)
+      : 0
     const duracionStr = duracionMin >= 60
       ? `${Math.floor(duracionMin / 60)}h ${duracionMin % 60} min`
       : `${duracionMin} min`
 
-    await supabaseAdmin()
+    const { error: novedadErr } = await supabaseAdmin()
       .from('libro_novedad')
       .insert({
         turno_id:    ronda.turno_id,
@@ -114,6 +118,7 @@ export async function POST(
         hora,
         descripcion: `Ronda #${ronda.numero_ronda} completada — ${nuevosEscaneados}/${ronda.total_puntos} puntos · ${horaInicioStr} → ${hora} (${duracionStr})`,
       })
+    if (novedadErr) console.error('[ronda/scan] Error al insertar novedad ronda:', novedadErr)
   }
 
   return NextResponse.json({
