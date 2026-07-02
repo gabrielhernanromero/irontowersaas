@@ -14,10 +14,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const sb = supabase()
-      await sb.auth.signOut()
-
-      const { data, error: authError } = await sb.auth.signInWithPassword({
+      const { data, error: authError } = await supabase().auth.signInWithPassword({
         email: emailVal,
         password: passwordVal,
       })
@@ -28,9 +25,14 @@ export default function LoginPage() {
         return
       }
 
+      const ctrl = new AbortController()
+      const tid = setTimeout(() => ctrl.abort(), 8000)
+
       const res = await fetch('/api/auth/role-redirect', {
         headers: { Authorization: `Bearer ${data.session.access_token}` },
+        signal: ctrl.signal,
       })
+      clearTimeout(tid)
 
       const { redirectTo } = await res.json()
       window.location.href = redirectTo ?? '/login'
