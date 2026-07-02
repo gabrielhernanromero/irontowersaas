@@ -13,7 +13,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="flex items-center gap-2 text-white/60 hover:text-white text-sm w-full p-2 rounded transition-colors"
+      className="flex items-center gap-2 text-white/60 hover:text-white text-sm p-2 rounded transition-colors shrink-0"
     >
       <LogOut size={16} />
       Cerrar sesión

@@ -48,7 +48,10 @@ export default async function SupervisorLayout({ children }: { children: React.R
         {/* Top bar mobile */}
         <header className="md:hidden print:hidden bg-brand-ink text-white px-4 py-3 flex items-center justify-between">
           <p className="font-condensed font-bold">Iron Tower</p>
-          <p className="text-sm text-white/70">{user?.nombre}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-white/70">{user?.nombre}</p>
+            <LogoutButton />
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto">{children}</main>
