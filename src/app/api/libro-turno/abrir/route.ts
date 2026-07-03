@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
 
   const { fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, cliente_id, esquema_id, interino, personal_apoyo, turno_saliente_id, relevo_firma_dataurl, verificacion_elementos } = parsed.data
 
+  let esquemaHoraFin: string | null = null
+
   // Verificar que no hay turno abierto propio
   const { data: turnoAbierto } = await supabaseAdmin()
     .from('libro_turno')
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
             .maybeSingle()
 
           const rol = excepcion?.rol_turno ?? null
-          if (rol === 'encargado') { matchEncargado = esq; break }
+          if (rol === 'encargado') { matchEncargado = esq; esquemaHoraFin = esq.hora_fin ?? null; break }
 
           if (!rol) {
             const { data: persistente } = await supabaseAdmin()
@@ -93,7 +95,7 @@ export async function POST(req: NextRequest) {
               .eq('esquema_id', esq.id)
               .eq('usuario_id', user.id)
               .maybeSingle()
-            if (persistente?.rol_turno === 'encargado') { matchEncargado = esq; break }
+            if (persistente?.rol_turno === 'encargado') { matchEncargado = esq; esquemaHoraFin = esq.hora_fin ?? null; break }
           }
         }
 
@@ -163,6 +165,7 @@ export async function POST(req: NextRequest) {
       tecnico_nombre,
       tecnico_dni,
       horario_inicio: horarioApertura,
+      horario_fin:   esquemaHoraFin,
       cliente_id:  cliente_id  ?? null,
       esquema_id:  esquema_id  ?? null,
       interino:    interino    ?? false,
