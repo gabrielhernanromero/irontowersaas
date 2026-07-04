@@ -31,6 +31,7 @@ interface PendingConfirm {
   codigoQr:    string
   fotoFile:    File | null
   fotoPreview: string | null
+  observacion: string
 }
 
 export default function RondaActivaClient({ ronda, puntos }: Props) {
@@ -141,7 +142,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
       if (wrongQrTimer.current) { clearTimeout(wrongQrTimer.current); wrongQrTimer.current = null }
 
       const puntoNombre = puntoEsperado?.nombre ?? 'Punto de control'
-      setPendingConfirm({ puntoId, puntoNombre, codigoQr, fotoFile: null, fotoPreview: null })
+      setPendingConfirm({ puntoId, puntoNombre, codigoQr, fotoFile: null, fotoPreview: null, observacion: '' })
     }, 300)
   }
 
@@ -185,7 +186,7 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
 
   async function confirmarScan() {
     if (!pendingConfirm) return
-    const { puntoId, codigoQr, fotoFile } = pendingConfirm
+    const { puntoId, codigoQr, fotoFile, observacion } = pendingConfirm
 
     let foto_url: string | undefined
     if (fotoFile) {
@@ -202,15 +203,15 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
     if (pendingConfirm.fotoPreview) URL.revokeObjectURL(pendingConfirm.fotoPreview)
     setPendingConfirm(null)
     setScanningId(puntoId)
-    await registrarScan(puntoId, codigoQr, foto_url)
+    await registrarScan(puntoId, codigoQr, foto_url, observacion || undefined)
   }
 
-  async function registrarScan(puntoId: string, codigoQr: string, fotoUrl?: string) {
+  async function registrarScan(puntoId: string, codigoQr: string, fotoUrl?: string, observacion?: string) {
     try {
       const res  = await fetch(`/api/tecnico/ronda/${ronda.id}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ codigo_qr: codigoQr, foto_url: fotoUrl }),
+        body:    JSON.stringify({ codigo_qr: codigoQr, foto_url: fotoUrl, observacion }),
       })
       const json = await res.json()
 
@@ -497,6 +498,16 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
                 Foto del estado del punto (opcional)
               </button>
             )}
+
+            {/* Novedad / observación opcional */}
+            <textarea
+              value={pendingConfirm.observacion}
+              onChange={e => setPendingConfirm(prev => prev ? { ...prev, observacion: e.target.value } : null)}
+              placeholder="Novedad o observación (opcional)"
+              maxLength={500}
+              rows={3}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-brand-ink placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-orange/40 mb-4"
+            />
 
             <button
               type="button"

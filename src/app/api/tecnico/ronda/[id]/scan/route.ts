@@ -4,10 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
 const ScanSchema = z.object({
-  codigo_qr: z.string().min(1),
-  foto_url:  z.string().url().optional(),
-  latitud:   z.number().optional(),
-  longitud:  z.number().optional(),
+  codigo_qr:   z.string().min(1),
+  foto_url:    z.string().url().optional(),
+  latitud:     z.number().optional(),
+  longitud:    z.number().optional(),
+  observacion: z.string().max(500).optional(),
 })
 
 export async function POST(
@@ -69,9 +70,10 @@ export async function POST(
     .insert({
       ronda_id:         params.id,
       punto_control_id: punto.id,
-      foto_url:         parsed.data.foto_url ?? null,
-      latitud:          parsed.data.latitud  ?? null,
-      longitud:         parsed.data.longitud ?? null,
+      foto_url:         parsed.data.foto_url    ?? null,
+      latitud:          parsed.data.latitud     ?? null,
+      longitud:         parsed.data.longitud    ?? null,
+      observacion:      parsed.data.observacion ?? null,
       orden_real:       nuevosEscaneados,
     })
     .select('id, punto_control_id, escaneado_at')
