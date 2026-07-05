@@ -159,6 +159,7 @@ export async function PATCH(req: NextRequest) {
   // Detectar el esquema activo para el usuario entrante, para que el nuevo turno
   // quede vinculado al esquema correcto y el cierre detecte el relevo siguiente.
   let esquemaIdNuevoTurno: string | null = null
+  let esquemaHoraFinNuevoTurno: string | null = null
   if (perfilUser?.cliente_id) {
     const { data: esqRaw } = await supabaseAdmin()
       .from('esquemas_cobertura')
@@ -173,19 +174,27 @@ export async function PATCH(req: NextRequest) {
         .from('asignaciones_turno').select('rol_turno')
         .eq('esquema_id', eId).eq('usuario_id', user.id)
         .in('fecha', [hoyEsq, ayerEsq]).maybeSingle()
-      if (eExc?.rol_turno === 'encargado') { esquemaIdNuevoTurno = eId; break }
+      if (eExc?.rol_turno === 'encargado') {
+        esquemaIdNuevoTurno = eId
+        esquemaHoraFinNuevoTurno = (esq as EsquemaVentana & { id: string }).hora_fin ?? null
+        break
+      }
       if (!eExc) {
         const { data: ePers } = await supabaseAdmin()
           .from('asignaciones_persistentes').select('rol_turno')
           .eq('esquema_id', eId).eq('usuario_id', user.id).maybeSingle()
-        if (ePers?.rol_turno === 'encargado') { esquemaIdNuevoTurno = eId; break }
+        if (ePers?.rol_turno === 'encargado') {
+          esquemaIdNuevoTurno = eId
+          esquemaHoraFinNuevoTurno = (esq as EsquemaVentana & { id: string }).hora_fin ?? null
+          break
+        }
       }
     }
   }
 
   const { data: nuevoTurno, error: insertErr } = await supabaseAdmin()
     .from('libro_turno')
-    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null, esquema_id: esquemaIdNuevoTurno })
+    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, horario_fin: esquemaHoraFinNuevoTurno, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null, esquema_id: esquemaIdNuevoTurno })
     .select()
     .single()
 

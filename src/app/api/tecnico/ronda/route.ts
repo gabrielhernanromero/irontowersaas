@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   // Verificar turno activo
   const { data: turno } = await supabaseAdmin()
     .from('libro_turno')
-    .select('id, estado, tecnico_id')
+    .select('id, estado, tecnico_id, horario_inicio, horario_fin, clientes!cliente_id(frecuencia_ronda_minutos)')
     .eq('id', turno_id)
     .single()
 
@@ -63,6 +63,31 @@ export async function POST(req: NextRequest) {
       .eq('usuario_id', user.id)
       .maybeSingle()
     if (!participacion) return NextResponse.json({ error: 'Sin permisos para este turno' }, { status: 403 })
+  }
+
+  // Validar que no se superó el límite de rondas del turno
+  {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const frecuenciaMin = (turno as any).clientes?.frecuencia_ronda_minutos ?? 0
+    if (frecuenciaMin > 0 && turno.horario_inicio && turno.horario_fin) {
+      const [hi, mi] = (turno.horario_inicio as string).split(':').map(Number)
+      const [hf, mf] = (turno.horario_fin   as string).split(':').map(Number)
+      let start = hi * 60 + mi
+      let end   = hf * 60 + mf
+      if (end <= start) end += 24 * 60
+      const duracionMin = end - start
+      const totalRondas = Math.floor(duracionMin / frecuenciaMin)
+      const { count: rondasExistentes } = await supabaseAdmin()
+        .from('rondas')
+        .select('id', { count: 'exact', head: true })
+        .eq('turno_id', turno_id)
+      if (totalRondas > 0 && (rondasExistentes ?? 0) >= totalRondas) {
+        return NextResponse.json(
+          { error: `Ya completaste las ${totalRondas} rondas programadas para este turno.` },
+          { status: 409 }
+        )
+      }
+    }
   }
 
   // Prevenir dos rondas simultáneas en el mismo turno

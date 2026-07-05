@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   QrCode, Play, MapPin, CheckCircle2, Loader2,
-  AlertCircle, ShieldOff, Clock, ChevronDown, ChevronUp, Route,
+  AlertCircle, ShieldOff, Clock, ChevronDown, ChevronUp, Route, Trophy,
 } from 'lucide-react'
 
 interface Turno {
@@ -265,6 +265,48 @@ export default function RondaIniciarClient({
   const totalRondas      = frecuenciaMin > 0 ? Math.floor(duracionTurnoMin / frecuenciaMin) : 0
   const rondasHechas     = rondasDelTurno.filter(r => r.completa).length
   const proximaRondaNum  = rondasHechas + 1
+  const rondasCompletas  = totalRondas > 0 && rondasHechas >= totalRondas
+
+  // ── Todas las rondas del turno completadas ─────────────────────────────────
+  if (rondasCompletas) {
+    return (
+      <div className="space-y-4">
+        <Header empresa={turno.clientes?.nombre_empresa} />
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 flex flex-col items-center text-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+            <Trophy size={30} className="text-emerald-600" />
+          </div>
+          <div>
+            <p className="font-bold text-emerald-800 text-lg">Rondas del turno completas</p>
+            <p className="text-sm text-emerald-700 mt-1 leading-relaxed">
+              Completaste las {totalRondas} ronda{totalRondas !== 1 ? 's' : ''} programadas para este turno.
+            </p>
+          </div>
+        </div>
+        {/* Programa igual para ver el historial */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {totalRondas} rondas — {rondasHechas}/{totalRondas} completadas
+            </p>
+          </div>
+          <div className="divide-y divide-gray-50 px-4 pb-2">
+            {rondasDelTurno.map(r => (
+              <div key={r.id} className="flex items-center gap-3 py-2.5">
+                <CheckCircle2 size={18} className={r.completa ? 'text-teal-500 shrink-0' : 'text-gray-200 shrink-0'} />
+                <span className="text-sm text-gray-500">Ronda #{r.numero_ronda}</span>
+                {r.completa && r.hora_fin && (
+                  <span className="ml-auto text-xs text-teal-600 font-medium">
+                    {formatDuracion(calcularDuracionMin(r.hora_inicio, r.hora_fin))}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
