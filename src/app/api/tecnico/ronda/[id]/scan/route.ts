@@ -5,12 +5,19 @@ import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 import { getArgTime } from '@/lib/cobertura/timeUtils'
 import { z } from 'zod'
 
+const IncidenciaAccionSchema = z.object({
+  incidencia_id: z.string().uuid(),
+  accion:        z.enum(['sigue', 'cambio', 'resuelto']),
+  comentario:    z.string().max(500).optional(),
+})
+
 const ScanSchema = z.object({
-  codigo_qr:   z.string().min(1),
-  foto_url:    z.string().url().optional(),
-  latitud:     z.number().optional(),
-  longitud:    z.number().optional(),
-  observacion: z.string().max(500).optional(),
+  codigo_qr:            z.string().min(1),
+  foto_url:             z.string().url().optional(),
+  latitud:              z.number().optional(),
+  longitud:             z.number().optional(),
+  observacion:          z.string().max(500).optional(),
+  incidencias_acciones: z.array(IncidenciaAccionSchema).optional(),
 })
 
 export async function POST(
@@ -93,7 +100,45 @@ export async function POST(
     })
     .eq('id', params.id)
 
-  // Si hay observación → crear novedad en libro de guardia + alertar supervisores
+  // Procesar acciones sobre incidencias existentes del punto
+  const incidenciasAcciones = parsed.data.incidencias_acciones ?? []
+  if (incidenciasAcciones.length > 0 && ronda.turno_id) {
+    const { hours, minutes } = getArgTime()
+    const horaAR = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+
+    for (const ia of incidenciasAcciones) {
+      if (ia.accion === 'sigue') continue
+
+      if (ia.accion === 'resuelto') {
+        await supabaseAdmin()
+          .from('incidencias')
+          .update({ estado: 'cerrado' })
+          .eq('id', ia.incidencia_id)
+      } else if (ia.accion === 'cambio') {
+        await supabaseAdmin()
+          .from('incidencias')
+          .update({ estado: 'en_seguimiento' })
+          .eq('id', ia.incidencia_id)
+      }
+
+      if (ia.comentario?.trim()) {
+        await supabaseAdmin()
+          .from('libro_novedad')
+          .insert({
+            turno_id:      ronda.turno_id,
+            tecnico_id:    user.id,
+            tipo:          'novedad',
+            hora:          horaAR,
+            incidencia_id: ia.incidencia_id,
+            descripcion:   ia.accion === 'resuelto'
+              ? `Ronda #${ronda.numero_ronda} · ${punto.nombre}: incidencia resuelta — ${ia.comentario}`
+              : `Ronda #${ronda.numero_ronda} · ${punto.nombre}: ${ia.comentario}`,
+          })
+      }
+    }
+  }
+
+  // Si hay observación nueva → crear incidencia + novedad en libro de guardia + alertar
   const observacion = parsed.data.observacion?.trim()
   if (observacion && ronda.turno_id) {
     const { hours, minutes } = getArgTime()

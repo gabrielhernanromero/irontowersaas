@@ -27,6 +27,11 @@ interface IncidenciaPunto {
   severidad: string | null
 }
 
+interface AccionIncidencia {
+  accion: 'sigue' | 'cambio' | 'resuelto'
+  comentario: string
+}
+
 interface Props {
   ronda:               Ronda
   puntos:              Punto[]
@@ -55,6 +60,7 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto }
   const [liveScanning,   setLiveScanning]   = useState(false)
   const [camError,       setCamError]       = useState<string | null>(null)
   const [wrongQr,        setWrongQr]        = useState(false)
+  const [incAcciones,    setIncAcciones]    = useState<Record<string, AccionIncidencia>>({})
   const wrongQrTimer                        = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const videoRef       = useRef<HTMLVideoElement>(null)
@@ -190,6 +196,7 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto }
   function cancelarConfirm() {
     if (pendingConfirm?.fotoPreview) URL.revokeObjectURL(pendingConfirm.fotoPreview)
     setPendingConfirm(null)
+    setIncAcciones({})
   }
 
   async function confirmarScan() {
@@ -208,18 +215,34 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto }
       setUploadingFoto(false)
     }
 
+    const accionesArray = Object.entries(incAcciones).map(([incidencia_id, { accion, comentario }]) => ({
+      incidencia_id, accion, comentario: comentario.trim() || undefined,
+    }))
+
     if (pendingConfirm.fotoPreview) URL.revokeObjectURL(pendingConfirm.fotoPreview)
     setPendingConfirm(null)
+    setIncAcciones({})
     setScanningId(puntoId)
-    await registrarScan(puntoId, codigoQr, foto_url, observacion || undefined)
+    await registrarScan(puntoId, codigoQr, foto_url, observacion || undefined, accionesArray)
   }
 
-  async function registrarScan(puntoId: string, codigoQr: string, fotoUrl?: string, observacion?: string) {
+  async function registrarScan(
+    puntoId: string,
+    codigoQr: string,
+    fotoUrl?: string,
+    observacion?: string,
+    accionesIncidencias?: { incidencia_id: string; accion: 'sigue' | 'cambio' | 'resuelto'; comentario?: string }[],
+  ) {
     try {
       const res  = await fetch(`/api/tecnico/ronda/${ronda.id}/scan`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ codigo_qr: codigoQr, foto_url: fotoUrl, observacion }),
+        body:    JSON.stringify({
+          codigo_qr: codigoQr,
+          foto_url:  fotoUrl,
+          observacion,
+          incidencias_acciones: accionesIncidencias?.length ? accionesIncidencias : undefined,
+        }),
       })
       const json = await res.json()
 
@@ -462,95 +485,155 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto }
       )}
 
       {/* Sheet confirmación de scan con foto opcional */}
-      {pendingConfirm && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-[60]" onClick={cancelarConfirm} />
-          <div className="fixed bottom-0 left-0 right-0 md:left-56 z-[70] bg-white rounded-t-2xl shadow-xl p-5 pb-8">
-            <div className="flex justify-center mb-4">
-              <div className="w-10 h-1 bg-gray-200 rounded-full" />
-            </div>
-
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle size={18} className="text-emerald-500 shrink-0" />
-              <p className="font-bold text-brand-ink">QR detectado</p>
-            </div>
-            <p className="text-sm text-gray-500 mb-3 pl-6">{pendingConfirm.puntoNombre}</p>
-
-            {/* Banner incidencias abiertas en este punto */}
-            {(incidenciasPorPunto[pendingConfirm.puntoId] ?? []).map(inc => (
-              <div key={inc.id} className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 mb-3">
-                <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-red-700">Incidencia abierta en este punto</p>
-                  <p className="text-xs text-red-600 mt-0.5">{inc.titulo}</p>
-                  <p className="text-xs text-red-500 mt-0.5 line-clamp-2">{inc.descripcion}</p>
-                </div>
+      {pendingConfirm && (() => {
+        const incidenciasEnPunto = incidenciasPorPunto[pendingConfirm.puntoId] ?? []
+        const puedeConfirmar = !uploadingFoto && incidenciasEnPunto.every(inc => {
+          const a = incAcciones[inc.id]
+          if (!a) return false
+          if (a.accion === 'sigue') return true
+          return a.comentario.trim().length > 0
+        })
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/40 z-[60]" onClick={cancelarConfirm} />
+            <div className="fixed bottom-0 left-0 right-0 md:left-56 z-[70] bg-white rounded-t-2xl shadow-xl p-5 pb-8 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-center mb-4">
+                <div className="w-10 h-1 bg-gray-200 rounded-full" />
               </div>
-            ))}
 
-            {/* Foto opcional */}
-            {pendingConfirm.fotoPreview ? (
-              <div className="relative mb-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={pendingConfirm.fotoPreview}
-                  alt="Foto del punto"
-                  className="w-full h-44 object-cover rounded-xl border border-gray-200"
-                />
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle size={18} className="text-emerald-500 shrink-0" />
+                <p className="font-bold text-brand-ink">QR detectado</p>
+              </div>
+              <p className="text-sm text-gray-500 mb-3 pl-6">{pendingConfirm.puntoNombre}</p>
+
+              {/* Incidencias abiertas — acción obligatoria */}
+              {incidenciasEnPunto.map(inc => {
+                const acc = incAcciones[inc.id]
+                return (
+                  <div key={inc.id} className={`rounded-xl border p-4 mb-3 transition-colors ${
+                    acc?.accion === 'resuelto' ? 'bg-emerald-50 border-emerald-200'
+                    : acc?.accion === 'cambio' ? 'bg-amber-50 border-amber-200'
+                    : 'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-start gap-2 mb-3">
+                      <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${
+                        acc?.accion === 'resuelto' ? 'text-emerald-500'
+                        : acc?.accion === 'cambio' ? 'text-amber-500'
+                        : 'text-red-500'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-red-700 mb-0.5">Incidencia abierta</p>
+                        <p className="text-sm font-semibold text-brand-ink">{inc.titulo}</p>
+                        <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{inc.descripcion}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['sigue', 'cambio', 'resuelto'] as const).map(op => (
+                        <button
+                          key={op}
+                          type="button"
+                          onClick={() => setIncAcciones(prev => ({
+                            ...prev,
+                            [inc.id]: { accion: op, comentario: prev[inc.id]?.comentario ?? '' },
+                          }))}
+                          className={`py-2.5 rounded-lg text-xs font-bold border transition-colors min-h-[44px] ${
+                            acc?.accion === op
+                              ? op === 'sigue'   ? 'bg-gray-700 text-white border-gray-700'
+                              : op === 'cambio'  ? 'bg-amber-500 text-white border-amber-500'
+                              :                    'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-white text-gray-600 border-gray-200 active:bg-gray-50'
+                          }`}
+                        >
+                          {op === 'sigue' ? 'Sigue igual' : op === 'cambio' ? 'Cambió algo' : 'Resuelta'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {(acc?.accion === 'cambio' || acc?.accion === 'resuelto') && (
+                      <textarea
+                        value={acc.comentario}
+                        onChange={e => setIncAcciones(prev => ({
+                          ...prev,
+                          [inc.id]: { ...prev[inc.id], comentario: e.target.value },
+                        }))}
+                        placeholder={acc.accion === 'cambio' ? 'Describí qué cambió...' : '¿Cómo se resolvió?'}
+                        maxLength={500}
+                        rows={2}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-brand-ink placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-orange/40 mt-2"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Foto opcional */}
+              {pendingConfirm.fotoPreview ? (
+                <div className="relative mb-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={pendingConfirm.fotoPreview}
+                    alt="Foto del punto"
+                    className="w-full h-44 object-cover rounded-xl border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPendingConfirm(prev => prev
+                      ? { ...prev, fotoFile: null, fotoPreview: null }
+                      : null
+                    )}
+                    className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => setPendingConfirm(prev => prev
-                    ? { ...prev, fotoFile: null, fotoPreview: null }
-                    : null
-                  )}
-                  className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  onClick={() => fotoInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl py-3 text-gray-500 text-sm mb-4 min-h-[52px] active:bg-gray-50"
                 >
-                  <X size={14} />
+                  <Camera size={18} />
+                  Foto del estado del punto (opcional)
                 </button>
-              </div>
-            ) : (
+              )}
+
+              {/* Novedad adicional (para reportar algo nuevo, sin incidencia previa) */}
+              <textarea
+                value={pendingConfirm.observacion}
+                onChange={e => setPendingConfirm(prev => prev ? { ...prev, observacion: e.target.value } : null)}
+                placeholder={incidenciasEnPunto.length ? 'Nueva novedad sobre este punto (opcional)' : 'Novedad o observación (opcional)'}
+                maxLength={500}
+                rows={2}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-brand-ink placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-orange/40 mb-4"
+              />
+
               <button
                 type="button"
-                onClick={() => fotoInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl py-3 text-gray-500 text-sm mb-4 min-h-[52px] active:bg-gray-50"
+                onClick={confirmarScan}
+                disabled={!puedeConfirmar}
+                className="w-full flex items-center justify-center gap-2 bg-brand-orange text-white font-bold py-4 rounded-xl min-h-[52px] disabled:opacity-60"
               >
-                <Camera size={18} />
-                Foto del estado del punto (opcional)
+                {uploadingFoto
+                  ? <><Loader2 size={18} className="animate-spin" /> Subiendo foto...</>
+                  : incidenciasEnPunto.length > 0 && !incidenciasEnPunto.every(i => incAcciones[i.id])
+                    ? 'Indicá el estado de cada incidencia'
+                    : 'Confirmar scan'
+                }
               </button>
-            )}
 
-            {/* Novedad / observación opcional */}
-            <textarea
-              value={pendingConfirm.observacion}
-              onChange={e => setPendingConfirm(prev => prev ? { ...prev, observacion: e.target.value } : null)}
-              placeholder="Novedad o observación (opcional)"
-              maxLength={500}
-              rows={3}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-brand-ink placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-orange/40 mb-4"
-            />
-
-            <button
-              type="button"
-              onClick={confirmarScan}
-              disabled={uploadingFoto}
-              className="w-full flex items-center justify-center gap-2 bg-brand-orange text-white font-bold py-4 rounded-xl min-h-[52px] disabled:opacity-60"
-            >
-              {uploadingFoto
-                ? <><Loader2 size={18} className="animate-spin" /> Subiendo foto...</>
-                : 'Confirmar scan'
-              }
-            </button>
-
-            <button
-              type="button"
-              onClick={cancelarConfirm}
-              className="w-full text-gray-400 text-sm py-3 mt-1 min-h-[44px]"
-            >
-              Cancelar
-            </button>
-          </div>
-        </>
-      )}
+              <button
+                type="button"
+                onClick={cancelarConfirm}
+                className="w-full text-gray-400 text-sm py-3 mt-1 min-h-[44px]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
