@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 import { z } from 'zod'
 
 const ScanSchema = z.object({
@@ -91,7 +92,32 @@ export async function POST(
     })
     .eq('id', params.id)
 
-  // La novedad se crea automáticamente via trigger fn_novedad_ronda_completada
+  // Si hay observación → crear novedad en libro de guardia + alertar supervisores
+  const observacion = parsed.data.observacion?.trim()
+  if (observacion && ronda.turno_id) {
+    const horaAR = new Date().toLocaleTimeString('es-AR', {
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Argentina/Buenos_Aires',
+    })
+
+    await supabaseAdmin()
+      .from('libro_novedad')
+      .insert({
+        turno_id:   ronda.turno_id,
+        tecnico_id: user.id,
+        tipo:       'novedad',
+        hora:       horaAR,
+        descripcion: `Ronda #${ronda.numero_ronda} · ${punto.nombre}: ${observacion}`,
+      })
+
+    await alertarSupervisores(
+      'novedad_scan',
+      `Novedad en Ronda #${ronda.numero_ronda} · ${punto.nombre}: ${observacion}`,
+      { turnoId: ronda.turno_id },
+    ).catch(() => {})
+  }
+
+  // La novedad de ronda completada se crea automáticamente via trigger fn_novedad_ronda_completada
 
   return NextResponse.json({
     ok:            true,
