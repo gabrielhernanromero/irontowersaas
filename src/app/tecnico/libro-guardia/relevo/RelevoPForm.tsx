@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import {
   Lock, UserCheck, XCircle, CheckCircle2, ChevronDown,
   X, Clock, AlertTriangle, TriangleAlert, ClipboardList, Eye,
-  CheckCircle, Users,
+  CheckCircle, Users, MapPin,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 const FirmaCanvas = dynamic(() => import('@/components/signature/FirmaCanvas'), {
@@ -113,6 +113,10 @@ export default function RelevoPForm({
   const [presencia, setPresencia] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(personalApoyo.map(p => [p.usuario_id, true]))
   )
+  const [conocidas, setConocidas] = useState<Set<string>>(new Set())
+
+  const incidenciasRonda    = incidenciasActivas.filter(i => i.punto_control_id)
+  const incidenciasGenerales = incidenciasActivas.filter(i => !i.elemento_afectado_id && !i.punto_control_id)
   const novedadesRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<RelevoPInput>({
@@ -181,6 +185,7 @@ export default function RelevoPForm({
                 presente:   presencia[p.usuario_id] ?? true,
               }))
             : undefined,
+          incidencias_conocidas: conocidas.size > 0 ? Array.from(conocidas) : undefined,
         }),
       })
       const json = await res.json()
@@ -231,8 +236,8 @@ export default function RelevoPForm({
           </div>
         </div>
 
-        {/* Incidencias activas del puesto — las ligadas a un elemento se muestran en el checklist de inventario */}
-        <IncidenciasActivas incidencias={incidenciasActivas.filter((i) => !i.elemento_afectado_id)} />
+        {/* Incidencias activas del puesto — las de elemento en el checklist, las de ronda abajo */}
+        <IncidenciasActivas incidencias={incidenciasGenerales} />
 
         {/* Control de inventario del puesto */}
         {elementos.length > 0 && (
@@ -240,6 +245,56 @@ export default function RelevoPForm({
             elementos={elementos}
             onChange={setInventarioControles}
           />
+        )}
+
+        {/* Incidencias de rondas — requieren "tomar conocimiento" */}
+        {incidenciasRonda.length > 0 && (
+          <div className="rounded-xl border-2 border-orange-300 bg-orange-50 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-orange-500 shrink-0" />
+              <p className="text-sm font-bold text-orange-800">
+                {incidenciasRonda.length === 1
+                  ? '1 incidencia de ronda pendiente'
+                  : `${incidenciasRonda.length} incidencias de ronda pendientes`}
+              </p>
+            </div>
+            {incidenciasRonda.map(inc => {
+              const punto = (inc as any).puntos_control
+              const tomada = conocidas.has(inc.id)
+              return (
+                <div key={inc.id} className={`bg-white rounded-xl border p-4 flex flex-col gap-2 transition-colors ${tomada ? 'border-emerald-300 bg-emerald-50' : 'border-orange-200'}`}>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={14} className={`shrink-0 mt-0.5 ${tomada ? 'text-emerald-500' : 'text-orange-500'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-brand-ink">{inc.titulo}</p>
+                      {punto?.nombre && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          <MapPin size={10} className="inline mr-0.5" />
+                          {punto.nombre}{punto.ubicacion ? ` · ${punto.ubicacion}` : ''}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-700 mt-1">{inc.descripcion}</p>
+                    </div>
+                  </div>
+                  {tomada ? (
+                    <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold">
+                      <CheckCircle size={14} />
+                      Tomaste conocimiento de esta incidencia
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConocidas(prev => new Set(Array.from(prev).concat(inc.id)))}
+                      className="w-full flex items-center justify-center gap-2 bg-orange-500 text-white font-bold py-3 rounded-lg text-sm min-h-[48px] active:bg-orange-600"
+                    >
+                      <CheckCircle size={16} />
+                      Sí, tomé conocimiento
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
 
         {/* Lista de novedades — scrollable */}

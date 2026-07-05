@@ -71,6 +71,8 @@ export const RelevoPSchema = z.object({
   turno: z.enum(['diurno', 'nocturno']),
   // Personal de apoyo del turno entrante
   personal_apoyo: z.array(PersonalApoyoSchema).optional(),
+  // IDs de incidencias de ronda que el entrante tomó conocimiento
+  incidencias_conocidas: z.array(z.string().uuid()).optional(),
 })
 
 // ── Relevo por Especificación Técnica (PIN auth + SHA-256 + firmas-relevos) ──

@@ -186,8 +186,8 @@ export default async function RelevoPPage({ searchParams }: Props) {
 
   // Incidencias activas en el puesto (de cualquier turno anterior)
   const incidenciasQuery = turno.cliente_id
-    ? supabaseAdmin().from('incidencias').select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni)').eq('cliente_id', turno.cliente_id).eq('estado', 'abierto').order('created_at', { ascending: true })
-    : supabaseAdmin().from('incidencias').select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni)').is('cliente_id', null).eq('estado', 'abierto').order('created_at', { ascending: true })
+    ? supabaseAdmin().from('incidencias').select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni), puntos_control!punto_control_id(id, nombre, ubicacion)').eq('cliente_id', turno.cliente_id).eq('estado', 'abierto').order('created_at', { ascending: true })
+    : supabaseAdmin().from('incidencias').select('*, libro_turno!turno_creacion_id(tecnico_nombre, tecnico_dni), puntos_control!punto_control_id(id, nombre, ubicacion)').is('cliente_id', null).eq('estado', 'abierto').order('created_at', { ascending: true })
   const { data: incidenciasData } = await incidenciasQuery
   const incidenciasActivas = (incidenciasData ?? []) as Incidencia[]
 

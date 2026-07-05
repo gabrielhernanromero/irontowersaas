@@ -109,6 +109,19 @@ export async function POST(
         descripcion: `Ronda #${ronda.numero_ronda} · ${punto.nombre}: ${observacion}`,
       })
 
+    await supabaseAdmin()
+      .from('incidencias')
+      .insert({
+        cliente_id:          ronda.cliente_id,
+        turno_creacion_id:   ronda.turno_id,
+        punto_control_id:    punto.id,
+        tecnico_detector_id: user.id,
+        titulo:              `Ronda #${ronda.numero_ronda} · ${punto.nombre}`,
+        descripcion:         observacion,
+        severidad:           'medio',
+        estado:              'abierto',
+      })
+
     await alertarSupervisores(
       'novedad_scan',
       `Novedad en Ronda #${ronda.numero_ronda} · ${punto.nombre}: ${observacion}`,

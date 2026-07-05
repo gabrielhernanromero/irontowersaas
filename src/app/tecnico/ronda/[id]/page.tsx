@@ -32,11 +32,29 @@ export default async function RondaActivaPage({ params }: { params: { id: string
     .eq('activo', true)
     .order('orden', { ascending: true })
 
+  // Incidencias abiertas por punto de control (para banner en scan)
+  const puntosIds = (puntos ?? []).map(p => p.id)
+  const { data: incidenciasAbiertas } = puntosIds.length
+    ? await supabaseAdmin()
+        .from('incidencias')
+        .select('id, punto_control_id, titulo, descripcion, severidad')
+        .in('punto_control_id', puntosIds)
+        .eq('estado', 'abierto')
+    : { data: [] }
+
+  const incidenciasPorPunto: Record<string, { id: string; titulo: string; descripcion: string; severidad: string | null }[]> = {}
+  for (const inc of incidenciasAbiertas ?? []) {
+    if (!inc.punto_control_id) continue
+    if (!incidenciasPorPunto[inc.punto_control_id]) incidenciasPorPunto[inc.punto_control_id] = []
+    incidenciasPorPunto[inc.punto_control_id].push(inc)
+  }
+
   return (
     <RondaActivaClient
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ronda={ronda as any}
       puntos={(puntos ?? []) as { id: string; nombre: string; ubicacion: string | null; orden: number; codigo_qr: string }[]}
+      incidenciasPorPunto={incidenciasPorPunto}
     />
   )
 }

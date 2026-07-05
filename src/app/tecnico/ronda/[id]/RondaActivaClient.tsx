@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, Circle, MapPin, Loader2, Trophy, Flag, QrCode, AlertCircle, Camera, X } from 'lucide-react'
+import { CheckCircle, Circle, MapPin, Loader2, Trophy, Flag, QrCode, AlertCircle, Camera, X, AlertTriangle } from 'lucide-react'
 import jsQR from 'jsqr'
 
 interface Scan  { id: string; punto_control_id: string }
@@ -20,9 +20,17 @@ interface Ronda {
   ronda_scans: Scan[]
 }
 
+interface IncidenciaPunto {
+  id: string
+  titulo: string
+  descripcion: string
+  severidad: string | null
+}
+
 interface Props {
-  ronda:  Ronda
-  puntos: Punto[]
+  ronda:               Ronda
+  puntos:              Punto[]
+  incidenciasPorPunto: Record<string, IncidenciaPunto[]>
 }
 
 interface PendingConfirm {
@@ -34,7 +42,7 @@ interface PendingConfirm {
   observacion: string
 }
 
-export default function RondaActivaClient({ ronda, puntos }: Props) {
+export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto }: Props) {
   const router = useRouter()
   const [scans,          setScans]          = useState<Scan[]>(ronda.ronda_scans)
   const [escaneados,     setEscaneados]     = useState(ronda.puntos_escaneados)
@@ -466,7 +474,19 @@ export default function RondaActivaClient({ ronda, puntos }: Props) {
               <CheckCircle size={18} className="text-emerald-500 shrink-0" />
               <p className="font-bold text-brand-ink">QR detectado</p>
             </div>
-            <p className="text-sm text-gray-500 mb-5 pl-6">{pendingConfirm.puntoNombre}</p>
+            <p className="text-sm text-gray-500 mb-3 pl-6">{pendingConfirm.puntoNombre}</p>
+
+            {/* Banner incidencias abiertas en este punto */}
+            {(incidenciasPorPunto[pendingConfirm.puntoId] ?? []).map(inc => (
+              <div key={inc.id} className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 mb-3">
+                <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-red-700">Incidencia abierta en este punto</p>
+                  <p className="text-xs text-red-600 mt-0.5">{inc.titulo}</p>
+                  <p className="text-xs text-red-500 mt-0.5 line-clamp-2">{inc.descripcion}</p>
+                </div>
+              </div>
+            ))}
 
             {/* Foto opcional */}
             {pendingConfirm.fotoPreview ? (

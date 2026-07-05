@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno, personal_apoyo } = parsed.data
+  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno, personal_apoyo, incidencias_conocidas } = parsed.data
 
   const { data: turnoSaliente } = await supabaseAdmin()
     .from('libro_turno')
@@ -225,6 +225,24 @@ export async function PATCH(req: NextRequest) {
       hora: horario_inicio,
       descripcion: descripcionApertura,
     })
+
+  // Registrar seguimientos de "tomar conocimiento" para incidencias de ronda
+  if (incidencias_conocidas?.length) {
+    const { hours, minutes } = getArgTime()
+    const horaConocimiento = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+    await supabaseAdmin()
+      .from('libro_novedad')
+      .insert(
+        incidencias_conocidas.map(incidenciaId => ({
+          turno_id:     nuevoTurno.id,
+          tecnico_id:   user.id,
+          incidencia_id: incidenciaId,
+          tipo:         'novedad' as const,
+          hora:         horaConocimiento,
+          descripcion:  `Seguimiento: Tomado en conocimiento por ${relevo_nombre} en el relevo`,
+        }))
+      )
+  }
 
   return NextResponse.json(nuevoTurno, { status: 201 })
 }

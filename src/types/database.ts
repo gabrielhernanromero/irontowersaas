@@ -121,6 +121,7 @@ export interface Incidencia {
   estado: 'abierto' | 'resuelto'
   foto_url: string | null
   elemento_afectado_id: string | null
+  punto_control_id: string | null
   tecnico_detector_id: string | null
   tecnico_imputado_id: string | null
   turno_imputado_id: string | null
