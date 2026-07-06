@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
 
   const params    = req.nextUrl.searchParams
   const clienteId = params.get('cliente_id')
+  const turnoId   = params.get('turno_id')
   const desde     = params.get('desde')
   const hasta     = params.get('hasta')
 
@@ -23,8 +24,9 @@ export async function GET(req: NextRequest) {
         puntos_control(id, nombre, ubicacion)
       )
     `)
-    .order('hora_inicio', { ascending: false })
+    .order('hora_inicio', { ascending: true })
 
+  if (turnoId)   query = query.eq('turno_id', turnoId)
   if (clienteId) query = query.eq('cliente_id', clienteId)
   if (desde)     query = query.gte('hora_inicio', desde)
   if (hasta)     query = query.lte('hora_inicio', hasta)
