@@ -13,7 +13,7 @@ const IncidenciaAccionSchema = z.object({
 
 const ScanSchema = z.object({
   codigo_qr:            z.string().min(1),
-  foto_url:             z.string().url().optional(),
+  foto_url:             z.string().min(1).optional(),
   latitud:              z.number().optional(),
   longitud:             z.number().optional(),
   observacion:          z.string().max(500).optional(),
