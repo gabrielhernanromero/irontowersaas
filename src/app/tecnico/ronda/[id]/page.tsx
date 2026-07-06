@@ -32,21 +32,45 @@ export default async function RondaActivaPage({ params }: { params: { id: string
     .eq('activo', true)
     .order('orden', { ascending: true })
 
-  // Incidencias abiertas por punto de control (para banner en scan)
+  // Incidencias activas (abiertas o en seguimiento) por punto de control
   const puntosIds = (puntos ?? []).map(p => p.id)
   const { data: incidenciasAbiertas } = puntosIds.length
     ? await supabaseAdmin()
         .from('incidencias')
-        .select('id, punto_control_id, titulo, descripcion, severidad')
+        .select('id, punto_control_id, titulo, descripcion, severidad, estado, created_at')
         .in('punto_control_id', puntosIds)
-        .eq('estado', 'abierto')
+        .in('estado', ['abierto', 'en_seguimiento'])
     : { data: [] }
 
-  const incidenciasPorPunto: Record<string, { id: string; titulo: string; descripcion: string; severidad: string | null }[]> = {}
+  const incidenciasPorPunto: Record<string, { id: string; titulo: string; descripcion: string; severidad: string | null; estado: string; created_at: string }[]> = {}
   for (const inc of incidenciasAbiertas ?? []) {
     if (!inc.punto_control_id) continue
     if (!incidenciasPorPunto[inc.punto_control_id]) incidenciasPorPunto[inc.punto_control_id] = []
     incidenciasPorPunto[inc.punto_control_id].push(inc)
+  }
+
+  // Historial de seguimientos por incidencia
+  type HistorialEntry = { id: string; descripcion: string; hora: string | null; created_at: string; autor: string | null }
+  const incidenciasIds = (incidenciasAbiertas ?? []).map(i => i.id)
+  const { data: historialRows } = incidenciasIds.length
+    ? await supabaseAdmin()
+        .from('libro_novedad')
+        .select('id, incidencia_id, descripcion, hora, created_at, users!tecnico_id(nombre, apellido)')
+        .in('incidencia_id', incidenciasIds)
+        .order('created_at', { ascending: true })
+    : { data: [] }
+
+  const historialPorIncidencia: Record<string, HistorialEntry[]> = {}
+  for (const nov of (historialRows ?? []) as any[]) {
+    if (!nov.incidencia_id) continue
+    if (!historialPorIncidencia[nov.incidencia_id]) historialPorIncidencia[nov.incidencia_id] = []
+    historialPorIncidencia[nov.incidencia_id].push({
+      id:          nov.id,
+      descripcion: nov.descripcion ?? '',
+      hora:        nov.hora ?? null,
+      created_at:  nov.created_at,
+      autor:       nov.users ? `${nov.users.nombre ?? ''} ${nov.users.apellido ?? ''}`.trim() : null,
+    })
   }
 
   return (
@@ -55,6 +79,7 @@ export default async function RondaActivaPage({ params }: { params: { id: string
       ronda={ronda as any}
       puntos={(puntos ?? []) as { id: string; nombre: string; ubicacion: string | null; orden: number; codigo_qr: string }[]}
       incidenciasPorPunto={incidenciasPorPunto}
+      historialPorIncidencia={historialPorIncidencia}
     />
   )
 }

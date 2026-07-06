@@ -102,6 +102,7 @@ export async function POST(
 
   // Procesar acciones sobre incidencias existentes del punto
   const incidenciasAcciones = parsed.data.incidencias_acciones ?? []
+  const incidenciasCerradas: string[] = []
   if (incidenciasAcciones.length > 0 && ronda.turno_id) {
     const { hours, minutes } = getArgTime()
     const horaAR = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
@@ -110,10 +111,11 @@ export async function POST(
       if (ia.accion === 'sigue') continue
 
       if (ia.accion === 'resuelto') {
-        await supabaseAdmin()
+        const { error: closeErr } = await supabaseAdmin()
           .from('incidencias')
           .update({ estado: 'cerrado' })
           .eq('id', ia.incidencia_id)
+        if (!closeErr) incidenciasCerradas.push(ia.incidencia_id)
       } else if (ia.accion === 'cambio') {
         await supabaseAdmin()
           .from('incidencias')
@@ -177,11 +179,12 @@ export async function POST(
   // La novedad de ronda completada se crea automáticamente via trigger fn_novedad_ronda_completada
 
   return NextResponse.json({
-    ok:            true,
+    ok:                  true,
     scan,
-    punto:         { id: punto.id, nombre: punto.nombre, ubicacion: punto.ubicacion },
-    escaneados:    nuevosEscaneados,
-    total:         ronda.total_puntos,
-    rondaCompleta: esCompleta,
+    punto:               { id: punto.id, nombre: punto.nombre, ubicacion: punto.ubicacion },
+    escaneados:          nuevosEscaneados,
+    total:               ronda.total_puntos,
+    rondaCompleta:       esCompleta,
+    incidenciasCerradas,
   })
 }
