@@ -37,16 +37,20 @@ export default async function RondaActivaPage({ params }: { params: { id: string
   const { data: incidenciasAbiertas } = puntosIds.length
     ? await supabaseAdmin()
         .from('incidencias')
-        .select('id, punto_control_id, titulo, descripcion, severidad, estado, created_at')
+        .select('id, punto_control_id, titulo, descripcion, severidad, estado, created_at, users!tecnico_detector_id(nombre, apellido)')
         .in('punto_control_id', puntosIds)
         .in('estado', ['abierto', 'en_seguimiento'])
     : { data: [] }
 
-  const incidenciasPorPunto: Record<string, { id: string; titulo: string; descripcion: string; severidad: string | null; estado: string; created_at: string }[]> = {}
-  for (const inc of incidenciasAbiertas ?? []) {
+  const incidenciasPorPunto: Record<string, { id: string; titulo: string; descripcion: string; severidad: string | null; estado: string; created_at: string; detector_nombre: string | null }[]> = {}
+  for (const inc of (incidenciasAbiertas ?? []) as any[]) {
     if (!inc.punto_control_id) continue
     if (!incidenciasPorPunto[inc.punto_control_id]) incidenciasPorPunto[inc.punto_control_id] = []
-    incidenciasPorPunto[inc.punto_control_id].push(inc)
+    const u = inc.users
+    incidenciasPorPunto[inc.punto_control_id].push({
+      ...inc,
+      detector_nombre: u ? `${u.nombre ?? ''} ${u.apellido ?? ''}`.trim() : null,
+    })
   }
 
   // Historial de seguimientos por incidencia

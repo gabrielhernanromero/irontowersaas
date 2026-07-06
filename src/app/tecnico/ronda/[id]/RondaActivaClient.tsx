@@ -30,6 +30,7 @@ interface IncidenciaPunto {
   severidad: string | null
   estado: string
   created_at: string
+  detector_nombre: string | null
 }
 
 interface HistorialEntry {
@@ -525,7 +526,10 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto, 
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-gray-500">Detectada</p>
                             <p className="text-xs text-gray-700">{inc.descripcion}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{formatFechaHist(inc.created_at)}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {formatFechaHist(inc.created_at)}
+                              {inc.detector_nombre ? ` · ${inc.detector_nombre}` : ''}
+                            </p>
                           </div>
                         </div>
                         {/* Seguimientos */}
