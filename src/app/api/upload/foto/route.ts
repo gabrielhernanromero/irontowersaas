@@ -39,5 +39,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al subir la foto' }, { status: 500 })
   }
 
-  return NextResponse.json({ path }, { status: 201 })
+  const { data: { publicUrl } } = supabaseAdmin()
+    .storage.from('fotos')
+    .getPublicUrl(path)
+
+  return NextResponse.json({ path: publicUrl }, { status: 201 })
 }
