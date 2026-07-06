@@ -303,7 +303,7 @@ export default async function LibroGuardiaHubPage({ searchParams }: Props) {
       .select('id, estado, folio_numero')
       .eq('tecnico_id', user.id)
       .in('estado', ['cerrado', 'pendiente_relevo'])
-      .in('fecha', [hoy, ayer])
+      .eq('fecha', hoy)
       .maybeSingle()
     turnoEncargadoCerradoHoy = cerrado ?? null
   }
