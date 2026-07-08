@@ -16,7 +16,7 @@ export default async function RondaActivaPage({ params }: { params: { id: string
       id, numero_ronda, hora_inicio, hora_fin,
       total_puntos, puntos_escaneados, completa, cliente_id,
       clientes(id, nombre_empresa),
-      ronda_scans(id, punto_control_id, escaneado_at)
+      ronda_scans(id, punto_control_id, escaneado_at, foto_url)
     `)
     .eq('id', params.id)
     .eq('tecnico_id', user!.id)

@@ -7,8 +7,9 @@ import {
   AlertCircle, Camera, X, AlertTriangle, ChevronDown,
 } from 'lucide-react'
 import jsQR from 'jsqr'
+import FotoLightbox from '@/components/ui/FotoLightbox'
 
-interface Scan  { id: string; punto_control_id: string }
+interface Scan  { id: string; punto_control_id: string; foto_url?: string | null }
 interface Punto { id: string; nombre: string; ubicacion: string | null; orden: number; codigo_qr: string }
 
 interface Ronda {
@@ -87,8 +88,8 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto, 
   const [incAcciones,     setIncAcciones]    = useState<Record<string, AccionIncidencia>>({})
   // incidencias locales — se actualizan tras cada scan exitoso
   const [incByPunto,      setIncByPunto]     = useState(incidenciasPorPunto)
-  // qué incidencias tienen el historial expandido
   const [expandedHist,    setExpandedHist]   = useState<Set<string>>(new Set())
+  const [lightboxUrl,     setLightboxUrl]    = useState<string | null>(null)
 
   const wrongQrTimer    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const videoRef        = useRef<HTMLVideoElement>(null)
@@ -263,7 +264,7 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto, 
         return
       }
 
-      setScans(prev => [...prev, { id: json.scan.id, punto_control_id: json.scan.punto_control_id ?? puntoId }])
+      setScans(prev => [...prev, { id: json.scan.id, punto_control_id: json.scan.punto_control_id ?? puntoId, foto_url: fotoUrl ?? null }])
       setEscaneados(json.escaneados)
       if (json.rondaCompleta) setCompleta(true)
 
@@ -378,15 +379,16 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto, 
           const escaneado  = escaneadosIds.has(punto.id)
           const procesando = scanningId === punto.id
           const incActivas = (incByPunto[punto.id] ?? []).length
+          const scanFoto   = scans.find(s => s.punto_control_id === punto.id)?.foto_url
 
           return (
             <button
               key={punto.id}
               type="button"
               disabled={escaneado || !!scanningId}
-              onClick={() => handlePuntoClick(punto.id)}
+              onClick={() => escaneado && scanFoto ? setLightboxUrl(scanFoto) : handlePuntoClick(punto.id)}
               className={`w-full flex items-center gap-3 p-4 rounded-2xl border text-left transition-all active:scale-[0.98] ${
-                escaneado  ? 'bg-emerald-50 border-emerald-100 cursor-default'
+                escaneado  ? 'bg-emerald-50 border-emerald-100'
                 : procesando ? 'bg-blue-50 border-blue-200'
                 : 'bg-white border-gray-100 active:bg-gray-50'
               }`}
@@ -418,9 +420,15 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto, 
                   </p>
                 )}
                 {procesando && <p className="text-xs text-brand-blue mt-1">Registrando...</p>}
+                {escaneado && scanFoto && (
+                  <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">
+                    <Camera size={11} /> Tocá para ver foto
+                  </p>
+                )}
               </div>
 
-              {escaneado && <span className="text-xs font-semibold text-emerald-600 shrink-0">✓</span>}
+              {escaneado && !scanFoto && <span className="text-xs font-semibold text-emerald-600 shrink-0">✓</span>}
+              {escaneado && scanFoto  && <Camera size={16} className="text-blue-400 shrink-0" />}
             </button>
           )
         })}
@@ -449,6 +457,11 @@ export default function RondaActivaClient({ ronda, puntos, incidenciasPorPunto, 
             : <><Flag size={22} /> Finalizar ronda</>
           }
         </button>
+      )}
+
+      {/* Lightbox de foto de scan */}
+      {lightboxUrl && (
+        <FotoLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
 
       {/* Sheet confirmación */}
