@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Home, Package, BookOpen, QrCode } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { LogoutButton } from './LogoutButton'
+import CentralBaseLogo from '@/components/ui/CentralBaseLogo'
 
 interface Props {
   userId: string
@@ -63,8 +64,8 @@ export default function NavRealtime({ userId, userName, initialGuardia, initialR
       {/* Sidebar — tablet/desktop */}
       <aside className="hidden md:flex flex-col w-56 bg-brand-ink text-white shrink-0">
         <div className="p-5 border-b border-white/10">
-          <p className="font-condensed font-bold text-lg">Iron Tower</p>
-          <p className="text-xs text-white/60 mt-1 truncate">{userName}</p>
+          <CentralBaseLogo inverted />
+          <p className="text-xs text-white/60 mt-2 truncate">{userName}</p>
         </div>
         <nav className="flex flex-col gap-1 p-3 flex-1">
           <SideItem href="/tecnico/home"          icon={<Home     size={18} />} label="Inicio"           />

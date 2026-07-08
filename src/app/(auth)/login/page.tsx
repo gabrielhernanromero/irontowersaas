@@ -65,10 +65,42 @@ export default function LoginPage() {
     <div className="w-full max-w-sm">
       <div className="bg-white rounded-2xl shadow-xl p-8">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-brand-dark font-condensed">
-            Iron Tower
-          </h1>
-          <p className="text-brand-muted text-sm mt-1">Ingresá con tu cuenta</p>
+          <div className="flex items-center justify-center gap-3 mb-1">
+            {/* CentralBase icon — eye/network shape */}
+            <svg viewBox="0 0 160 100" className="h-10 w-auto" xmlns="http://www.w3.org/2000/svg">
+              <g stroke="#E8A87C" strokeWidth="1.8" fill="none">
+                {/* Perimeter */}
+                <polygon points="5,50 32,20 80,5 128,20 155,50 128,80 80,95 32,80" />
+                {/* Spokes to center */}
+                <line x1="80" y1="50" x2="5"   y2="50" />
+                <line x1="80" y1="50" x2="155" y2="50" />
+                <line x1="80" y1="50" x2="80"  y2="5"  />
+                <line x1="80" y1="50" x2="80"  y2="95" />
+                <line x1="80" y1="50" x2="32"  y2="20" />
+                <line x1="80" y1="50" x2="128" y2="20" />
+                <line x1="80" y1="50" x2="32"  y2="80" />
+                <line x1="80" y1="50" x2="128" y2="80" />
+              </g>
+              {/* Outer nodes */}
+              <g fill="#1E3A5F">
+                <circle cx="5"   cy="50" r="5" />
+                <circle cx="155" cy="50" r="5" />
+                <circle cx="80"  cy="5"  r="5" />
+                <circle cx="80"  cy="95" r="5" />
+                <circle cx="32"  cy="20" r="5" />
+                <circle cx="128" cy="20" r="5" />
+                <circle cx="32"  cy="80" r="5" />
+                <circle cx="128" cy="80" r="5" />
+              </g>
+              {/* Center node */}
+              <circle cx="80" cy="50" r="11" fill="#C87842" />
+            </svg>
+            <span className="text-3xl font-bold leading-none tracking-tight">
+              <span style={{ color: '#1E3A5F' }}>Central</span>
+              <span style={{ color: '#C87842' }}>Base</span>
+            </span>
+          </div>
+          <p className="text-brand-muted text-sm mt-2">Ingresá con tu cuenta</p>
         </div>
 
         {/* Acceso rápido dev */}

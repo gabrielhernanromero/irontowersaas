@@ -5,6 +5,7 @@ import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Target, Clipboar
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 import OfflineBanner from '@/components/OfflineBanner'
 import LogoutButton from '@/components/ui/LogoutButton'
+import CentralBaseLogo from '@/components/ui/CentralBaseLogo'
 
 export default async function SupervisorLayout({ children }: { children: React.ReactNode }) {
   await requireRole('supervisor', 'admin')
@@ -18,8 +19,8 @@ export default async function SupervisorLayout({ children }: { children: React.R
       {/* Sidebar desktop */}
       <aside className="hidden md:flex print:hidden flex-col w-56 bg-brand-ink text-white min-h-screen">
         <div className="p-5 border-b border-white/10">
-          <p className="font-condensed font-bold text-lg">Iron Tower</p>
-          <p className="text-xs text-white/60 mt-1">
+          <CentralBaseLogo inverted />
+          <p className="text-xs text-white/60 mt-2">
             {user?.nombre} {user?.apellido}
           </p>
         </div>
@@ -47,7 +48,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top bar mobile */}
         <header className="md:hidden print:hidden bg-brand-ink text-white px-4 py-3 flex items-center justify-between">
-          <p className="font-condensed font-bold">Iron Tower</p>
+          <CentralBaseLogo inverted />
           <div className="flex items-center gap-3">
             <p className="text-sm text-white/70">{user?.nombre}</p>
             <LogoutButton />
