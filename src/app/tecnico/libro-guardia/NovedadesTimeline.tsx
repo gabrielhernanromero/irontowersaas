@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { X, Clock, Eye, FileText, Route } from 'lucide-react'
 import type { LibroNovedad, Incidencia } from '@/types/database'
 import IncidenciaDetailSheet from '@/components/libro/IncidenciaDetailSheet'
+import { VerFotoBtn, FotoBadge } from '@/components/ui/FotoLightbox'
 
 function formatHora(h: string | null) { return h ? h.slice(0, 5) : '—' }
 
@@ -246,11 +247,16 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                     <p className={`text-sm mt-1 line-clamp-2 ${esAlertaAcusada ? 'text-gray-400' : 'text-brand-ink'}`}>{n.descripcion}</p>
                   )}
 
-                  {/* Badge planilla */}
-                  {n.planilla_id && (
-                    <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
-                      <FileText size={11} className="text-brand-blue" />
-                      <span className="text-xs text-brand-blue font-medium">Planilla adjunta · Tocá para ver</span>
+                  {/* Badges: planilla + foto */}
+                  {(n.planilla_id || n.foto_url) && (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                      {n.planilla_id && (
+                        <>
+                          <FileText size={11} className="text-brand-blue" />
+                          <span className="text-xs text-brand-blue font-medium">Planilla adjunta · Tocá para ver</span>
+                        </>
+                      )}
+                      {n.foto_url && <FotoBadge />}
                     </div>
                   )}
 
@@ -372,8 +378,7 @@ export default function NovedadesTimeline({ novedades, incidencias = [], turnoId
                 {selected.foto_url && (
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Foto</p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selected.foto_url} alt="Foto de la novedad" className="w-full rounded-xl object-cover max-h-72" />
+                    <VerFotoBtn url={selected.foto_url} />
                   </div>
                 )}
 

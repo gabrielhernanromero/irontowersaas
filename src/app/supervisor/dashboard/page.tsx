@@ -1,9 +1,24 @@
 export const dynamic = 'force-dynamic'
 
+import dynamicImport from 'next/dynamic'
 import { requireRole } from '@/lib/auth/requireRole'
 import { getSession } from '@/lib/auth/getSession'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import DashboardClient from './DashboardClient'
+
+const DashboardClient = dynamicImport(() => import('./DashboardClient'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col gap-6">
+      <div className="h-7 w-36 bg-gray-100 rounded animate-pulse" />
+      <div className="grid grid-cols-2 gap-3">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
+        ))}
+      </div>
+      <div className="h-48 bg-gray-100 rounded-2xl animate-pulse" />
+    </div>
+  ),
+})
 
 function todayStartAR(): string {
   const now  = new Date()
@@ -43,7 +58,7 @@ export default async function DashboardPage() {
     supabaseAdmin()
       .from('libro_novedad')
       .select(`
-        id, turno_id, tipo, hora, descripcion, incidencia_id, created_at,
+        id, turno_id, tipo, hora, descripcion, incidencia_id, foto_url, created_at,
         libro_turno(id, tecnico_nombre, cliente_id, clientes(id, nombre_empresa))
       `)
       .gte('created_at', todayStart)
@@ -54,6 +69,7 @@ export default async function DashboardPage() {
       .from('incidencias')
       .select(`
         id, cliente_id, titulo, descripcion, severidad, estado,
+        foto_url, requiere_aprobacion, estado_aprobacion,
         elemento_afectado_id, created_at,
         clientes(id, nombre_empresa),
         elemento:elementos_puesto(id, nombre, codigo_patrimonial)
@@ -88,7 +104,7 @@ export default async function DashboardPage() {
     // Rondas de hoy con datos de cumplimiento
     supabaseAdmin()
       .from('rondas')
-      .select('id, completa, total_puntos, puntos_escaneados, tecnico_id, cliente_id, clientes(id, nombre_empresa)')
+      .select('id, turno_id, completa, total_puntos, puntos_escaneados, tecnico_id, cliente_id, clientes(id, nombre_empresa)')
       .gte('hora_inicio', todayStart),
 
     // Técnicos únicos con guardia abierta ahora
@@ -97,6 +113,17 @@ export default async function DashboardPage() {
       .select('tecnico_id', { count: 'exact', head: true })
       .eq('estado', 'abierto'),
   ])
+
+  // Rondas agrupadas por turno para mostrar progreso en cards de guardia
+  const rondasPorTurno: Record<string, { total: number; completas: number }> = {}
+  for (const ronda of rondasHoy ?? []) {
+    const tid = (ronda as { turno_id?: string }).turno_id
+    if (tid) {
+      if (!rondasPorTurno[tid]) rondasPorTurno[tid] = { total: 0, completas: 0 }
+      rondasPorTurno[tid].total++
+      if (ronda.completa) rondasPorTurno[tid].completas++
+    }
+  }
 
   return (
     <DashboardClient
@@ -109,6 +136,7 @@ export default async function DashboardPage() {
       initialIncidencias={(incidenciasRaw ?? []) as any[]}
       initialAlertasSinLeer={alertasSinLeer ?? 0}
       clientes={(clientes ?? []) as { id: string; nombre_empresa: string }[]}
+      rondasPorTurno={rondasPorTurno}
       resumenDia={{
         turnosCerrados:       turnosCerradosHoy   ?? 0,
         novedadesHoy:         novedadesRaw?.length ?? 0,

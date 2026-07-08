@@ -18,6 +18,7 @@ import IncidenciasActivas from '@/components/libro/IncidenciasActivas'
 import RelevoInventarioChecklist, { type ControlItem } from '@/components/inventario/RelevoInventarioChecklist'
 import { RelevoPSchema, type RelevoPInput } from '@/lib/validations/libroTurno'
 import type { Incidencia, LibroNovedad, EstadoAdmin } from '@/types/database'
+import { VerFotoBtn } from '@/components/ui/FotoLightbox'
 
 interface PlanillaItem {
   numero: number
@@ -625,12 +626,7 @@ export default function RelevoPForm({
                 {selectedNovedad.foto_url && (
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Foto</p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={selectedNovedad.foto_url}
-                      alt="Foto"
-                      className="w-full rounded-xl object-cover max-h-72"
-                    />
+                    <VerFotoBtn url={selectedNovedad.foto_url} />
                   </div>
                 )}
 
