@@ -6,6 +6,9 @@ import SessionGuard from '@/components/SessionGuard'
 import { ToastProvider } from '@/lib/toast/context'
 import ToastContainer from '@/components/ui/ToastContainer'
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt'
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+import PostHogProvider from '@/components/PostHogProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -35,13 +38,17 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.className}>
-        <ToastProvider>
-          <ServiceWorkerRegister />
-          <SessionGuard />
-          <PWAUpdatePrompt />
-          <ToastContainer />
-          {children}
-        </ToastProvider>
+        <PostHogProvider>
+          <ToastProvider>
+            <ServiceWorkerRegister />
+            <SessionGuard />
+            <PWAUpdatePrompt />
+            <ToastContainer />
+            {children}
+          </ToastProvider>
+        </PostHogProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
