@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { PlanillaExtintoresSubmitSchema } from '@/lib/validations/extintor'
 import { checkDuplicatePlanilla } from '@/lib/utils/checkDuplicatePlanilla'
+import { validateItemsMatchCatalog } from '@/lib/utils/validatePlanillaItemsCatalog'
 import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 import { notificarNovedad } from '@/lib/alertas/notificarNovedad'
 
@@ -67,6 +68,23 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Si el supervisor activó el motor genérico para Extintores de este cliente
+  // (después de que el técnico haya cargado este form), esta ruta ya no es
+  // el camino correcto — evita crear una planilla "legacy" fuera de la
+  // estructura configurable que el supervisor espera de acá en adelante.
+  const { data: tipoConfig } = await admin
+    .from('planilla_tipos')
+    .select('usa_motor_generico')
+    .eq('cliente_id', cliente_id)
+    .eq('slug', 'extintores')
+    .maybeSingle()
+  if (tipoConfig?.usa_motor_generico) {
+    return NextResponse.json(
+      { error: 'La configuración de esta planilla cambió. Recargá la página e intentá de nuevo.' },
+      { status: 409 }
+    )
+  }
+
   // Regla 1: duplicado por técnico + tipo + turno
   const isDuplicate = await checkDuplicatePlanilla(user.id, 'extintores', turnoActivo.id)
   if (isDuplicate) {
@@ -74,6 +92,17 @@ export async function POST(req: NextRequest) {
       { error: 'Ya enviaste una planilla de extintores para este turno' },
       { status: 409 }
     )
+  }
+
+  // Los ítems enviados deben coincidir con el catálogo activo del cliente
+  // (evita inconsistencias si el supervisor edita el catálogo a mitad de turno)
+  const catalogCheck = await validateItemsMatchCatalog(
+    cliente_id,
+    'extintores',
+    items.map((i) => i.numero)
+  )
+  if (!catalogCheck.ok) {
+    return NextResponse.json({ error: catalogCheck.error }, { status: 409 })
   }
 
   // Subir firma a Storage

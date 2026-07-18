@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { PlanillaHidrantesSubmitSchema } from '@/lib/validations/planilla'
+import { buildPlanillaGenericaSchema, itemTieneNovedad } from '@/lib/validations/planillaGenerica'
 import { checkDuplicatePlanilla } from '@/lib/utils/checkDuplicatePlanilla'
 import { validateItemsMatchCatalog } from '@/lib/utils/validatePlanillaItemsCatalog'
 import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 import { notificarNovedad } from '@/lib/alertas/notificarNovedad'
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { tipoId: string } }
+) {
   // Regla 6: autenticación y captura de user_agent
   const {
     data: { user },
@@ -19,8 +22,37 @@ export async function POST(req: NextRequest) {
   }
 
   const userAgent = req.headers.get('user-agent') ?? ''
+  const admin = supabaseAdmin()
 
-  // Validación Zod (incluye Regla 3 via superRefine)
+  const { data: tipo } = await admin
+    .from('planilla_tipos')
+    .select('id, cliente_id, nombre, slug, activo, es_legacy, usa_motor_generico')
+    .eq('id', params.tipoId)
+    .maybeSingle()
+
+  if (!tipo || !tipo.activo) {
+    return NextResponse.json({ error: 'Tipo de planilla no encontrado' }, { status: 404 })
+  }
+  // Legacy (Hidrantes/Extintores) solo puede pasar por acá si el supervisor
+  // activó explícitamente el motor genérico para este cliente+tipo
+  if (tipo.es_legacy && !tipo.usa_motor_generico) {
+    return NextResponse.json({ error: 'Este tipo se envía por su propia ruta' }, { status: 400 })
+  }
+
+  const { data: campos } = await admin
+    .from('planilla_tipo_campos')
+    .select('clave, etiqueta, tipo_campo, opciones, valor_min, valor_max')
+    .eq('planilla_tipo_id', tipo.id)
+    .order('orden', { ascending: true })
+
+  if (!campos || campos.length === 0) {
+    return NextResponse.json(
+      { error: 'Este tipo de planilla no tiene campos de chequeo configurados' },
+      { status: 409 }
+    )
+  }
+
+  // Validación Zod (incluye Regla 3 via superRefine, campos dinámicos)
   let body: unknown
   try {
     body = await req.json()
@@ -28,7 +60,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const parsed = PlanillaHidrantesSubmitSchema.safeParse(body)
+  const schema = buildPlanillaGenericaSchema(campos)
+  const parsed = schema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Datos inválidos', issues: parsed.error.flatten() },
@@ -37,7 +70,6 @@ export async function POST(req: NextRequest) {
   }
 
   const { cliente_id, fecha, turno, items, firma_dataurl, firma_aclaracion } = parsed.data
-  const admin = supabaseAdmin()
 
   // Turno propio abierto
   let turnoActivo = (await admin
@@ -68,37 +100,19 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Si el supervisor activó el motor genérico para Hidrantes de este cliente
-  // (después de que el técnico haya cargado este form), esta ruta ya no es
-  // el camino correcto — evita crear una planilla "legacy" fuera de la
-  // estructura configurable que el supervisor espera de acá en adelante.
-  const { data: tipoConfig } = await admin
-    .from('planilla_tipos')
-    .select('usa_motor_generico')
-    .eq('cliente_id', cliente_id)
-    .eq('slug', 'hidrantes')
-    .maybeSingle()
-  if (tipoConfig?.usa_motor_generico) {
-    return NextResponse.json(
-      { error: 'La configuración de esta planilla cambió. Recargá la página e intentá de nuevo.' },
-      { status: 409 }
-    )
-  }
-
   // Regla 1: duplicado por técnico + tipo + turno
-  const isDuplicate = await checkDuplicatePlanilla(user.id, 'hidrantes', turnoActivo.id)
+  const isDuplicate = await checkDuplicatePlanilla(user.id, tipo.slug, turnoActivo.id)
   if (isDuplicate) {
     return NextResponse.json(
-      { error: 'Ya enviaste una planilla de hidrantes para este turno' },
+      { error: `Ya enviaste una planilla de ${tipo.nombre} para este turno` },
       { status: 409 }
     )
   }
 
   // Los ítems enviados deben coincidir con el catálogo activo del cliente
-  // (evita inconsistencias si el supervisor edita el catálogo a mitad de turno)
   const catalogCheck = await validateItemsMatchCatalog(
     cliente_id,
-    'hidrantes',
+    tipo.slug,
     items.map((i) => i.numero)
   )
   if (!catalogCheck.ok) {
@@ -120,7 +134,7 @@ export async function POST(req: NextRequest) {
   const { data: planilla, error: planillaErr } = await admin
     .from('planillas')
     .insert({
-      tipo: 'hidrantes',
+      tipo: tipo.slug,
       tecnico_id: user.id,
       cliente_id,
       turno_id: turnoActivo.id,
@@ -130,6 +144,7 @@ export async function POST(req: NextRequest) {
       firma_aclaracion,
       inmutable: false,
       user_agent: userAgent,
+      snapshot_config: { tipo_nombre: tipo.nombre, campos },
     })
     .select('id')
     .single()
@@ -138,22 +153,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al crear la planilla' }, { status: 500 })
   }
 
-  // Batch INSERT de los 48 ítems
-  const hidrantes = items.map((item) => ({
+  // Batch INSERT de los ítems (respuestas/observaciones son jsonb, keyed por campo.clave)
+  const respuestas = items.map((item) => ({
     planilla_id: planilla.id,
     numero: item.numero,
-    gabinete: item.gabinete,
-    manga: item.manga,
-    lanza: item.lanza,
-    valvula: item.valvula,
-    obs_gabinete: item.obs_gabinete ?? null,
-    obs_manga: item.obs_manga ?? null,
-    obs_lanza: item.obs_lanza ?? null,
-    obs_valvula: item.obs_valvula ?? null,
+    respuestas: item.respuestas,
+    observaciones: item.observaciones,
     foto_url: item.foto_url ?? null,
   }))
 
-  const { error: itemsErr } = await admin.from('planilla_hidrantes').insert(hidrantes)
+  const { error: itemsErr } = await admin.from('planilla_item_respuestas').insert(respuestas)
   if (itemsErr) {
     return NextResponse.json({ error: 'Error al guardar los ítems' }, { status: 500 })
   }
@@ -168,21 +177,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al cerrar la planilla' }, { status: 500 })
   }
 
-  // Regla 4: alertar supervisores si algún ítem tiene un NO
-  const hayNo = items.some(
-    (item) => !item.gabinete || !item.manga || !item.lanza || !item.valvula
-  )
+  // Regla 4: alertar supervisores si algún campo de algún ítem tiene un NO
+  // (check en false, o numérico fuera del rango configurado)
+  const hayNo = items.some((item) => itemTieneNovedad(item, campos))
   if (hayNo) {
     await alertarSupervisores(
       'novedad_planilla',
-      `Planilla de hidrantes con novedades — técnico ${user.id} — ${fecha} turno ${turno}`,
+      `Planilla de ${tipo.nombre} con novedades — técnico ${user.id} — ${fecha} turno ${turno}`,
       planilla.id
     )
   }
 
   // Crear novedad automática en el libro de guardia
   const noItems = hayNo ? ' (con observaciones)' : ''
-  const descripcionNovedad = `Planilla de hidrantes enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
+  const descripcionNovedad = `Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:   turnoActivo.id,
     tecnico_id: user.id,
@@ -201,8 +209,8 @@ export async function POST(req: NextRequest) {
       encargadoId: turnoActivo.tecnico_id,
       turnoId:     turnoActivo.id,
       novedadId:   novedad.id,
-      mensaje:     `${autorNombre} envió planilla de hidrantes${noItems}`,
-      pushTitle:   '📋 Planilla de hidrantes enviada',
+      mensaje:     `${autorNombre} envió planilla de ${tipo.nombre}${noItems}`,
+      pushTitle:   `📋 Planilla de ${tipo.nombre} enviada`,
     })
   }
 

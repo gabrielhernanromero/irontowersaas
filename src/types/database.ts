@@ -1,5 +1,7 @@
 export type Rol = 'admin' | 'supervisor' | 'tecnico' | 'cliente'
-export type TipoPlanilla = 'hidrantes' | 'extintores'
+// 'hidrantes' | 'extintores' son los tipos legacy hardcodeados; cualquier otro
+// string es el slug de un planilla_tipos creado por el supervisor.
+export type TipoPlanilla = string
 export type Turno = 'diurno' | 'nocturno'
 export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado' | 'turno_sin_cerrar' | 'novedad_scan'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
@@ -39,6 +41,18 @@ export interface Cliente {
   planillas_habilitadas: string[]
 }
 
+export interface PlanillaSnapshotConfig {
+  tipo_nombre: string
+  campos: {
+    clave: string
+    etiqueta: string
+    tipo_campo: TipoCampo
+    opciones: string[]
+    valor_min: number | null
+    valor_max: number | null
+  }[]
+}
+
 export interface Planilla {
   id: string
   tipo: TipoPlanilla
@@ -53,6 +67,7 @@ export interface Planilla {
   inmutable: boolean
   user_agent: string
   created_at: string
+  snapshot_config: PlanillaSnapshotConfig | null
   tecnicos?: User
   clientes?: Cliente
 }
@@ -196,6 +211,62 @@ export interface ControlInventarioTurno {
   estado_operativo: EstadoOperativo
   observacion: string | null
   created_at: string
+}
+
+export interface PlanillaItemConfig {
+  id: string
+  cliente_id: string
+  tipo: TipoPlanilla
+  numero: string
+  tipo_extintor: string | null
+  ubicacion: string | null
+  orden: number
+  activo: boolean
+  created_at: string
+}
+
+export interface PlanoPlanta {
+  id: string
+  cliente_id: string
+  path: string
+  nombre: string | null
+  created_at: string
+}
+
+export interface PlanillaTipo {
+  id: string
+  cliente_id: string
+  nombre: string
+  slug: string
+  es_legacy: boolean
+  usa_motor_generico: boolean
+  etiqueta_numero: string
+  etiqueta_ubicacion: string
+  activo: boolean
+  created_at: string
+}
+
+export type TipoCampo = 'check' | 'select' | 'texto' | 'numero' | 'fecha' | 'ubicacion'
+
+export interface PlanillaTipoCampo {
+  id: string
+  planilla_tipo_id: string
+  clave: string
+  etiqueta: string
+  orden: number
+  tipo_campo: TipoCampo
+  opciones: string[]
+  valor_min: number | null
+  valor_max: number | null
+}
+
+export interface PlanillaItemRespuesta {
+  id: string
+  planilla_id: string
+  numero: string
+  respuestas: Record<string, boolean | string | number>
+  observaciones: Record<string, string | null>
+  foto_url: string | null
 }
 
 export interface LibroNovedad {
