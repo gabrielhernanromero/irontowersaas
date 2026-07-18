@@ -11,6 +11,7 @@ import {
 } from '@/lib/validations/planilla'
 import HidranteRow from './HidranteRow'
 import SignatureCanvas from '@/components/signature/SignatureCanvas'
+import { VerFotoBtn } from '@/components/ui/FotoLightbox'
 
 function buildSummary(errors: FieldErrors<PlanillaHidrantesSubmit>): string[] {
   const msgs: string[] = []
@@ -26,11 +27,9 @@ function buildSummary(errors: FieldErrors<PlanillaHidrantesSubmit>): string[] {
   return msgs
 }
 
-const TOTAL_HIDRANTES = 48
-
-function buildDefaultItems() {
-  return Array.from({ length: TOTAL_HIDRANTES }, (_, i) => ({
-    numero: `H-${String(i + 1).padStart(3, '0')}`,
+function buildDefaultItems(catalogo: { numero: string }[]) {
+  return catalogo.map((c) => ({
+    numero: c.numero,
     gabinete: true,
     manga: true,
     lanza: true,
@@ -48,9 +47,11 @@ interface Props {
   clienteNombre: string | null
   turnoDefault: 'diurno' | 'nocturno'
   aclaracion?: string
+  items: { numero: string }[]
+  planoUrl?: string | null
 }
 
-export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, aclaracion }: Props) {
+export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, aclaracion, items: catalogo, planoUrl }: Props) {
   const router = useRouter()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -63,7 +64,7 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
       cliente_id: clienteId ?? '',
       fecha: new Date().toISOString().split('T')[0],
       turno: turnoDefault,
-      items: buildDefaultItems(),
+      items: buildDefaultItems(catalogo),
       firma_dataurl: '',
       firma_aclaracion: aclaracion ?? '',
     },
@@ -190,9 +191,19 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
         {/* Lista de hidrantes */}
         <div className="mb-6">
           <h2 className="text-base font-semibold mb-2 text-brand-ink">Hidrantes</h2>
-          {Array.from({ length: TOTAL_HIDRANTES }, (_, i) => (
-            <HidranteRow key={i} index={i} />
-          ))}
+          {planoUrl && (
+            <div className="mb-3">
+              <VerFotoBtn url={planoUrl} label="Ver plano de planta" />
+            </div>
+          )}
+          {catalogo.length === 0 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+              No hay hidrantes configurados para este puesto. Contactá a tu supervisor
+              para que cargue el listado antes de enviar la planilla.
+            </div>
+          ) : (
+            catalogo.map((_, i) => <HidranteRow key={i} index={i} />)
+          )}
         </div>
 
         {/* Firma */}
