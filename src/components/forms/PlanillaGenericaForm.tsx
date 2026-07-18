@@ -6,14 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, XCircle, ClipboardList, Building2 } from 'lucide-react'
 import {
-  PlanillaHidrantesSubmitSchema,
-  type PlanillaHidrantesSubmit,
-} from '@/lib/validations/planilla'
-import HidranteRow from './HidranteRow'
+  buildPlanillaGenericaSchema,
+  type PlanillaGenericaSubmit,
+} from '@/lib/validations/planillaGenerica'
+import PlanillaGenericaRow from './PlanillaGenericaRow'
 import SignatureCanvas from '@/components/signature/SignatureCanvas'
 import { VerFotoBtn } from '@/components/ui/FotoLightbox'
 
-function buildSummary(errors: FieldErrors<PlanillaHidrantesSubmit>): string[] {
+function buildSummary(errors: FieldErrors<PlanillaGenericaSubmit>): string[] {
   const msgs: string[] = []
   if (errors.cliente_id) msgs.push('Seleccioná un cliente')
   if (errors.firma_dataurl) msgs.push('Falta la firma del técnico')
@@ -22,27 +22,40 @@ function buildSummary(errors: FieldErrors<PlanillaHidrantesSubmit>): string[] {
   if (Array.isArray(itemErrors)) {
     const count = itemErrors.filter(Boolean).length
     if (count > 0)
-      msgs.push(`${count} ${count === 1 ? 'hidrante tiene' : 'hidrantes tienen'} observaciones incompletas`)
+      msgs.push(`${count} ${count === 1 ? 'ítem tiene' : 'ítems tienen'} observaciones incompletas`)
   }
   return msgs
 }
 
-function buildDefaultItems(catalogo: { numero: string }[]) {
+function valorPorDefecto(cp: CampoDef): boolean | string | number {
+  if (cp.tipo_campo === 'select') return cp.opciones?.[0] ?? ''
+  if (cp.tipo_campo === 'texto' || cp.tipo_campo === 'fecha' || cp.tipo_campo === 'ubicacion') return ''
+  if (cp.tipo_campo === 'numero') return cp.valor_min ?? 0
+  return true // check (default)
+}
+
+function buildDefaultItems(catalogo: { numero: string }[], campos: CampoDef[]) {
   return catalogo.map((c) => ({
     numero: c.numero,
-    gabinete: true,
-    manga: true,
-    lanza: true,
-    valvula: true,
-    obs_gabinete: null,
-    obs_manga: null,
-    obs_lanza: null,
-    obs_valvula: null,
+    respuestas: Object.fromEntries(campos.map((cp) => [cp.clave, valorPorDefecto(cp)])),
+    observaciones: Object.fromEntries(campos.map((cp) => [cp.clave, null])),
     foto_url: null,
   }))
 }
 
+interface CampoDef {
+  clave: string
+  etiqueta: string
+  tipo_campo?: 'check' | 'select' | 'texto' | 'numero' | 'fecha' | 'ubicacion'
+  opciones?: string[]
+  valor_min?: number | null
+  valor_max?: number | null
+}
+
 interface Props {
+  tipoId: string
+  tipoNombre: string
+  campos: CampoDef[]
   clienteId: string | null
   clienteNombre: string | null
   turnoDefault: 'diurno' | 'nocturno'
@@ -51,20 +64,24 @@ interface Props {
   planoUrl?: string | null
 }
 
-export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, aclaracion, items: catalogo, planoUrl }: Props) {
+export default function PlanillaGenericaForm({
+  tipoId, tipoNombre, campos, clienteId, clienteNombre, turnoDefault, aclaracion, items: catalogo, planoUrl,
+}: Props) {
   const router = useRouter()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [alreadySent, setAlreadySent] = useState(false)
   const [validationMessages, setValidationMessages] = useState<string[]>([])
 
-  const methods = useForm<PlanillaHidrantesSubmit>({
-    resolver: zodResolver(PlanillaHidrantesSubmitSchema),
+  const schema = buildPlanillaGenericaSchema(campos)
+
+  const methods = useForm<PlanillaGenericaSubmit>({
+    resolver: zodResolver(schema),
     defaultValues: {
       cliente_id: clienteId ?? '',
       fecha: new Date().toISOString().split('T')[0],
       turno: turnoDefault,
-      items: buildDefaultItems(catalogo),
+      items: buildDefaultItems(catalogo, campos),
       firma_dataurl: '',
       firma_aclaracion: aclaracion ?? '',
     },
@@ -98,23 +115,22 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
     [setValue]
   )
 
-  function onValidationError(errs: FieldErrors<PlanillaHidrantesSubmit>) {
+  function onValidationError(errs: FieldErrors<PlanillaGenericaSubmit>) {
     setValidationMessages(buildSummary(errs))
   }
 
-  async function onSubmit(data: PlanillaHidrantesSubmit) {
+  async function onSubmit(data: PlanillaGenericaSubmit) {
     setSubmitError(null)
     setValidationMessages([])
     setSubmitting(true)
     try {
-      const res = await fetch('/api/planillas/hidrantes', {
+      const res = await fetch(`/api/planillas/generico/${tipoId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
       const json = await res.json()
       if (!res.ok) {
-        // Distinguir duplicado de "sin turno activo"
         if (res.status === 409 && json.error?.includes('Ya enviaste')) {
           setAlreadySent(true)
         } else {
@@ -139,7 +155,7 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
             <XCircle className="mx-auto mb-3 text-red-500" size={48} />
             <h2 className="text-lg font-bold text-brand-ink mb-2">Planilla ya enviada</h2>
             <p className="text-gray-600 text-sm mb-5">
-              Ya registraste una planilla de hidrantes para este turno. No podés enviar dos planillas para el mismo turno.
+              Ya registraste una planilla de {tipoNombre} para este turno. No podés enviar dos planillas para el mismo turno.
             </p>
             <div className="flex gap-3">
               <button
@@ -165,7 +181,6 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
       <form onSubmit={handleSubmit(onSubmit, onValidationError)} className="pb-44">
         {/* Encabezado */}
         <div className="flex flex-col gap-4 mb-6">
-          {/* Cliente — viene del turno, no editable */}
           <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-3 min-h-[52px]">
             <Building2 size={16} className="text-gray-400 shrink-0" />
             <div>
@@ -188,9 +203,9 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
           </div>
         </div>
 
-        {/* Lista de hidrantes */}
+        {/* Lista de ítems */}
         <div className="mb-6">
-          <h2 className="text-base font-semibold mb-2 text-brand-ink">Hidrantes</h2>
+          <h2 className="text-base font-semibold mb-2 text-brand-ink">{tipoNombre}</h2>
           {planoUrl && (
             <div className="mb-3">
               <VerFotoBtn url={planoUrl} label="Ver plano de planta" />
@@ -198,11 +213,11 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
           )}
           {catalogo.length === 0 ? (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-              No hay hidrantes configurados para este puesto. Contactá a tu supervisor
+              No hay ítems configurados para este puesto. Contactá a tu supervisor
               para que cargue el listado antes de enviar la planilla.
             </div>
           ) : (
-            catalogo.map((_, i) => <HidranteRow key={i} index={i} />)
+            catalogo.map((_, i) => <PlanillaGenericaRow key={i} index={i} campos={campos} />)
           )}
         </div>
 
@@ -221,7 +236,6 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
         {/* Botón sticky — encima de la nav bar */}
         <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-56 z-50 bg-white border-t border-gray-200 p-3">
           <div className="max-w-2xl mx-auto space-y-2">
-            {/* Resumen de validación */}
             {validationMessages.length > 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 flex gap-2 items-start">
                 <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
@@ -233,7 +247,6 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
                 </div>
               </div>
             )}
-            {/* Error de envío — siempre visible sobre el botón */}
             {submitError && (
               <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-red-700 text-xs flex gap-2 items-start">
                 <XCircle size={14} className="shrink-0 mt-0.5" />

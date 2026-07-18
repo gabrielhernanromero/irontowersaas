@@ -1,7 +1,9 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getPlanoUrl } from '@/lib/utils/getPlanoUrl'
 import ExtintoresForm from '@/components/forms/ExtintoresForm'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { CheckCircle2, Eye } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -67,6 +69,20 @@ export default async function ExtintoresPage() {
     )
   }
 
+  // Si el supervisor activó el motor genérico para Extintores en este cliente,
+  // el envío pasa por la ruta genérica (columnas configurables) en vez de este form
+  if (turnoActivo?.cliente_id) {
+    const { data: tipoGenerico } = await supabaseAdmin()
+      .from('planilla_tipos')
+      .select('id, usa_motor_generico')
+      .eq('cliente_id', turnoActivo.cliente_id)
+      .eq('slug', 'extintores')
+      .maybeSingle()
+    if (tipoGenerico?.usa_motor_generico) {
+      redirect(`/tecnico/planilla/${tipoGenerico.id}`)
+    }
+  }
+
   // Busca por turno_id — más robusto que cliente+fecha+turno
   const planillaEnviada = turnoActivo
     ? (await supabaseAdmin()
@@ -114,6 +130,20 @@ export default async function ExtintoresPage() {
 
   const clienteData = turnoActivo?.clientes as unknown as { nombre_empresa: string } | null
 
+  const clienteIdActivo = turnoActivo?.cliente_id ?? null
+  const [{ data: itemsConfig }, planoUrl] = clienteIdActivo
+    ? await Promise.all([
+        supabaseAdmin()
+          .from('planilla_items_config')
+          .select('numero, tipo_extintor')
+          .eq('cliente_id', clienteIdActivo)
+          .eq('tipo', 'extintores')
+          .eq('activo', true)
+          .order('orden', { ascending: true }),
+        getPlanoUrl(clienteIdActivo),
+      ])
+    : [{ data: [] as { numero: string; tipo_extintor: string | null }[] }, null]
+
   return (
     <div>
       <h1 className="text-xl font-condensed font-bold text-brand-ink mb-4">
@@ -124,6 +154,8 @@ export default async function ExtintoresPage() {
         clienteNombre={clienteData?.nombre_empresa ?? null}
         turnoDefault={(turnoActivo?.turno as 'diurno' | 'nocturno') ?? (new Date().getHours() < 18 ? 'diurno' : 'nocturno')}
         aclaracion={aclaracion}
+        items={itemsConfig ?? []}
+        planoUrl={planoUrl}
       />
     </div>
   )

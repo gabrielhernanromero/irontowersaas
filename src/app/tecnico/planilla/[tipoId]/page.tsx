@@ -1,30 +1,47 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getPlanoUrl } from '@/lib/utils/getPlanoUrl'
-import HidrantesForm from '@/components/forms/HidrantesForm'
+import PlanillaGenericaForm from '@/components/forms/PlanillaGenericaForm'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { CheckCircle2, Eye } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
-export default async function HidrantesPage() {
+export default async function PlanillaGenericaPage({ params }: { params: { tipoId: string } }) {
   const user = await requireRole('tecnico', 'admin')
+  const admin = supabaseAdmin()
 
-  let turnoActivo = (await supabaseAdmin()
+  const { data: tipo } = await admin
+    .from('planilla_tipos')
+    .select('id, nombre, slug, cliente_id, activo')
+    .eq('id', params.tipoId)
+    .maybeSingle()
+
+  if (!tipo || !tipo.activo) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center px-4">
+        <h1 className="text-xl font-condensed font-bold text-brand-ink">Planilla no disponible</h1>
+        <p className="text-gray-500 text-sm">Este tipo de planilla ya no está habilitado.</p>
+        <Link href="/tecnico/home" className="text-sm text-brand-blue underline min-h-[44px] flex items-center">
+          Volver al inicio
+        </Link>
+      </div>
+    )
+  }
+
+  let turnoActivo = (await admin
     .from('libro_turno')
     .select('id, turno, fecha, cliente_id, clientes(nombre_empresa)')
     .eq('tecnico_id', user.id)
     .eq('estado', 'abierto')
     .maybeSingle()).data
 
-  // Apoyo: si no tiene turno propio, usar el del encargado SOLO si ya se unió al turno
   let turnoEncargadoSinUnir = false
   if (!turnoActivo) {
-    const { data: perfil } = await supabaseAdmin()
+    const { data: perfil } = await admin
       .from('users').select('cliente_id').eq('id', user.id).single()
     if (perfil?.cliente_id) {
-      const { data: turnoEnc } = await supabaseAdmin()
+      const { data: turnoEnc } = await admin
         .from('libro_turno')
         .select('id, turno, fecha, cliente_id, clientes(nombre_empresa)')
         .eq('cliente_id', perfil.cliente_id)
@@ -32,7 +49,7 @@ export default async function HidrantesPage() {
         .neq('tecnico_id', user.id)
         .maybeSingle()
       if (turnoEnc) {
-        const { data: participacion } = await supabaseAdmin()
+        const { data: participacion } = await admin
           .from('participaciones_turno')
           .select('id')
           .eq('turno_id', turnoEnc.id)
@@ -46,32 +63,6 @@ export default async function HidrantesPage() {
       }
     }
   }
-
-  // Si el supervisor activó el motor genérico para Hidrantes en este cliente,
-  // el envío pasa por la ruta genérica (columnas configurables) en vez de este form
-  if (turnoActivo?.cliente_id) {
-    const { data: tipoGenerico } = await supabaseAdmin()
-      .from('planilla_tipos')
-      .select('id, usa_motor_generico')
-      .eq('cliente_id', turnoActivo.cliente_id)
-      .eq('slug', 'hidrantes')
-      .maybeSingle()
-    if (tipoGenerico?.usa_motor_generico) {
-      redirect(`/tecnico/planilla/${tipoGenerico.id}`)
-    }
-  }
-
-  // Busca por turno_id — más robusto que cliente+fecha+turno
-  const planillaEnviada = turnoActivo
-    ? (await supabaseAdmin()
-        .from('planillas')
-        .select('id, tipo')
-        .eq('turno_id', turnoActivo.id)
-        .eq('tipo', 'hidrantes')
-        .eq('inmutable', true)
-        .maybeSingle()
-      ).data
-    : null
 
   if (turnoEncargadoSinUnir) {
     return (
@@ -95,6 +86,17 @@ export default async function HidrantesPage() {
     )
   }
 
+  const planillaEnviada = turnoActivo
+    ? (await admin
+        .from('planillas')
+        .select('id, tipo')
+        .eq('turno_id', turnoActivo.id)
+        .eq('tipo', tipo.slug)
+        .eq('inmutable', true)
+        .maybeSingle()
+      ).data
+    : null
+
   if (planillaEnviada) {
     return (
       <div className="flex flex-col items-center justify-center gap-5 py-16 text-center px-4">
@@ -104,7 +106,7 @@ export default async function HidrantesPage() {
         <div>
           <h1 className="text-xl font-condensed font-bold text-brand-ink">Planilla ya enviada</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Ya registraste la planilla de hidrantes para este turno.
+            Ya registraste la planilla de {tipo.nombre} para este turno.
           </p>
         </div>
         <Link
@@ -121,7 +123,7 @@ export default async function HidrantesPage() {
     )
   }
 
-  const { data: perfil } = await supabaseAdmin()
+  const { data: perfil } = await admin
     .from('users').select('nombre, apellido, dni').eq('id', user.id).single()
 
   const aclaracion = perfil
@@ -129,28 +131,36 @@ export default async function HidrantesPage() {
     : undefined
 
   const clienteData = turnoActivo?.clientes as unknown as { nombre_empresa: string } | null
-
   const clienteIdActivo = turnoActivo?.cliente_id ?? null
-  const [{ data: itemsConfig }, planoUrl] = clienteIdActivo
+
+  const [{ data: campos }, { data: itemsConfig }, planoUrl] = clienteIdActivo
     ? await Promise.all([
-        supabaseAdmin()
+        admin
+          .from('planilla_tipo_campos')
+          .select('clave, etiqueta, tipo_campo, opciones, valor_min, valor_max')
+          .eq('planilla_tipo_id', tipo.id)
+          .order('orden', { ascending: true }),
+        admin
           .from('planilla_items_config')
           .select('numero')
           .eq('cliente_id', clienteIdActivo)
-          .eq('tipo', 'hidrantes')
+          .eq('tipo', tipo.slug)
           .eq('activo', true)
           .order('orden', { ascending: true }),
         getPlanoUrl(clienteIdActivo),
       ])
-    : [{ data: [] as { numero: string }[] }, null]
+    : [{ data: [] as { clave: string; etiqueta: string; tipo_campo: 'check' | 'select' | 'texto' | 'numero' | 'fecha' | 'ubicacion'; opciones: string[]; valor_min: number | null; valor_max: number | null }[] }, { data: [] as { numero: string }[] }, null]
 
   return (
     <div>
       <h1 className="text-xl font-condensed font-bold text-brand-ink mb-4">
-        Planilla de Hidrantes
+        Planilla de {tipo.nombre}
       </h1>
-      <HidrantesForm
-        clienteId={turnoActivo?.cliente_id ?? null}
+      <PlanillaGenericaForm
+        tipoId={tipo.id}
+        tipoNombre={tipo.nombre}
+        campos={campos ?? []}
+        clienteId={clienteIdActivo}
         clienteNombre={clienteData?.nombre_empresa ?? null}
         turnoDefault={(turnoActivo?.turno as 'diurno' | 'nocturno') ?? (new Date().getHours() < 18 ? 'diurno' : 'nocturno')}
         aclaracion={aclaracion}

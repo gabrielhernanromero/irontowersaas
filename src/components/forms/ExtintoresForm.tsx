@@ -11,13 +11,12 @@ import {
 } from '@/lib/validations/extintor'
 import ExtintorRow, { TIPOS_EXTINTOR } from './ExtintorRow'
 import SignatureCanvas from '@/components/signature/SignatureCanvas'
+import { VerFotoBtn } from '@/components/ui/FotoLightbox'
 
-const DEFAULT_TOTAL = 10
-
-function buildItem(i: number) {
-  return {
-    numero: `E-${String(i + 1).padStart(3, '0')}`,
-    tipo: '',
+function buildDefaultItems(catalogo: { numero: string; tipo_extintor: string | null }[]) {
+  return catalogo.map((c) => ({
+    numero: c.numero,
+    tipo: c.tipo_extintor ?? '',
     senalizacion: true,
     acceso: true,
     presion_peso: true,
@@ -25,7 +24,7 @@ function buildItem(i: number) {
     obs_acceso: null,
     obs_presion_peso: null,
     foto_url: null,
-  }
+  }))
 }
 
 function buildSummary(errors: FieldErrors<PlanillaExtintoresSubmit>): string[] {
@@ -48,15 +47,16 @@ interface Props {
   clienteNombre: string | null
   turnoDefault: 'diurno' | 'nocturno'
   aclaracion?: string
+  items: { numero: string; tipo_extintor: string | null }[]
+  planoUrl?: string | null
 }
 
-export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault, aclaracion }: Props) {
+export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault, aclaracion, items: catalogo, planoUrl }: Props) {
   const router = useRouter()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [alreadySent, setAlreadySent] = useState(false)
   const [validationMessages, setValidationMessages] = useState<string[]>([])
-  const [totalExtintores, setTotalExtintores] = useState(DEFAULT_TOTAL)
   const [tipoDefault, setTipoDefault] = useState<string>('ABC')
   const [soloNovedades, setSoloNovedades] = useState(false)
 
@@ -66,7 +66,7 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
       cliente_id: clienteId ?? '',
       fecha: new Date().toISOString().split('T')[0],
       turno: turnoDefault,
-      items: Array.from({ length: DEFAULT_TOTAL }, (_, i) => buildItem(i)),
+      items: buildDefaultItems(catalogo),
       firma_dataurl: '',
       firma_aclaracion: aclaracion ?? '',
     },
@@ -81,15 +81,6 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
   const { register, handleSubmit, setValue, watch, formState: { errors } } = methods
 
   const items = watch('items')
-
-  // Cambia la cantidad de extintores preservando los ya completados
-  function handleCantidad(n: number) {
-    if (n < 1 || n > 500) return
-    const current = methods.getValues('items')
-    const next = Array.from({ length: n }, (_, i) => current[i] ?? buildItem(i))
-    setValue('items', next)
-    setTotalExtintores(n)
-  }
 
   // Aplica el tipo seleccionado a TODOS los extintores (sin excepción)
   function handleAplicarTipo() {
@@ -213,20 +204,7 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
 
         {/* Controles de la lista */}
         <div className="bg-gray-50 rounded-xl p-3 mb-4 flex flex-col gap-3">
-          {/* Cantidad */}
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-brand-ink shrink-0">
-              Cantidad de extintores
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={500}
-              value={totalExtintores}
-              onChange={(e) => handleCantidad(Number(e.target.value))}
-              className="border border-gray-300 rounded p-2 text-base w-20 min-h-[44px] text-center"
-            />
-          </div>
+          {planoUrl && <VerFotoBtn url={planoUrl} label="Ver plano de planta" />}
 
           {/* Bulk tipo */}
           <div className="flex items-center gap-2">
@@ -270,10 +248,17 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
         <div className="mb-2">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-base font-semibold text-brand-ink">Extintores</h2>
-            <span className="text-xs text-gray-400">{totalExtintores} en total</span>
+            <span className="text-xs text-gray-400">{catalogo.length} en total</span>
           </div>
 
-          {soloNovedades && indicesVisibles.length === 0 && (
+          {catalogo.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+              No hay extintores configurados para este puesto. Contactá a tu supervisor
+              para que cargue el listado antes de enviar la planilla.
+            </div>
+          )}
+
+          {soloNovedades && indicesVisibles.length === 0 && catalogo.length > 0 && (
             <div className="text-center py-8 text-gray-400 text-sm">
               Sin novedades registradas aún
             </div>
@@ -322,7 +307,7 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
               disabled={submitting}
               className="w-full bg-brand-orange text-white font-bold py-4 rounded-lg text-base min-h-[56px] disabled:opacity-60"
             >
-              {submitting ? 'Enviando...' : `Enviar Planilla (${totalExtintores} extintores)`}
+              {submitting ? 'Enviando...' : `Enviar Planilla (${catalogo.length} extintores)`}
             </button>
           </div>
         </div>
