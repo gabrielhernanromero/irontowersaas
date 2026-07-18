@@ -5,12 +5,16 @@ DO $$
 DECLARE
   conname text;
 BEGIN
+  -- Matchea por la columna exacta "estado" (no por substring del nombre):
+  -- "estado_aprobacion" también matchea "%estado%" y podía dropearse por error.
   SELECT c.conname INTO conname
   FROM pg_constraint c
   JOIN pg_class t ON t.oid = c.conrelid
+  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
   WHERE t.relname = 'incidencias'
     AND c.contype = 'c'
-    AND c.conname LIKE '%estado%';
+    AND a.attname = 'estado'
+    AND array_length(c.conkey, 1) = 1;
 
   IF conname IS NOT NULL THEN
     EXECUTE 'ALTER TABLE public.incidencias DROP CONSTRAINT ' || quote_ident(conname);

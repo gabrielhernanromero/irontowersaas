@@ -20,6 +20,7 @@ BEGIN
       duracion_str := duracion_min::text || ' min';
     END IF;
 
+    BEGIN
       INSERT INTO public.libro_novedad (turno_id, tecnico_id, tipo, hora, descripcion)
       VALUES (
         NEW.turno_id,
@@ -36,6 +37,7 @@ BEGIN
       );
     EXCEPTION WHEN OTHERS THEN
       RAISE WARNING 'fn_novedad_ronda_completada falló: %', SQLERRM;
+    END;
   END IF;
 
   RETURN NEW;
