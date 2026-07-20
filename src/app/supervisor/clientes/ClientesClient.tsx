@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
   Building2, Plus, ChevronDown, ChevronUp, Edit2,
   Users, Package, Info, Sun, Moon, Loader2, X,
   ToggleLeft, ToggleRight, AlertCircle, MapPin, QrCode, Printer, Bell,
-  Trash2, ShieldCheck, UserPlus, UserMinus, Eye, EyeOff, Clock, FileText, CheckCircle2,
+  Trash2, ShieldCheck, UserPlus, UserMinus, Eye, EyeOff, Clock, FileText,
+  ClipboardList, Settings,
 } from 'lucide-react'
 import QRCode from 'react-qr-code'
-import type { Cliente, ElementoPuesto, EstadoAdmin } from '@/types/database'
+import type { Cliente, ElementoPuesto, EstadoAdmin, PlanillaTipo } from '@/types/database'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1953,6 +1955,34 @@ function PlanillasTab({
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState<string | null>(null)
   const [local,  setLocal]  = useState<string[]>(planillasHabilitadas)
+  const [tiposCustom, setTiposCustom] = useState<PlanillaTipo[]>([])
+  const [loadingCustom, setLoadingCustom] = useState(true)
+
+  useEffect(() => {
+    setLoadingCustom(true)
+    fetch(`/api/supervisor/planilla-tipos?cliente_id=${clienteId}`)
+      .then(r => r.json())
+      .then(j => {
+        const todos: PlanillaTipo[] = j.tipos ?? []
+        setTiposCustom(todos.filter(t => !t.es_legacy))
+        setLoadingCustom(false)
+      })
+      .catch(() => setLoadingCustom(false))
+  }, [clienteId])
+
+  async function toggleActivoTipo(tipo: PlanillaTipo) {
+    setTiposCustom(prev => prev.map(t => t.id === tipo.id ? { ...t, activo: !t.activo } : t))
+    setError(null)
+    const res = await fetch('/api/supervisor/planilla-tipos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: tipo.id, activo: !tipo.activo }),
+    })
+    if (!res.ok) {
+      setTiposCustom(prev => prev.map(t => t.id === tipo.id ? { ...t, activo: tipo.activo } : t))
+      setError('Error al guardar')
+    }
+  }
 
   async function toggle(key: string) {
     const next = local.includes(key) ? local.filter(k => k !== key) : [...local, key]
@@ -1974,7 +2004,7 @@ function PlanillasTab({
   return (
     <div>
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
-        Planillas habilitadas para este cliente
+        Planillas de este cliente
       </p>
 
       {error && (
@@ -1988,15 +2018,10 @@ function PlanillasTab({
         {PLANILLAS_OPCIONES.map(({ key, label, desc }) => {
           const activa = local.includes(key)
           return (
-            <button
+            <div
               key={key}
-              type="button"
-              onClick={() => toggle(key)}
-              disabled={saving}
-              className={`flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all disabled:opacity-60 ${
-                activa
-                  ? 'border-brand-orange bg-orange-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+              className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${
+                activa ? 'border-brand-orange bg-orange-50' : 'border-gray-200 bg-white'
               }`}
             >
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -2008,13 +2033,72 @@ function PlanillasTab({
                 <p className={`font-semibold text-sm ${activa ? 'text-brand-ink' : 'text-gray-500'}`}>{label}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
               </div>
-              <CheckCircle2
-                size={20}
-                className={`shrink-0 transition-colors ${activa ? 'text-brand-orange' : 'text-gray-200'}`}
-              />
-            </button>
+              <Link
+                href="/supervisor/planillas"
+                className="p-2.5 min-h-[44px] min-w-[44px] text-gray-300 hover:text-brand-orange inline-flex items-center justify-center shrink-0"
+                title="Configurar columnas e ítems"
+              >
+                <Settings size={16} />
+              </Link>
+              <button
+                type="button"
+                onClick={() => toggle(key)}
+                disabled={saving}
+                className="p-2.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center shrink-0 disabled:opacity-60"
+                title={activa ? 'Deshabilitar' : 'Habilitar'}
+              >
+                {activa ? <ToggleRight size={22} className="text-brand-orange" /> : <ToggleLeft size={22} className="text-gray-300" />}
+              </button>
+            </div>
           )
         })}
+
+        {loadingCustom ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 size={18} className="animate-spin text-gray-300" />
+          </div>
+        ) : (
+          tiposCustom.map(t => (
+            <div
+              key={t.id}
+              className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${
+                t.activo ? 'border-brand-orange bg-orange-50' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                t.activo ? 'bg-brand-orange text-white' : 'bg-gray-100 text-gray-400'
+              }`}>
+                <ClipboardList size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`font-semibold text-sm ${t.activo ? 'text-brand-ink' : 'text-gray-500'}`}>{t.nombre}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t.activo ? 'Visible para el técnico' : 'Oculta para el técnico'}</p>
+              </div>
+              <Link
+                href="/supervisor/planillas"
+                className="p-2.5 min-h-[44px] min-w-[44px] text-gray-300 hover:text-brand-orange inline-flex items-center justify-center shrink-0"
+                title="Configurar columnas e ítems"
+              >
+                <Settings size={16} />
+              </Link>
+              <button
+                type="button"
+                onClick={() => toggleActivoTipo(t)}
+                className="p-2.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center shrink-0"
+                title={t.activo ? 'Deshabilitar' : 'Habilitar'}
+              >
+                {t.activo ? <ToggleRight size={22} className="text-brand-orange" /> : <ToggleLeft size={22} className="text-gray-300" />}
+              </button>
+            </div>
+          ))
+        )}
+
+        {!loadingCustom && tiposCustom.length === 0 && (
+          <p className="text-sm text-gray-400 italic px-1">
+            Todavía no hay planillas personalizadas para este cliente — creálas desde{' '}
+            <Link href="/supervisor/planillas" className="text-brand-orange underline">Planillas → Configuración</Link>.
+          </p>
+        )}
       </div>
 
       {saving && (
@@ -2022,6 +2106,11 @@ function PlanillasTab({
           <Loader2 size={12} className="animate-spin" /> Guardando...
         </p>
       )}
+
+      <p className="text-xs text-gray-400 mt-4">
+        La carga de ítems y el plano de planta se maneja desde la pantalla{' '}
+        <span className="font-semibold text-gray-500">Planillas → Configuración</span>.
+      </p>
     </div>
   )
 }

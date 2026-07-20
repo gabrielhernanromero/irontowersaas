@@ -41,7 +41,7 @@ export const PlanillaHidrantesSubmitSchema = z.object({
   cliente_id: z.string().uuid('Seleccioná un cliente'),
   fecha: z.string().min(1, 'La fecha es obligatoria'),
   turno: z.enum(['diurno', 'nocturno'], { message: 'Seleccioná un turno' }),
-  items: z.array(HidranteItemSchema).length(48, 'Deben ser exactamente 48 hidrantes'),
+  items: z.array(HidranteItemSchema).min(1, 'No hay hidrantes configurados para este cliente'),
   firma_dataurl: z.string().min(1, 'La firma es obligatoria'),
   firma_aclaracion: z.string().min(1, 'La aclaración (nombre y apellido) es obligatoria'),
 }).superRefine((data, ctx) => {

@@ -128,7 +128,7 @@ export function VerFotoBtn({
       <button
         type="button"
         onClick={() => setLightboxUrl(url)}
-        className="flex items-center gap-2 text-sm text-brand-blue font-semibold py-2 px-3 rounded-xl bg-blue-50 border border-blue-100 active:bg-blue-100 min-h-[44px] w-full justify-center"
+        className="flex items-center gap-2 text-base text-brand-blue font-semibold py-2 px-3 rounded-xl bg-blue-50 border border-blue-100 active:bg-blue-100 min-h-[44px] w-full justify-center"
       >
         <Camera size={16} />
         {label}

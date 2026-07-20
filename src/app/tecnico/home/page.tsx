@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import {
   Droplets, FlameKindling, CheckCircle2, ChevronRight,
-  BookOpen, AlertTriangle, CircleDot, Lock, UserCheck, Users,
+  BookOpen, AlertTriangle, CircleDot, Lock, UserCheck, Users, ClipboardList,
 } from 'lucide-react'
 import { findEsquemaActivo, type EsquemaVentana } from '@/lib/esquemas/validarVentana'
 import { getArgTime } from '@/lib/cobertura/timeUtils'
@@ -149,6 +149,18 @@ export default async function TecnicoHome() {
   const enviada = (tipo: string) => planillasHoy?.find((p) => p.tipo === tipo)
   const hidrantesEnviada  = enviada('hidrantes')
   const extintoresEnviada = enviada('extintores')
+
+  // Tipos de planilla genéricos (creados por el supervisor) para este cliente
+  const { data: tiposGenericos } = clienteId
+    ? await supabaseAdmin()
+        .from('planilla_tipos')
+        .select('id, nombre, slug, activo')
+        .eq('cliente_id', clienteId)
+        .eq('es_legacy', false)
+        .eq('activo', true)
+        .order('created_at', { ascending: true })
+    : { data: [] as { id: string; nombre: string; slug: string; activo: boolean }[] }
+
   const turnoPropio       = !!turnoActivo
   // Apoyo solo puede acceder a planillas si ya se unió al turno del encargado
   const hayTurnoActivo    = turnoPropio || apoyoUnido
@@ -237,6 +249,23 @@ export default async function TecnicoHome() {
             href={extintoresEnviada ? `/tecnico/historial/${extintoresEnviada.id}` : '/tecnico/extintores'}
           />
         )}
+
+        {/* Tipos de planilla genéricos creados por el supervisor */}
+        {(tiposGenericos ?? []).map((t) => {
+          const env = enviada(t.slug)
+          return (
+            <PlanillaCard
+              key={t.id}
+              label={`Planilla ${t.nombre}`}
+              sublabel="Ver ítems configurados"
+              icon={<ClipboardList size={24} className="text-white" />}
+              iconBg={env ? 'bg-green-500' : 'bg-brand-ink'}
+              enviada={!!env}
+              turnoAbierto={hayTurnoActivo}
+              href={env ? `/tecnico/historial/${env.id}` : `/tecnico/planilla/${t.id}`}
+            />
+          )
+        })}
 
         {/* Libro de Guardia */}
         <Link

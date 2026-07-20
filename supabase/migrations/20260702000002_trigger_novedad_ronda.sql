@@ -20,6 +20,7 @@ BEGIN
       duracion_str := duracion_min::text || ' min';
     END IF;
 
+    BEGIN
       INSERT INTO public.libro_novedad (turno_id, tecnico_id, tipo, hora, descripcion)
       VALUES (
         NEW.turno_id,
@@ -36,12 +37,14 @@ BEGIN
       );
     EXCEPTION WHEN OTHERS THEN
       RAISE WARNING 'fn_novedad_ronda_completada falló: %', SQLERRM;
+    END;
   END IF;
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trigger_novedad_ronda_completada ON public.rondas;
 CREATE TRIGGER trigger_novedad_ronda_completada
 AFTER UPDATE ON public.rondas
 FOR EACH ROW
