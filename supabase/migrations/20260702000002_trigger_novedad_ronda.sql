@@ -44,6 +44,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trigger_novedad_ronda_completada ON public.rondas;
 CREATE TRIGGER trigger_novedad_ronda_completada
 AFTER UPDATE ON public.rondas
 FOR EACH ROW
