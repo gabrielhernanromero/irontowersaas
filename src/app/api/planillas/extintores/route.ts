@@ -175,17 +175,41 @@ export async function POST(req: NextRequest) {
   const hayNo = items.some(
     (item) => !item.senalizacion || !item.acceso || !item.presion_peso
   )
+
+  // Primera observación cargada — se muestra en la alerta y en el libro de
+  // guardia para no tener que entrar a la planilla a ver el detalle.
+  let primeraObs: string | null = null
+  if (hayNo) {
+    const CAMPOS = [
+      { obs: 'obs_senalizacion', label: 'Señalización' },
+      { obs: 'obs_acceso',       label: 'Acceso'        },
+      { obs: 'obs_presion_peso', label: 'Presión/Peso'  },
+    ] as const
+    for (const item of items) {
+      for (const { obs, label } of CAMPOS) {
+        const val = (item as Record<string, unknown>)[obs]
+        if (typeof val === 'string' && val.trim()) { primeraObs = `${label}: ${val.trim()}`; break }
+      }
+      if (primeraObs) break
+    }
+  }
+
   if (hayNo) {
     await alertarSupervisores(
       'novedad_planilla',
-      `Planilla de extintores con novedades — técnico ${user.id} — ${fecha} turno ${turno}`,
+      `Planilla de extintores con novedades — técnico ${user.id} — ${fecha} turno ${turno}` +
+        (primeraObs ? `. ${primeraObs}` : ''),
       planilla.id
     )
   }
 
-  // Crear novedad automática en el libro de guardia
+  // Crear novedad automática en el libro de guardia — el prefijo [FALLA]
+  // hace que el timeline del dashboard la resalte en naranja y quede
+  // incluida en el filtro de "Alertas".
   const noItemsExt = hayNo ? ' (con observaciones)' : ''
-  const descripcionNovedad = `Planilla de extintores enviada${noItemsExt} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
+  const tagFalla = hayNo ? '[FALLA] ' : ''
+  const descripcionNovedad = `${tagFalla}Planilla de extintores enviada${noItemsExt} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
+    (primeraObs ? `. ${primeraObs}` : '')
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:    turnoActivo.id,
     tecnico_id:  user.id,

@@ -172,17 +172,42 @@ export async function POST(req: NextRequest) {
   const hayNo = items.some(
     (item) => !item.gabinete || !item.manga || !item.lanza || !item.valvula
   )
+
+  // Primera observación cargada — se muestra en la alerta y en el libro de
+  // guardia para no tener que entrar a la planilla a ver el detalle.
+  let primeraObs: string | null = null
+  if (hayNo) {
+    const CAMPOS = [
+      { obs: 'obs_gabinete', label: 'Gabinete' },
+      { obs: 'obs_manga',    label: 'Manga'    },
+      { obs: 'obs_lanza',    label: 'Lanza'    },
+      { obs: 'obs_valvula',  label: 'Válvula'  },
+    ] as const
+    for (const item of items) {
+      for (const { obs, label } of CAMPOS) {
+        const val = (item as Record<string, unknown>)[obs]
+        if (typeof val === 'string' && val.trim()) { primeraObs = `${label}: ${val.trim()}`; break }
+      }
+      if (primeraObs) break
+    }
+  }
+
   if (hayNo) {
     await alertarSupervisores(
       'novedad_planilla',
-      `Planilla de hidrantes con novedades — técnico ${user.id} — ${fecha} turno ${turno}`,
+      `Planilla de hidrantes con novedades — técnico ${user.id} — ${fecha} turno ${turno}` +
+        (primeraObs ? `. ${primeraObs}` : ''),
       planilla.id
     )
   }
 
-  // Crear novedad automática en el libro de guardia
+  // Crear novedad automática en el libro de guardia — el prefijo [FALLA]
+  // hace que el timeline del dashboard la resalte en naranja (parsearCategoria
+  // ya sabe leer ese tag) y que quede incluida en el filtro de "Alertas".
   const noItems = hayNo ? ' (con observaciones)' : ''
-  const descripcionNovedad = `Planilla de hidrantes enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
+  const tagFalla = hayNo ? '[FALLA] ' : ''
+  const descripcionNovedad = `${tagFalla}Planilla de hidrantes enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
+    (primeraObs ? `. ${primeraObs}` : '')
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:   turnoActivo.id,
     tecnico_id: user.id,

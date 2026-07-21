@@ -203,9 +203,12 @@ export async function POST(
     )
   }
 
-  // Crear novedad automática en el libro de guardia
+  // Crear novedad automática en el libro de guardia — el prefijo [FALLA]
+  // hace que el timeline del dashboard la resalte en naranja (parsearCategoria
+  // ya sabe leer ese tag) y que quede incluida en el filtro de "Alertas".
   const noItems = hayNo ? ' (con observaciones)' : ''
-  const descripcionNovedad = `Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
+  const tagFalla = hayNo ? '[FALLA] ' : ''
+  const descripcionNovedad = `${tagFalla}Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
     (primeraObs ? `. ${primeraObs}` : '')
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:   turnoActivo.id,

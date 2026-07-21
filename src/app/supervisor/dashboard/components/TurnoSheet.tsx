@@ -115,6 +115,24 @@ const TIPO_STYLE: Record<string, { dot: string; label: string }> = {
   sistema:   { dot: 'bg-gray-300',    label: 'Sistema'  },
 }
 
+// Novedades generadas por el sistema (planilla con NO, incidencia resuelta)
+// vienen con un tag "[FALLA]"/"[INCIDENCIA]" al frente de la descripción —
+// mismo criterio que parsearCategoria() en DashboardClient — para resaltarlas
+// con un color distinto del "Novedad" genérico.
+const CAT_TAG: Record<string, { dot: string; label: string }> = {
+  FALLA:      { dot: 'bg-orange-500', label: 'Falla'      },
+  INCIDENCIA: { dot: 'bg-red-500',    label: 'Incidencia' },
+}
+
+function parseNovedad(n: Novedad) {
+  const match = n.descripcion.match(/^\[([^\]]+)\]\s*/)
+  const tag = match ? CAT_TAG[match[1].toUpperCase()] : null
+  return {
+    style: tag ?? TIPO_STYLE[n.tipo] ?? TIPO_STYLE.novedad,
+    detalle: match ? n.descripcion.slice(match[0].length) : n.descripcion,
+  }
+}
+
 export default function TurnoSheet({ turnoId, onClose }: Props) {
   const [turno,        setTurno]        = useState<TurnoDetalle | null>(null)
   const [rondas,       setRondas]       = useState<Ronda[]>([])
@@ -344,7 +362,7 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                       <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
                       <div className="space-y-5">
                         {turno.novedades.map(n => {
-                          const style = TIPO_STYLE[n.tipo] ?? TIPO_STYLE.novedad
+                          const { style, detalle } = parseNovedad(n)
                           return (
                             <div key={n.id} className="relative flex gap-4">
                               <div className={`w-3.5 h-3.5 rounded-full ${style.dot} shrink-0 mt-0.5 ring-2 ring-white z-10`} />
@@ -353,7 +371,7 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                                   <span className="text-xs font-semibold text-gray-500">{n.hora}</span>
                                   <span className="text-xs text-gray-400">{style.label}</span>
                                 </div>
-                                <p className="text-sm text-gray-800 leading-relaxed">{n.descripcion}</p>
+                                <p className="text-sm text-gray-800 leading-relaxed">{detalle}</p>
                                 {n.riesgo_detectado && (
                                   <p className="text-xs text-red-600 mt-1">
                                     <span className="font-medium">Riesgo:</span> {n.riesgo_detectado}
