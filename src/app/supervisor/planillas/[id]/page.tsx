@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { respuestaEsNovedad, type CampoDef } from '@/lib/validations/planillaGenerica'
 import FotoCell from './FotoCell'
@@ -33,17 +34,13 @@ export default async function PlanillaDetallePage({
   const camposGenerico = (planilla.snapshot_config as { campos?: CampoDef[] } | null)?.campos
   const esGenerico = !hidrantes?.length && !extintores?.length && !!camposGenerico?.length
 
-  // Obtener URL firmada de la firma (60 segundos)
+  // Obtener URL firmada de la firma (60 segundos) — directo contra Storage,
+  // sin round-trip HTTP a la propia API (esa llamada no lleva cookie de
+  // sesión y siempre fallaba con 401, dejando la firma oculta sin error visible).
   let firmaUrl: string | null = null
   if (planilla.firma_url) {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/storage/signed-url?bucket=firmas&path=${encodeURIComponent(planilla.firma_url)}`,
-      { cache: 'no-store' }
-    )
-    if (res.ok) {
-      const { url } = await res.json()
-      firmaUrl = url
-    }
+    const { data } = await supabaseAdmin().storage.from('firmas').createSignedUrl(planilla.firma_url, 60)
+    firmaUrl = data?.signedUrl ?? null
   }
 
   const items = hidrantes ?? extintores ?? []
