@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Camera, X, Loader2, CheckCircle } from 'lucide-react'
+import { compressImage } from '@/lib/media/compress'
 
 interface Props {
   value: string | null | undefined
@@ -21,10 +22,11 @@ export function FotoUpload({ value, onChange }: Props) {
     const localUrl = URL.createObjectURL(file)
     setPreview(localUrl)
 
-    const fd = new FormData()
-    fd.append('file', file)
-
     try {
+      const compressed = await compressImage(file)
+      const fd = new FormData()
+      fd.append('file', compressed)
+
       const res = await fetch('/api/upload/foto', { method: 'POST', body: fd })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Error al subir')
