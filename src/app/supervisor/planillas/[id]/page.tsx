@@ -37,7 +37,7 @@ export default async function PlanillaDetallePage({
   let firmaUrl: string | null = null
   if (planilla.firma_url) {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/storage/signed-url?path=${encodeURIComponent(planilla.firma_url)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/storage/signed-url?bucket=firmas&path=${encodeURIComponent(planilla.firma_url)}`,
       { cache: 'no-store' }
     )
     if (res.ok) {
