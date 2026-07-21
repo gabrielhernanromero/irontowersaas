@@ -54,7 +54,7 @@ if (typeof setInterval !== 'undefined') {
 // Límites predefinidos
 export const LIMITS = {
   novedad:   { maxRequests: 15,  windowMs: 60_000 },  // 15 novedades/min
-  upload:    { maxRequests: 10,  windowMs: 60_000 },  // 10 fotos/min
+  upload:    { maxRequests: 30,  windowMs: 60_000 },  // 30 fotos/min — 10 quedaba corto para un técnico cargando varios ítems con foto seguidos
   push:      { maxRequests: 5,   windowMs: 60_000 },  // 5 suscripciones/min
   auth:      { maxRequests: 5,   windowMs: 60_000 },  // 5 logins/min por IP
 } satisfies Record<string, RateLimitConfig>
