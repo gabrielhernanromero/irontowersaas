@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, CheckCircle2, Clock } from 'lucide-react'
 import type { Alerta } from '@/types/database'
 import EmptyState from '@/components/ui/EmptyState'
+import { supabase } from '@/lib/supabase/client'
 
 interface Props {
   initialAlertas: Alerta[]
+  supervisorId: string
 }
 
 function formatRelativo(dateStr: string) {
@@ -190,8 +192,25 @@ function RondaVencidaCard({
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export default function AlertasClient({ initialAlertas }: Props) {
+export default function AlertasClient({ initialAlertas, supervisorId }: Props) {
   const [alertas, setAlertas] = useState<Alerta[]>(initialAlertas)
+
+  // Alertas nuevas en vivo — sin esto solo se ven al recargar la página
+  useEffect(() => {
+    const client = supabase()
+    const channel = client
+      .channel('alertas-page')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'alertas', filter: `destinatario_id=eq.${supervisorId}` },
+        (payload) => {
+          const nueva = payload.new as Alerta
+          setAlertas(prev => prev.some(a => a.id === nueva.id) ? prev : [nueva, ...prev])
+        }
+      )
+      .subscribe()
+
+    return () => { client.removeChannel(channel) }
+  }, [supervisorId])
 
   function handleRead(id: string) {
     setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))

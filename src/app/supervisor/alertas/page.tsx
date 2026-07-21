@@ -16,7 +16,7 @@ export default async function AlertasPage() {
   return (
     <div>
       <h1 className="text-2xl font-condensed font-bold text-brand-ink mb-6">Alertas</h1>
-      <AlertasClient initialAlertas={alertas ?? []} />
+      <AlertasClient initialAlertas={alertas ?? []} supervisorId={user!.id} />
     </div>
   )
 }
