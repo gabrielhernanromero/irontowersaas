@@ -203,6 +203,9 @@ export default async function PlanillaDetallePage({
           <p className="text-sm font-medium text-brand-ink mb-2">Firma del técnico</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={firmaUrl} alt="Firma" className="max-w-xs border border-gray-200 rounded" />
+          {planilla.firma_aclaracion && (
+            <p className="text-xs text-gray-500 mt-2">{planilla.firma_aclaracion}</p>
+          )}
         </div>
       )}
     </div>
