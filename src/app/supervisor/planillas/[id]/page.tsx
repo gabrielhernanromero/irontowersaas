@@ -1,6 +1,7 @@
 import { supabaseServer } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { respuestaEsNovedad, type CampoDef } from '@/lib/validations/planillaGenerica'
+import FotoCell from './FotoCell'
 
 export default async function PlanillaDetallePage({
   params,
@@ -91,6 +92,7 @@ export default async function PlanillaDetallePage({
                     <th key={campo.clave} className="px-3 py-2">{campo.etiqueta}</th>
                   ))}
                   <th className="px-3 py-2 text-left">Observaciones</th>
+                  <th className="px-3 py-2">Foto</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,6 +118,9 @@ export default async function PlanillaDetallePage({
                         {camposGenerico!
                           .map((c) => observaciones[c.clave] ? `${c.etiqueta}: ${observaciones[c.clave]}` : null)
                           .filter(Boolean).join(' | ') || '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {item.foto_url ? <FotoCell url={item.foto_url as string} /> : '—'}
                       </td>
                     </tr>
                   )
