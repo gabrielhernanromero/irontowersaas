@@ -180,17 +180,33 @@ export async function POST(
   // Regla 4: alertar supervisores si algún campo de algún ítem tiene un NO
   // (check en false, o numérico fuera del rango configurado)
   const hayNo = items.some((item) => itemTieneNovedad(item, campos))
+
+  // Primera observación cargada — se muestra en la alerta y en el libro de
+  // guardia para que el detalle del problema se vea sin entrar a la planilla
+  let primeraObs: string | null = null
+  if (hayNo) {
+    for (const item of items) {
+      for (const campo of campos) {
+        const obs = item.observaciones[campo.clave]
+        if (obs?.trim()) { primeraObs = `${campo.etiqueta}: ${obs.trim()}`; break }
+      }
+      if (primeraObs) break
+    }
+  }
+
   if (hayNo) {
     await alertarSupervisores(
       'novedad_planilla',
-      `Planilla de ${tipo.nombre} con novedades — técnico ${user.id} — ${fecha} turno ${turno}`,
+      `Planilla de ${tipo.nombre} con novedades — técnico ${user.id} — ${fecha} turno ${turno}` +
+        (primeraObs ? `. ${primeraObs}` : ''),
       planilla.id
     )
   }
 
   // Crear novedad automática en el libro de guardia
   const noItems = hayNo ? ' (con observaciones)' : ''
-  const descripcionNovedad = `Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
+  const descripcionNovedad = `Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
+    (primeraObs ? `. ${primeraObs}` : '')
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:   turnoActivo.id,
     tecnico_id: user.id,
