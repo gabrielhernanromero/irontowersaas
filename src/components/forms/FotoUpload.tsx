@@ -26,11 +26,11 @@ export function FotoUpload({ value, onChange }: Props) {
 
     try {
       const res = await fetch('/api/upload/foto', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Error al subir')
-      const { path } = await res.json()
-      onChange(path)
-    } catch {
-      setError('No se pudo subir')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Error al subir')
+      onChange(data.path)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo subir')
       setPreview(null)
       onChange(null)
     } finally {

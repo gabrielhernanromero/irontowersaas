@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     .upload(path, buffer, { contentType: file.type })
 
   if (error) {
-    return NextResponse.json({ error: 'Error al subir la foto' }, { status: 500 })
+    console.error('[upload/foto]', error.message)
+    return NextResponse.json({ error: `Error al subir la foto: ${error.message}` }, { status: 500 })
   }
 
   const { data: { publicUrl } } = supabaseAdmin()
