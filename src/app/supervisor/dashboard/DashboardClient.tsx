@@ -278,7 +278,6 @@ export default function DashboardClient({
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'libro_novedad' },
         (payload) => {
-          console.log('[realtime] INSERT libro_novedad recibido:', payload.new)
           const row   = payload.new as NovedadFeed
           const turno = turnosRef.current.find(t => t.id === row.turno_id)
           const enriched: NovedadFeed = {
@@ -304,9 +303,7 @@ export default function DashboardClient({
           }
         }
       )
-      .subscribe((status, err) => {
-        console.log('[realtime] canal dashboard-novedades:', status, err ?? '')
-      })
+      .subscribe()
 
     const turnosChannel = client
       .channel('dashboard-turnos')
