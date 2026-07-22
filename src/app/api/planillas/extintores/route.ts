@@ -210,8 +210,12 @@ export async function POST(req: NextRequest) {
   const tagFalla = hayNo ? '[FALLA] ' : ''
   const descripcionNovedad = `${tagFalla}Planilla de extintores enviada${noItemsExt} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
     (primeraObs ? `. ${primeraObs}` : '')
+  // Primera foto cargada en algún ítem — así el ícono de cámara del timeline
+  // y el detalle de la novedad ya la muestran, sin tener que entrar a la planilla.
+  const primeraFoto = items.find((item) => item.foto_url)?.foto_url ?? null
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:    turnoActivo.id,
+    foto_url:    primeraFoto,
     tecnico_id:  user.id,
     planilla_id: planilla.id,
     tipo:        'novedad',
