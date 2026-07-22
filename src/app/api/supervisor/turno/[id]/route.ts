@@ -34,5 +34,25 @@ export async function GET(
     (data.novedades as { hora: string }[]).sort((a, b) => a.hora.localeCompare(b.hora))
   }
 
-  return NextResponse.json({ turno: data })
+  const [{ data: incidencias }, { data: elementos }] = await Promise.all([
+    // Incidencias detectadas en este turno, más las que siguen abiertas de
+    // turnos anteriores del mismo cliente (persisten hasta resolverse).
+    data.cliente_id
+      ? supabaseAdmin()
+          .from('incidencias')
+          .select('id, titulo, descripcion, severidad, estado, foto_url, turno_creacion_id, created_at')
+          .eq('cliente_id', data.cliente_id)
+          .or(`turno_creacion_id.eq.${params.id},estado.in.(abierto,en_seguimiento)`)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] }),
+
+    supabaseAdmin()
+      .from('control_inventario_turno')
+      .select('id, elemento_id, estado_operativo, observacion, elementos_puesto(id, nombre, codigo_patrimonial, categoria)')
+      .eq('turno_id', params.id),
+  ])
+
+  return NextResponse.json({
+    turno: { ...data, incidencias: incidencias ?? [], elementos: elementos ?? [] },
+  })
 }

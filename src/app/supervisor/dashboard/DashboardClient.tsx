@@ -12,7 +12,8 @@ import { downloadCsv } from '@/lib/exportCsv'
 import ClienteSelector from './components/ClienteSelector'
 import TurnoSheet      from './components/TurnoSheet'
 import IncidenciaSheet from './components/IncidenciaSheet'
-import FotoLightbox    from './components/FotoLightbox'
+import NovedadSheet    from './components/NovedadSheet'
+import RondasSheet     from './components/RondasSheet'
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ interface NovedadFeed {
   hora: string
   descripcion: string
   incidencia_id: string | null
+  planilla_id: string | null
   foto_url: string | null
   created_at: string
   libro_turno: {
@@ -49,6 +51,21 @@ interface NovedadFeed {
     cliente_id: string | null
     clientes: ClienteRef | null
   } | null
+}
+
+interface RondaDetalle {
+  id: string
+  turno_id: string
+  numero_ronda: number
+  completa: boolean
+  total_puntos: number
+  puntos_escaneados: number
+  hora_inicio: string
+  hora_fin: string | null
+  tecnico_id: string
+  cliente_id: string | null
+  clientes: ClienteRef | null
+  tecnico: { nombre: string; apellido: string } | null
 }
 
 interface IncidenciaActiva {
@@ -86,6 +103,7 @@ interface Props {
   clientes: ClienteRef[]
   resumenDia: ResumenDia
   rondasPorTurno: Record<string, { total: number; completas: number }>
+  rondasDetalle: RondaDetalle[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -143,7 +161,7 @@ const CAT_CLS: Record<string, string> = {
   CIERRE:     'bg-gray-100   text-gray-600',
 }
 
-function parsearCategoria(descripcion: string, tipo: string): { label: string; cls: string } {
+export function parsearCategoria(descripcion: string, tipo: string): { label: string; cls: string } {
   const match = descripcion.match(/^\[([^\]]+)\]/)
   if (match) {
     const cat = match[1].toUpperCase()
@@ -153,7 +171,7 @@ function parsearCategoria(descripcion: string, tipo: string): { label: string; c
   return { label, cls: CAT_CLS[label] ?? 'bg-gray-100 text-gray-600' }
 }
 
-function estadoActividad(tipo: string): { label: string; cls: string; dot: string } {
+export function estadoActividad(tipo: string): { label: string; cls: string; dot: string } {
   const MAP: Record<string, { label: string; cls: string; dot: string }> = {
     apertura: { label: 'INICIADO',   cls: 'text-emerald-600', dot: 'bg-emerald-500' },
     cierre:   { label: 'CERRADO',    cls: 'text-gray-400',    dot: 'bg-gray-400'    },
@@ -194,6 +212,7 @@ export default function DashboardClient({
   clientes,
   resumenDia: initialResumen,
   rondasPorTurno: initialRondasPorTurno,
+  rondasDetalle,
 }: Props) {
   const [turnos,      setTurnos]      = useState(initialTurnos)
   const [novedades,   setNovedades]   = useState(initialNovedades)
@@ -207,7 +226,24 @@ export default function DashboardClient({
 
   const [turnoSheet,      setTurnoSheet]      = useState<string | null>(null)
   const [incidenciaSheet, setIncidenciaSheet] = useState<IncidenciaActiva | null>(null)
-  const [lightboxUrl,     setLightboxUrl]     = useState<string | null>(null)
+  const [novedadSheet,    setNovedadSheet]    = useState<NovedadFeed | null>(null)
+  const [rondasSheetOpen, setRondasSheetOpen] = useState(false)
+
+  // Ids de novedades que acaban de llegar por Realtime — para animar su entrada
+  // en el timeline (distinto de "es la primera de la lista", que también es
+  // cierto para la más reciente del fetch inicial y esa no debe animar).
+  const [newNovedadIds, setNewNovedadIds] = useState<Set<string>>(new Set())
+
+  // Scroll + highlight para los KPI que apuntan a una sección ya visible en la página
+  const guardiaSectionRef     = useRef<HTMLDivElement>(null)
+  const incidenciasSectionRef = useRef<HTMLDivElement>(null)
+  const [highlightSection, setHighlightSection] = useState<'guardia' | 'incidencias' | null>(null)
+
+  function irASeccion(ref: React.RefObject<HTMLDivElement>, key: 'guardia' | 'incidencias') {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setHighlightSection(key)
+    setTimeout(() => setHighlightSection(prev => prev === key ? null : prev), 1500)
+  }
 
   // Alerta crítica nivel ALTO
   const [alertaAlto, setAlertaAlto] = useState<IncidenciaActiva | null>(null)
@@ -252,6 +288,14 @@ export default function DashboardClient({
           }
           setNovedades(prev => [enriched, ...prev].slice(0, 50))
           setResumen(prev => ({ ...prev, novedadesHoy: prev.novedadesHoy + 1 }))
+          setNewNovedadIds(prev => new Set(prev).add(enriched.id))
+          setTimeout(() => {
+            setNewNovedadIds(prev => {
+              const next = new Set(prev)
+              next.delete(enriched.id)
+              return next
+            })
+          }, 2000)
           if (turno) {
             setTurnos(prev => prev.map(t =>
               t.id === turno.id ? { ...t, novedades: [row, ...t.novedades] } : t
@@ -440,7 +484,7 @@ export default function DashboardClient({
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
 
       {/* ── Modal alerta crítica nivel ALTO ── */}
       {alertaAlto && (
@@ -479,27 +523,30 @@ export default function DashboardClient({
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5 capitalize">{todayLabel()}</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <LiveBadge />
+          </div>
+          <p className="text-sm text-gray-500 mt-1 capitalize">{todayLabel()}</p>
         </div>
         <ClienteSelector clientes={clientes} value={clienteId} onChange={setClienteId} />
       </div>
 
       {/* ── Zona de atención inmediata ── */}
       {itemsUrgentes.length > 0 && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-red-100 border-b border-red-200">
+        <div className="rounded-2xl bg-red-50/70 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3">
             <TriangleAlert size={14} className="text-red-600 shrink-0" />
             <p className="text-xs font-bold text-red-700 uppercase tracking-wider">
               {itemsUrgentes.length} {itemsUrgentes.length === 1 ? 'situación requiere atención' : 'situaciones requieren atención'}
             </p>
           </div>
-          <div className="divide-y divide-red-100">
+          <div className="divide-y divide-red-100/70">
             {itemsUrgentes.map((item) => (
               <button
                 key={`${item.tipo}-${item.id}`}
                 onClick={() => item.tipo === 'relevo' ? setTurnoSheet(item.id) : item.inc && setIncidenciaSheet(item.inc)}
-                className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 hover:bg-red-100/60 transition-colors group"
+                className="w-full text-left px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-red-100/50 transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${
@@ -519,46 +566,48 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* ── KPIs (4 cards con sub-métricas) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
+      {/* ── KPIs (franja única, clickeable) ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm grid grid-cols-2 sm:grid-cols-4 divide-y divide-x-0 sm:divide-y-0 sm:divide-x divide-gray-100">
+        <KpiItem
           value={kpis.turnos}
           label="Guardias activas"
           icon={Shield}
-          accentClass="text-emerald-600"
-          iconBg="bg-emerald-50"
-          live={kpis.turnos > 0}
+          onClick={() => irASeccion(guardiaSectionRef, 'guardia')}
           sub={
             turnos.filter(t => t.estado === 'pendiente_relevo').length > 0
               ? { text: `${turnos.filter(t => t.estado === 'pendiente_relevo').length} con relevo pendiente`, cls: 'text-amber-600' }
               : { text: 'todas en orden', cls: 'text-gray-400' }
           }
         />
-        <KpiCard
+        <KpiItem
           value={resumen.tecnicosActivos}
           label="Técnicos en guardia"
           icon={Users}
-          accentClass="text-blue-600"
-          iconBg="bg-blue-50"
-          live={resumen.tecnicosActivos > 0}
+          onClick={() => irASeccion(guardiaSectionRef, 'guardia')}
           sub={{ text: `${resumen.turnosCerrados} cerradas hoy`, cls: 'text-gray-400' }}
         />
-        <KpiCard
+        <KpiItem
           value={kpis.incidencias}
           label="Incidencias abiertas"
           icon={AlertTriangle}
-          accentClass="text-red-500"
-          iconBg="bg-red-50"
+          valueColorClass={kpis.incidencias > 0 ? 'text-red-600' : undefined}
+          onClick={() => irASeccion(incidenciasSectionRef, 'incidencias')}
           sub={
             incidencias.filter(i => i.severidad === 'alto').length > 0
               ? { text: `${incidencias.filter(i => i.severidad === 'alto').length} de severidad alta`, cls: 'text-red-500 font-semibold' }
               : { text: 'sin críticas abiertas', cls: 'text-gray-400' }
           }
         />
-        <KpiCardPct
-          value={resumen.cumplimientoPromedio}
+        <KpiItem
+          value={resumen.cumplimientoPromedio === null ? '—' : `${resumen.cumplimientoPromedio}%`}
           label="Cumplimiento rondas"
           icon={TrendingUp}
+          valueColorClass={
+            resumen.cumplimientoPromedio === null ? undefined :
+            resumen.cumplimientoPromedio >= 90 ? 'text-emerald-600' :
+            resumen.cumplimientoPromedio >= 70 ? 'text-amber-600' : 'text-red-600'
+          }
+          onClick={() => setRondasSheetOpen(true)}
           sub={{ text: `${resumen.rondasCompletas}/${resumen.rondasHoy} rondas completas`, cls: 'text-gray-400' }}
         />
       </div>
@@ -567,11 +616,13 @@ export default function DashboardClient({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* ── Guardias en vivo (2/3) ── */}
-        <div className="lg:col-span-2 space-y-3">
-          <SectionLabel>
-            Guardia en vivo
-            <LiveBadge />
-          </SectionLabel>
+        <div
+          ref={guardiaSectionRef}
+          className={`lg:col-span-2 space-y-3 rounded-2xl transition-shadow duration-500 ${
+            highlightSection === 'guardia' ? 'ring-2 ring-brand-orange/50 ring-offset-4' : ''
+          }`}
+        >
+          <SectionLabel>Guardia en vivo</SectionLabel>
 
           {turnosFiltrados.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
@@ -591,7 +642,7 @@ export default function DashboardClient({
                 <div
                   key={turno.id}
                   onClick={() => setTurnoSheet(turno.id)}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-gray-200 transition-all group"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:border-gray-200 transition-all group"
                 >
                   <div className="flex items-start gap-3">
                     <div className="shrink-0 mt-1.5">
@@ -683,7 +734,12 @@ export default function DashboardClient({
         </div>
 
         {/* ── Incidencias (1/3) ── */}
-        <div className="space-y-3">
+        <div
+          ref={incidenciasSectionRef}
+          className={`space-y-3 rounded-2xl transition-shadow duration-500 ${
+            highlightSection === 'incidencias' ? 'ring-2 ring-brand-orange/50 ring-offset-4' : ''
+          }`}
+        >
           <div className="flex items-center justify-between">
             <SectionLabel>Incidencias abiertas</SectionLabel>
             {incidenciasFiltradas.length > 0 && (
@@ -753,13 +809,10 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* ── Activity feed ── */}
+      {/* ── Activity feed — timeline vertical ── */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <SectionLabel>Actividad en vivo</SectionLabel>
-            <LiveBadge />
-          </div>
+          <SectionLabel>Actividad en vivo</SectionLabel>
           {/* Filter chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <Filter size={12} className="text-gray-400" />
@@ -779,7 +832,7 @@ export default function DashboardClient({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           {novedadesFiltradas.length === 0 ? (
             <div className="p-8 text-center">
               <MessageSquare size={24} className="mx-auto mb-2 text-gray-200" />
@@ -788,66 +841,48 @@ export default function DashboardClient({
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <div className="grid grid-cols-[72px_140px_1fr_44px_130px] min-w-[560px] px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                {['HORA', 'CATEGORÍA', 'DETALLE / OBSERVACIÓN', '', 'ESTADO'].map((h, i) => (
-                  <span key={i} className="text-xs font-semibold text-gray-400 uppercase tracking-wide last:text-right">
-                    {h}
-                  </span>
-                ))}
-              </div>
-
-              <div className="divide-y divide-gray-50">
-                {novedadesFiltradas.map((nov, i) => {
+            <div className="relative">
+              <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
+              <div className="space-y-1">
+                {novedadesFiltradas.map((nov) => {
                   const turno  = nov.libro_turno
                   const cat    = parsearCategoria(nov.descripcion, nov.tipo)
                   const estado = estadoActividad(nov.tipo)
                   const nombre = turno?.tecnico_nombre ?? '—'
                   const cli    = turno?.clientes?.nombre_empresa
                   const detalle = nov.descripcion.replace(/^\[[^\]]+\]\s*/, '')
+                  const fecha = new Date(nov.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+                  const esNueva = newNovedadIds.has(nov.id)
 
                   return (
-                    <div
+                    <button
                       key={nov.id}
-                      className={`grid grid-cols-[72px_140px_1fr_44px_130px] min-w-[560px] px-4 py-3 items-center transition-colors ${
-                        i === 0 ? 'bg-blue-50/20' : 'hover:bg-gray-50/50'
+                      onClick={() => setNovedadSheet(nov)}
+                      className={`relative w-full text-left flex gap-4 rounded-xl px-3 py-3 -mx-3 hover:bg-gray-50 transition-colors group ${
+                        esNueva ? 'animate-fade-in-slide bg-blue-50/40' : ''
                       }`}
                     >
-                      <span className="font-mono text-sm text-gray-600 font-medium tabular-nums">
-                        {nov.hora}
-                      </span>
-                      <div>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${cat.cls}`}>
-                          {cat.label}
-                        </span>
-                      </div>
-                      <div className="min-w-0 pr-2">
-                        <p className="text-sm text-gray-700 line-clamp-1">
+                      <span className={`w-3.5 h-3.5 rounded-full shrink-0 mt-0.5 ring-2 ring-white z-10 ${estado.dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <span className="font-mono text-xs font-semibold text-gray-500 tabular-nums">
+                            {fecha} · {nov.hora}
+                          </span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${cat.cls}`}>{cat.label}</span>
+                          {nov.foto_url && <Camera size={12} className="text-gray-400" />}
+                        </div>
+                        <p className="text-sm text-gray-700 line-clamp-1 group-hover:text-brand-ink">
                           {detalle || nov.descripcion}
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {nombre}{cli ? ` · ${cli}` : ''}
                         </p>
                       </div>
-                      {/* Foto icon */}
-                      <div className="flex items-center justify-center">
-                        {nov.foto_url && (
-                          <button
-                            onClick={() => setLightboxUrl(nov.foto_url!)}
-                            className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
-                            title="Ver foto"
-                          >
-                            <Camera size={14} className="text-gray-400 hover:text-brand-ink" />
-                          </button>
-                        )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs font-bold tracking-wide ${estado.cls}`}>{estado.label}</span>
+                        <ChevronRight size={13} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
                       </div>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${estado.dot}`} />
-                        <span className={`text-xs font-bold tracking-wide ${estado.cls}`}>
-                          {estado.label}
-                        </span>
-                      </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -870,10 +905,23 @@ export default function DashboardClient({
           onResolved={handleIncidenciaResolved}
         />
       )}
-      {lightboxUrl && (
-        <FotoLightbox
-          url={lightboxUrl}
-          onClose={() => setLightboxUrl(null)}
+      {novedadSheet && (
+        <NovedadSheet
+          novedad={novedadSheet}
+          onClose={() => setNovedadSheet(null)}
+          onVerIncidencia={(incidenciaId) => {
+            const inc = incidencias.find(i => i.id === incidenciaId)
+            if (inc) {
+              setNovedadSheet(null)
+              setIncidenciaSheet(inc)
+            }
+          }}
+        />
+      )}
+      {rondasSheetOpen && (
+        <RondasSheet
+          rondas={rondasDetalle}
+          onClose={() => setRondasSheetOpen(false)}
         />
       )}
     </div>
@@ -882,67 +930,26 @@ export default function DashboardClient({
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({
-  value, label, icon: Icon, accentClass, iconBg, live, sub,
+function KpiItem({
+  value, label, icon: Icon, valueColorClass, onClick, sub,
 }: {
-  value: number
+  value: number | string
   label: string
   icon: React.ElementType
-  accentClass: string
-  iconBg: string
-  live?: boolean
+  valueColorClass?: string
+  onClick?: () => void
   sub?: { text: string; cls: string }
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center`}>
-          <Icon size={17} className={accentClass} />
-        </div>
-        {live && value > 0 && (
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-        )}
-      </div>
-      <p className={`text-4xl font-black ${accentClass}`}>{value}</p>
+    <button
+      onClick={onClick}
+      className="text-left p-5 hover:bg-gray-50/70 transition-colors"
+    >
+      <Icon size={16} className="text-gray-300 mb-3" />
+      <p className={`text-4xl font-black ${valueColorClass ?? 'text-gray-900'}`}>{value}</p>
       <p className="text-sm text-gray-500 mt-1 leading-tight">{label}</p>
       {sub && <p className={`text-xs mt-1 ${sub.cls}`}>{sub.text}</p>}
-    </div>
-  )
-}
-
-function KpiCardPct({
-  value, label, icon: Icon, sub,
-}: {
-  value: number | null
-  label: string
-  icon: React.ElementType
-  sub?: { text: string; cls: string }
-}) {
-  const color = value === null ? 'text-gray-400' : value >= 90 ? 'text-emerald-600' : value >= 70 ? 'text-amber-500' : 'text-red-500'
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center">
-          <Icon size={17} className={color} />
-        </div>
-      </div>
-      <p className={`text-4xl font-black ${color}`}>
-        {value === null ? '—' : `${value}%`}
-      </p>
-      {value !== null && (
-        <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full ${value >= 90 ? 'bg-emerald-400' : value >= 70 ? 'bg-amber-400' : 'bg-red-400'}`}
-            style={{ width: `${value}%` }}
-          />
-        </div>
-      )}
-      <p className="text-sm text-gray-500 mt-1 leading-tight">{label}</p>
-      {sub && <p className={`text-xs mt-0.5 ${sub.cls}`}>{sub.text}</p>}
-    </div>
+    </button>
   )
 }
 

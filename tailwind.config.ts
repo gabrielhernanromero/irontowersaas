@@ -36,9 +36,14 @@ const config: Config = {
           '0%':   { transform: 'translateY(-100%)', opacity: '0' },
           '100%': { transform: 'translateY(0)',     opacity: '1' },
         },
+        'fade-in-slide': {
+          '0%':   { transform: 'translateY(-6px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)',     opacity: '1' },
+        },
       },
       animation: {
         'slide-down': 'slide-down 0.3s ease-out',
+        'fade-in-slide': 'fade-in-slide 0.4s ease-out',
       },
     },
   },

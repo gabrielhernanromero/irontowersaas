@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       incidencia_id,
       tipo: 'novedad',
       hora: horaActual(),
-      descripcion: `INCIDENCIA RESUELTA — "${incidencia.titulo}": ${descripcion_resolucion}`,
+      descripcion: `[INCIDENCIA] Resuelta — "${incidencia.titulo}": ${descripcion_resolucion}`,
       foto_url: foto_url ?? null,
     })
     .select()

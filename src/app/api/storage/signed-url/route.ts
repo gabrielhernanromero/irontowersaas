@@ -23,8 +23,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'path requerido' }, { status: 400 })
   }
 
-  // Inferir bucket del primer segmento del path
-  const bucket = BUCKET_MAP[path.split('/')[0]]
+  // El bucket se pasa explícito (los paths reales son "{userId}/{archivo}",
+  // no vienen prefijados con el nombre del bucket). Si no se pasa, se intenta
+  // inferir del primer segmento por compatibilidad con llamadas viejas.
+  const bucketParam = req.nextUrl.searchParams.get('bucket')
+  const bucket = bucketParam ? BUCKET_MAP[bucketParam] : BUCKET_MAP[path.split('/')[0]]
   if (!bucket) {
     return NextResponse.json({ error: 'Bucket inválido' }, { status: 400 })
   }

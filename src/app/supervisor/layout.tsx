@@ -1,7 +1,7 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { getSession } from '@/lib/auth/getSession'
 import Link from 'next/link'
-import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Target, ClipboardCheck, CalendarDays, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Target, ClipboardCheck, CalendarDays, ShieldCheck, BookOpen } from 'lucide-react'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 import OfflineBanner from '@/components/OfflineBanner'
 import LogoutButton from '@/components/ui/LogoutButton'
@@ -32,6 +32,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
           <SideLink href="/supervisor/informes" icon={<FileText size={18} />} label="Informes" />
           <SideLink href="/supervisor/clientes" icon={<Target size={18} />} label="Clientes" />
           <SideLink href="/supervisor/turnos"    icon={<CalendarDays size={18} />} label="Turnos" />
+          <SideLink href="/supervisor/libro-guardia" icon={<BookOpen size={18} />} label="Libro de Guardia" />
           <SideLink href="/supervisor/rondas"   icon={<ClipboardCheck size={18} />} label="Rondas" />
           <SideLink href="/supervisor/usuarios" icon={<Users size={18} />} label="Técnicos" />
           {esAdmin && (

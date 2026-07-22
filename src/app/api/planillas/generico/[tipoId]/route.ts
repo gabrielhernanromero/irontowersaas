@@ -180,17 +180,39 @@ export async function POST(
   // Regla 4: alertar supervisores si algún campo de algún ítem tiene un NO
   // (check en false, o numérico fuera del rango configurado)
   const hayNo = items.some((item) => itemTieneNovedad(item, campos))
+
+  // Primera observación cargada — se muestra en la alerta y en el libro de
+  // guardia para que el detalle del problema se vea sin entrar a la planilla
+  let primeraObs: string | null = null
+  if (hayNo) {
+    for (const item of items) {
+      for (const campo of campos) {
+        const obs = item.observaciones[campo.clave]
+        if (obs?.trim()) { primeraObs = `${campo.etiqueta}: ${obs.trim()}`; break }
+      }
+      if (primeraObs) break
+    }
+  }
+
   if (hayNo) {
     await alertarSupervisores(
       'novedad_planilla',
-      `Planilla de ${tipo.nombre} con novedades — técnico ${user.id} — ${fecha} turno ${turno}`,
+      `Planilla de ${tipo.nombre} con novedades — técnico ${user.id} — ${fecha} turno ${turno}` +
+        (primeraObs ? `. ${primeraObs}` : ''),
       planilla.id
     )
   }
 
-  // Crear novedad automática en el libro de guardia
+  // Crear novedad automática en el libro de guardia — el prefijo [FALLA]
+  // hace que el timeline del dashboard la resalte en naranja (parsearCategoria
+  // ya sabe leer ese tag) y que quede incluida en el filtro de "Alertas".
   const noItems = hayNo ? ' (con observaciones)' : ''
-  const descripcionNovedad = `Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}`
+  const tagFalla = hayNo ? '[FALLA] ' : ''
+  const descripcionNovedad = `${tagFalla}Planilla de ${tipo.nombre} enviada${noItems} — ${turnoActivo.tecnico_nombre}, DNI ${turnoActivo.tecnico_dni}` +
+    (primeraObs ? `. ${primeraObs}` : '')
+  // Primera foto cargada en algún ítem — así el ícono de cámara del timeline
+  // y el detalle de la novedad ya la muestran, sin tener que entrar a la planilla.
+  const primeraFoto = items.find((item) => item.foto_url)?.foto_url ?? null
   const { data: novedad } = await admin.from('libro_novedad').insert({
     turno_id:   turnoActivo.id,
     tecnico_id: user.id,
@@ -198,6 +220,7 @@ export async function POST(
     tipo:        'novedad',
     hora:        new Date().toTimeString().slice(0, 5),
     descripcion: descripcionNovedad,
+    foto_url:    primeraFoto,
   }).select('id').single()
 
   // Notificar al otro rol (apoyo → encargado o encargado → apoyo)

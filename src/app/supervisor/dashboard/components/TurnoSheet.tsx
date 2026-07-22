@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   X, User, Clock, MapPin, Loader2, BookOpen, ShieldAlert,
   ClipboardCheck, CheckCircle2, CheckCircle, XCircle, Camera,
+  AlertTriangle, Package,
 } from 'lucide-react'
 import FotoLightbox, { FotoThumb } from './FotoLightbox'
 
@@ -44,6 +45,25 @@ interface Ronda {
   ronda_scans: RondaScan[]
 }
 
+interface IncidenciaTurno {
+  id: string
+  titulo: string
+  descripcion: string
+  severidad: 'bajo' | 'medio' | 'alto' | null
+  estado: 'abierto' | 'resuelto' | 'cerrado' | 'en_seguimiento'
+  foto_url: string | null
+  turno_creacion_id: string | null
+  created_at: string
+}
+
+interface ElementoTurno {
+  id: string
+  elemento_id: string
+  estado_operativo: 'ok' | 'falla' | 'faltante'
+  observacion: string | null
+  elementos_puesto: { id: string; nombre: string; codigo_patrimonial: string; categoria: string | null } | null
+}
+
 interface TurnoDetalle {
   id: string
   folio_numero: number
@@ -56,6 +76,8 @@ interface TurnoDetalle {
   estado: string
   clientes: { id: string; nombre_empresa: string } | null
   novedades: Novedad[]
+  incidencias: IncidenciaTurno[]
+  elementos: ElementoTurno[]
 }
 
 interface Props {
@@ -63,7 +85,26 @@ interface Props {
   onClose: () => void
 }
 
-type Tab = 'novedades' | 'rondas'
+type Tab = 'novedades' | 'rondas' | 'incidencias' | 'elementos'
+
+const SEV_CONFIG: Record<'bajo' | 'medio' | 'alto', { label: string; badge: string }> = {
+  alto:  { label: 'Alto',  badge: 'bg-red-100 text-red-700'   },
+  medio: { label: 'Medio', badge: 'bg-amber-100 text-amber-700' },
+  bajo:  { label: 'Bajo',  badge: 'bg-gray-100 text-gray-600'  },
+}
+
+const ESTADO_INCIDENCIA: Record<IncidenciaTurno['estado'], { label: string; badge: string }> = {
+  abierto:        { label: 'Abierta',        badge: 'bg-red-100 text-red-700' },
+  en_seguimiento: { label: 'En seguimiento',  badge: 'bg-amber-100 text-amber-700' },
+  resuelto:       { label: 'Resuelta',        badge: 'bg-emerald-100 text-emerald-700' },
+  cerrado:        { label: 'Cerrada',         badge: 'bg-gray-100 text-gray-500' },
+}
+
+const ESTADO_ELEMENTO: Record<ElementoTurno['estado_operativo'], { label: string; badge: string }> = {
+  ok:       { label: 'OK',       badge: 'bg-emerald-100 text-emerald-700' },
+  falla:    { label: 'Falla',    badge: 'bg-amber-100 text-amber-700' },
+  faltante: { label: 'Faltante', badge: 'bg-red-100 text-red-700' },
+}
 
 const TIPO_STYLE: Record<string, { dot: string; label: string }> = {
   apertura:  { dot: 'bg-emerald-500', label: 'Apertura' },
@@ -72,6 +113,24 @@ const TIPO_STYLE: Record<string, { dot: string; label: string }> = {
   cierre:    { dot: 'bg-gray-400',    label: 'Cierre'   },
   ronda:     { dot: 'bg-purple-500',  label: 'Ronda'    },
   sistema:   { dot: 'bg-gray-300',    label: 'Sistema'  },
+}
+
+// Novedades generadas por el sistema (planilla con NO, incidencia resuelta)
+// vienen con un tag "[FALLA]"/"[INCIDENCIA]" al frente de la descripción —
+// mismo criterio que parsearCategoria() en DashboardClient — para resaltarlas
+// con un color distinto del "Novedad" genérico.
+const CAT_TAG: Record<string, { dot: string; label: string }> = {
+  FALLA:      { dot: 'bg-orange-500', label: 'Falla'      },
+  INCIDENCIA: { dot: 'bg-red-500',    label: 'Incidencia' },
+}
+
+function parseNovedad(n: Novedad) {
+  const match = n.descripcion.match(/^\[([^\]]+)\]\s*/)
+  const tag = match ? CAT_TAG[match[1].toUpperCase()] : null
+  return {
+    style: tag ?? TIPO_STYLE[n.tipo] ?? TIPO_STYLE.novedad,
+    detalle: match ? n.descripcion.slice(match[0].length) : n.descripcion,
+  }
 }
 
 export default function TurnoSheet({ turnoId, onClose }: Props) {
@@ -284,6 +343,13 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                   <ClipboardCheck size={13} />
                   Rondas
                 </TabBtn>
+                <TabBtn active={tab === 'incidencias'} onClick={() => setTab('incidencias')}>
+                  Incidencias ({turno.incidencias.length})
+                </TabBtn>
+                <TabBtn active={tab === 'elementos'} onClick={() => setTab('elementos')}>
+                  <Package size={13} />
+                  Elementos
+                </TabBtn>
               </div>
 
               {/* Tab: Novedades */}
@@ -296,7 +362,7 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                       <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
                       <div className="space-y-5">
                         {turno.novedades.map(n => {
-                          const style = TIPO_STYLE[n.tipo] ?? TIPO_STYLE.novedad
+                          const { style, detalle } = parseNovedad(n)
                           return (
                             <div key={n.id} className="relative flex gap-4">
                               <div className={`w-3.5 h-3.5 rounded-full ${style.dot} shrink-0 mt-0.5 ring-2 ring-white z-10`} />
@@ -305,7 +371,7 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                                   <span className="text-xs font-semibold text-gray-500">{n.hora}</span>
                                   <span className="text-xs text-gray-400">{style.label}</span>
                                 </div>
-                                <p className="text-sm text-gray-800 leading-relaxed">{n.descripcion}</p>
+                                <p className="text-sm text-gray-800 leading-relaxed">{detalle}</p>
                                 {n.riesgo_detectado && (
                                   <p className="text-xs text-red-600 mt-1">
                                     <span className="font-medium">Riesgo:</span> {n.riesgo_detectado}
@@ -354,6 +420,83 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                         onFoto={setLightboxUrl}
                       />
                     ))
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Incidencias */}
+              {tab === 'incidencias' && (
+                <div className="p-5 space-y-3">
+                  <p className="text-xs text-gray-400 leading-relaxed -mt-1 mb-1">
+                    Problemas del puesto — quedan abiertas hasta que se resuelven, aunque cambie el técnico de turno. Distinto de una alerta puntual (ver en Alertas).
+                  </p>
+                  {turno.incidencias.length === 0 ? (
+                    <div className="text-center py-6">
+                      <AlertTriangle size={24} className="mx-auto mb-2 text-gray-200" />
+                      <p className="text-sm text-gray-400">Sin incidencias para este puesto</p>
+                    </div>
+                  ) : (
+                    turno.incidencias.map(inc => {
+                      const sev = SEV_CONFIG[inc.severidad ?? 'bajo']
+                      const est = ESTADO_INCIDENCIA[inc.estado]
+                      const deEsteTurno = inc.turno_creacion_id === turno.id
+                      return (
+                        <div key={inc.id} className="border border-gray-100 rounded-xl p-3.5">
+                          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${sev.badge}`}>
+                              {sev.label}
+                            </span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${est.badge}`}>
+                              {est.label}
+                            </span>
+                            <span className="text-[10px] font-medium text-gray-400">
+                              {deEsteTurno ? 'Detectada en este turno' : 'Persiste de un turno anterior'}
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-800">{inc.titulo}</p>
+                          {inc.descripcion && (
+                            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{inc.descripcion}</p>
+                          )}
+                          {inc.foto_url && (
+                            <FotoThumb
+                              url={inc.foto_url}
+                              onClick={() => setLightboxUrl(inc.foto_url!)}
+                              className="w-28 h-20 mt-2"
+                            />
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Elementos */}
+              {tab === 'elementos' && (
+                <div className="p-5 space-y-2">
+                  {turno.elementos.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Package size={24} className="mx-auto mb-2 text-gray-200" />
+                      <p className="text-sm text-gray-400">Sin verificación de elementos en este turno</p>
+                    </div>
+                  ) : (
+                    turno.elementos.map(el => {
+                      const est = ESTADO_ELEMENTO[el.estado_operativo]
+                      return (
+                        <div key={el.id} className="flex items-center justify-between gap-3 border border-gray-100 rounded-xl px-3.5 py-2.5">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{el.elementos_puesto?.nombre ?? 'Elemento'}</p>
+                            <p className="text-xs text-gray-400">
+                              {el.elementos_puesto?.codigo_patrimonial}
+                              {el.observacion ? ` · ${el.observacion}` : ''}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${est.badge}`}>
+                            {est.label}
+                          </span>
+                        </div>
+                      )
+                    })
                   )}
                 </div>
               )}

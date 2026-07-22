@@ -58,7 +58,7 @@ export default async function DashboardPage() {
     supabaseAdmin()
       .from('libro_novedad')
       .select(`
-        id, turno_id, tipo, hora, descripcion, incidencia_id, foto_url, created_at,
+        id, turno_id, tipo, hora, descripcion, incidencia_id, planilla_id, foto_url, created_at,
         libro_turno(id, tecnico_nombre, cliente_id, clientes(id, nombre_empresa))
       `)
       .gte('created_at', todayStart)
@@ -104,8 +104,14 @@ export default async function DashboardPage() {
     // Rondas de hoy con datos de cumplimiento
     supabaseAdmin()
       .from('rondas')
-      .select('id, turno_id, completa, total_puntos, puntos_escaneados, tecnico_id, cliente_id, clientes(id, nombre_empresa)')
-      .gte('hora_inicio', todayStart),
+      .select(`
+        id, turno_id, numero_ronda, completa, total_puntos, puntos_escaneados,
+        hora_inicio, hora_fin, tecnico_id, cliente_id,
+        clientes(id, nombre_empresa),
+        tecnico:users!tecnico_id(nombre, apellido)
+      `)
+      .gte('hora_inicio', todayStart)
+      .order('hora_inicio', { ascending: false }),
 
     // Técnicos únicos con guardia abierta ahora
     supabaseAdmin()
@@ -137,6 +143,8 @@ export default async function DashboardPage() {
       initialAlertasSinLeer={alertasSinLeer ?? 0}
       clientes={(clientes ?? []) as { id: string; nombre_empresa: string }[]}
       rondasPorTurno={rondasPorTurno}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rondasDetalle={(rondasHoy ?? []) as any[]}
       resumenDia={{
         turnosCerrados:       turnosCerradosHoy   ?? 0,
         novedadesHoy:         novedadesRaw?.length ?? 0,
