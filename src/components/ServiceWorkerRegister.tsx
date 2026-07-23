@@ -9,10 +9,18 @@ export default function ServiceWorkerRegister() {
 
     // En desarrollo el SW cachea chunks de webpack que cambian en cada recompilación
     // y causa errores "options.factory is undefined". Se desregistra para evitarlo.
+    // También se borra el Cache Storage: un SW registrado en una sesión previa (ej. un
+    // build de producción corrido en el mismo puerto) deja assets cacheados con
+    // cache-first que sobreviven al unregister y siguen sirviendo JS viejo.
     if (process.env.NODE_ENV !== 'production') {
       navigator.serviceWorker.getRegistrations()
         .then(regs => regs.forEach(r => r.unregister()))
         .catch(() => {})
+      if ('caches' in window) {
+        caches.keys()
+          .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+          .catch(() => {})
+      }
       return
     }
 
