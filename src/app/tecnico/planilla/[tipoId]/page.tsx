@@ -18,15 +18,7 @@ export default async function PlanillaGenericaPage({ params }: { params: { tipoI
     .maybeSingle()
 
   if (!tipo || !tipo.activo) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center px-4">
-        <h1 className="text-xl font-condensed font-bold text-brand-ink">Planilla no disponible</h1>
-        <p className="text-gray-500 text-sm">Este tipo de planilla ya no está habilitado.</p>
-        <Link href="/tecnico/home" className="text-sm text-brand-blue underline min-h-[44px] flex items-center">
-          Volver al inicio
-        </Link>
-      </div>
-    )
+    return <PlanillaNoDisponible />
   }
 
   let turnoActivo = (await admin
@@ -133,6 +125,13 @@ export default async function PlanillaGenericaPage({ params }: { params: { tipoI
   const clienteData = turnoActivo?.clientes as unknown as { nombre_empresa: string } | null
   const clienteIdActivo = turnoActivo?.cliente_id ?? null
 
+  // El tipo pertenece a un cliente puntual — si el turno abierto es de otro
+  // cliente, no debe poder completarse (aunque no aparezca en su home, no
+  // hay que confiar solo en eso: la URL es adivinable por id).
+  if (clienteIdActivo && tipo.cliente_id !== clienteIdActivo) {
+    return <PlanillaNoDisponible />
+  }
+
   const [{ data: campos }, { data: itemsConfig }, planoUrl] = clienteIdActivo
     ? await Promise.all([
         admin
@@ -167,6 +166,18 @@ export default async function PlanillaGenericaPage({ params }: { params: { tipoI
         items={itemsConfig ?? []}
         planoUrl={planoUrl}
       />
+    </div>
+  )
+}
+
+function PlanillaNoDisponible() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-16 text-center px-4">
+      <h1 className="text-xl font-condensed font-bold text-brand-ink">Planilla no disponible</h1>
+      <p className="text-gray-500 text-sm">Este tipo de planilla ya no está habilitado.</p>
+      <Link href="/tecnico/home" className="text-sm text-brand-blue underline min-h-[44px] flex items-center">
+        Volver al inicio
+      </Link>
     </div>
   )
 }
