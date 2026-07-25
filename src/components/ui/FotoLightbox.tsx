@@ -1,7 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, ZoomIn, ImageOff, Loader2, Camera } from 'lucide-react'
+import { X, ZoomIn, ImageOff, Loader2, Camera, FileText, ExternalLink } from 'lucide-react'
+
+// Un plano de planta puede subirse como imagen o como PDF — se distingue
+// por la extensión en el path (antes de los query params de la signed URL).
+function isPdfUrl(url: string): boolean {
+  return url.split('?')[0].toLowerCase().endsWith('.pdf')
+}
 
 // ── Lightbox full-screen ──────────────────────────────────────────────────────
 
@@ -13,6 +19,7 @@ interface LightboxProps {
 
 export default function FotoLightbox({ url, alt = 'Foto', onClose }: LightboxProps) {
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading')
+  const esPdf = isPdfUrl(url)
 
   // Cerrar con ESC
   useEffect(() => {
@@ -52,31 +59,54 @@ export default function FotoLightbox({ url, alt = 'Foto', onClose }: LightboxPro
         Deslizá hacia abajo para cerrar
       </p>
 
-      {/* Spinner mientras carga */}
-      {status === 'loading' && (
-        <Loader2 size={32} className="text-white/60 animate-spin absolute" />
-      )}
-
-      {/* Error state */}
-      {status === 'error' && (
-        <div className="flex flex-col items-center gap-3 text-white/60">
-          <ImageOff size={40} />
-          <p className="text-sm">No se pudo cargar la foto</p>
+      {esPdf ? (
+        // Los navegadores no renderizan bien un PDF dentro de un modal —
+        // se abre en una pestaña nueva con el visor nativo del SO/navegador.
+        <div
+          className="flex flex-col items-center gap-4 text-white bg-white/5 border border-white/10 rounded-xl p-8"
+          onClick={e => e.stopPropagation()}
+        >
+          <FileText size={40} />
+          <p className="text-base">{alt}</p>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-base font-semibold bg-white/10 hover:bg-white/20 rounded-xl px-4 py-2.5 min-h-[44px]"
+          >
+            <ExternalLink size={16} />
+            Abrir PDF
+          </a>
         </div>
-      )}
+      ) : (
+        <>
+          {/* Spinner mientras carga */}
+          {status === 'loading' && (
+            <Loader2 size={32} className="text-white/60 animate-spin absolute" />
+          )}
 
-      {/* La imagen */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt={alt}
-        className={`max-w-full max-h-[88vh] object-contain rounded-xl shadow-2xl transition-opacity duration-200 ${
-          status === 'ok' ? 'opacity-100' : 'opacity-0 absolute'
-        }`}
-        onLoad={() => setStatus('ok')}
-        onError={() => setStatus('error')}
-        onClick={e => e.stopPropagation()}
-      />
+          {/* Error state */}
+          {status === 'error' && (
+            <div className="flex flex-col items-center gap-3 text-white/60">
+              <ImageOff size={40} />
+              <p className="text-sm">No se pudo cargar la foto</p>
+            </div>
+          )}
+
+          {/* La imagen */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={alt}
+            className={`max-w-full max-h-[88vh] object-contain rounded-xl shadow-2xl transition-opacity duration-200 ${
+              status === 'ok' ? 'opacity-100' : 'opacity-0 absolute'
+            }`}
+            onLoad={() => setStatus('ok')}
+            onError={() => setStatus('error')}
+            onClick={e => e.stopPropagation()}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -92,6 +122,18 @@ export function FotoThumb({
   onClick: () => void
   className?: string
 }) {
+  if (isPdfUrl(url)) {
+    return (
+      <button
+        onClick={onClick}
+        className={`relative group overflow-hidden rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center ${className}`}
+        aria-label="Ver PDF"
+      >
+        <FileText size={24} className="text-gray-400" />
+      </button>
+    )
+  }
+
   return (
     <button
       onClick={onClick}

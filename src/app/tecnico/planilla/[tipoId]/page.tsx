@@ -146,7 +146,7 @@ export default async function PlanillaGenericaPage({ params }: { params: { tipoI
           .eq('tipo', tipo.slug)
           .eq('activo', true)
           .order('orden', { ascending: true }),
-        getPlanoUrl(clienteIdActivo),
+        getPlanoUrl(tipo.id),
       ])
     : [{ data: [] as { clave: string; etiqueta: string; tipo_campo: 'check' | 'select' | 'texto' | 'numero' | 'fecha' | 'ubicacion'; opciones: string[]; valor_min: number | null; valor_max: number | null }[] }, { data: [] as { numero: string }[] }, null]
 
