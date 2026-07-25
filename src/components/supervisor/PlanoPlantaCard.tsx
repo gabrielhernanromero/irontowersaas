@@ -7,7 +7,7 @@ import type { PlanoPlanta } from '@/types/database'
 
 type PlanoPlantaRow = PlanoPlanta & { url: string | null }
 
-export default function PlanoPlantaCard({ clienteId }: { clienteId: string }) {
+export default function PlanoPlantaCard({ clienteId, planillaTipoId }: { clienteId: string; planillaTipoId: string }) {
   const [plano,      setPlano]      = useState<PlanoPlantaRow | null>(null)
   const [loading,    setLoading]    = useState(true)
   const [uploading,  setUploading]  = useState(false)
@@ -15,11 +15,12 @@ export default function PlanoPlantaCard({ clienteId }: { clienteId: string }) {
   const [lightbox,   setLightbox]   = useState(false)
 
   useEffect(() => {
-    fetch(`/api/supervisor/planos?cliente_id=${clienteId}`)
+    setLoading(true)
+    fetch(`/api/supervisor/planos?planilla_tipo_id=${planillaTipoId}`)
       .then(r => r.json())
       .then(j => { setPlano(j.plano ?? null); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [clienteId])
+  }, [clienteId, planillaTipoId])
 
   async function handleFile(file: File) {
     setUploading(true)
@@ -28,6 +29,7 @@ export default function PlanoPlantaCard({ clienteId }: { clienteId: string }) {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('cliente_id', clienteId)
+      fd.append('planilla_tipo_id', planillaTipoId)
       const res = await fetch('/api/supervisor/planos', { method: 'POST', body: fd })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al subir el plano'); return }
@@ -38,7 +40,7 @@ export default function PlanoPlantaCard({ clienteId }: { clienteId: string }) {
 
   async function handleDelete() {
     if (!confirm('¿Eliminar el plano de planta?')) return
-    const res = await fetch(`/api/supervisor/planos?cliente_id=${clienteId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/supervisor/planos?planilla_tipo_id=${planillaTipoId}`, { method: 'DELETE' })
     if (res.ok) setPlano(null)
   }
 
@@ -75,7 +77,7 @@ export default function PlanoPlantaCard({ clienteId }: { clienteId: string }) {
               Reemplazar plano
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 className="hidden"
                 disabled={uploading}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
@@ -98,7 +100,7 @@ export default function PlanoPlantaCard({ clienteId }: { clienteId: string }) {
           {uploading ? 'Subiendo...' : 'Cargar plano de planta'}
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
             disabled={uploading}
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}

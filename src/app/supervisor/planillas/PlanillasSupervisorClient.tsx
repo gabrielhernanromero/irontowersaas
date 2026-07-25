@@ -741,7 +741,7 @@ function ConfiguracionTab({ clientes }: { clientes: { id: string; nombre_empresa
               </div>
 
               <div className="pt-6 border-t border-gray-100">
-                <PlanoPlantaCard clienteId={clienteId} />
+                <PlanoPlantaCard clienteId={clienteId} planillaTipoId={tipoActivo.id} />
               </div>
             </div>
           )}

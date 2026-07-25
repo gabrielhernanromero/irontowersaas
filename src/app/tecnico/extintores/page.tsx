@@ -71,6 +71,7 @@ export default async function ExtintoresPage() {
 
   // Si el supervisor activó el motor genérico para Extintores en este cliente,
   // el envío pasa por la ruta genérica (columnas configurables) en vez de este form
+  let tipoExtintoresId: string | null = null
   if (turnoActivo?.cliente_id) {
     const { data: tipoGenerico } = await supabaseAdmin()
       .from('planilla_tipos')
@@ -81,6 +82,7 @@ export default async function ExtintoresPage() {
     if (tipoGenerico?.usa_motor_generico) {
       redirect(`/tecnico/planilla/${tipoGenerico.id}`)
     }
+    tipoExtintoresId = tipoGenerico?.id ?? null
   }
 
   // Busca por turno_id — más robusto que cliente+fecha+turno
@@ -140,7 +142,7 @@ export default async function ExtintoresPage() {
           .eq('tipo', 'extintores')
           .eq('activo', true)
           .order('orden', { ascending: true }),
-        getPlanoUrl(clienteIdActivo),
+        tipoExtintoresId ? getPlanoUrl(tipoExtintoresId) : Promise.resolve(null),
       ])
     : [{ data: [] as { numero: string; tipo_extintor: string | null }[] }, null]
 

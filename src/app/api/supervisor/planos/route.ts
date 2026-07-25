@@ -12,14 +12,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
-  const clienteId = req.nextUrl.searchParams.get('cliente_id')
-  if (!clienteId) return NextResponse.json({ error: 'cliente_id requerido' }, { status: 400 })
+  const planillaTipoId = req.nextUrl.searchParams.get('planilla_tipo_id')
+  if (!planillaTipoId) return NextResponse.json({ error: 'planilla_tipo_id requerido' }, { status: 400 })
 
   const admin = supabaseAdmin()
   const { data, error } = await admin
     .from('planos_planta')
-    .select('id, cliente_id, path, nombre, created_at')
-    .eq('cliente_id', clienteId)
+    .select('id, cliente_id, planilla_tipo_id, path, nombre, created_at')
+    .eq('planilla_tipo_id', planillaTipoId)
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -49,14 +49,16 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   const clienteId = formData.get('cliente_id') as string | null
+  const planillaTipoId = formData.get('planilla_tipo_id') as string | null
   const nombre = formData.get('nombre') as string | null
 
   if (!file) return NextResponse.json({ error: 'No se envió archivo' }, { status: 400 })
   if (!clienteId) return NextResponse.json({ error: 'cliente_id requerido' }, { status: 400 })
+  if (!planillaTipoId) return NextResponse.json({ error: 'planilla_tipo_id requerido' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const ext = file.type === 'image/png' ? 'png' : 'jpg'
-  const path = `${clienteId}/${Date.now()}.${ext}`
+  const ext = file.type === 'application/pdf' ? 'pdf' : file.type === 'image/png' ? 'png' : 'jpg'
+  const path = `${clienteId}/${planillaTipoId}/${Date.now()}.${ext}`
 
   const admin = supabaseAdmin()
 
@@ -71,10 +73,10 @@ export async function POST(req: NextRequest) {
   const { data: plano, error: dbErr } = await admin
     .from('planos_planta')
     .upsert(
-      { cliente_id: clienteId, path, nombre: nombre || null },
-      { onConflict: 'cliente_id' }
+      { cliente_id: clienteId, planilla_tipo_id: planillaTipoId, path, nombre: nombre || null },
+      { onConflict: 'cliente_id,planilla_tipo_id' }
     )
-    .select('id, cliente_id, path, nombre, created_at')
+    .select('id, cliente_id, planilla_tipo_id, path, nombre, created_at')
     .single()
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
@@ -92,13 +94,13 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const clienteId = searchParams.get('cliente_id')
-  if (!clienteId) return NextResponse.json({ error: 'cliente_id requerido' }, { status: 400 })
+  const planillaTipoId = searchParams.get('planilla_tipo_id')
+  if (!planillaTipoId) return NextResponse.json({ error: 'planilla_tipo_id requerido' }, { status: 400 })
 
   const { error } = await supabaseAdmin()
     .from('planos_planta')
     .delete()
-    .eq('cliente_id', clienteId)
+    .eq('planilla_tipo_id', planillaTipoId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

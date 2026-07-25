@@ -49,6 +49,7 @@ export default async function HidrantesPage() {
 
   // Si el supervisor activó el motor genérico para Hidrantes en este cliente,
   // el envío pasa por la ruta genérica (columnas configurables) en vez de este form
+  let tipoHidrantesId: string | null = null
   if (turnoActivo?.cliente_id) {
     const { data: tipoGenerico } = await supabaseAdmin()
       .from('planilla_tipos')
@@ -59,6 +60,7 @@ export default async function HidrantesPage() {
     if (tipoGenerico?.usa_motor_generico) {
       redirect(`/tecnico/planilla/${tipoGenerico.id}`)
     }
+    tipoHidrantesId = tipoGenerico?.id ?? null
   }
 
   // Busca por turno_id — más robusto que cliente+fecha+turno
@@ -140,7 +142,7 @@ export default async function HidrantesPage() {
           .eq('tipo', 'hidrantes')
           .eq('activo', true)
           .order('orden', { ascending: true }),
-        getPlanoUrl(clienteIdActivo),
+        tipoHidrantesId ? getPlanoUrl(tipoHidrantesId) : Promise.resolve(null),
       ])
     : [{ data: [] as { numero: string }[] }, null]
 
