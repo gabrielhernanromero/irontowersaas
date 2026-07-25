@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -14,28 +13,26 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { data, error: authError } = await supabase().auth.signInWithPassword({
-        email: emailVal,
-        password: passwordVal,
-      })
-
-      if (authError || !data.session) {
-        setError('Email o contraseña incorrectos')
-        setLoading(false)
-        return
-      }
-
       const ctrl = new AbortController()
       const tid = setTimeout(() => ctrl.abort(), 8000)
 
-      const res = await fetch('/api/auth/role-redirect', {
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailVal, password: passwordVal }),
         signal: ctrl.signal,
       })
       clearTimeout(tid)
 
-      const { redirectTo } = await res.json()
-      window.location.href = redirectTo ?? '/login'
+      const body = await res.json()
+
+      if (!res.ok) {
+        setError(body.error ?? 'Email o contraseña incorrectos')
+        setLoading(false)
+        return
+      }
+
+      window.location.href = body.redirectTo ?? '/login'
     } catch {
       setError('Error de conexión. Intentá de nuevo.')
       setLoading(false)
@@ -136,6 +133,13 @@ export default function LoginPage() {
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
+
+          <a
+            href="/recuperar-password"
+            className="block text-center text-base text-brand-muted hover:text-brand-ink underline min-h-[44px] leading-[44px]"
+          >
+            ¿Olvidaste tu contraseña?
+          </a>
         </form>
       </div>
     </div>

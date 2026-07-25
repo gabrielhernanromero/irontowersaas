@@ -8,6 +8,7 @@ export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
 export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema' | 'ronda'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
 export type EstadoOperativo = 'ok' | 'falla' | 'faltante'
+export type TipoAuthEvento = 'login_ok' | 'login_fail' | 'account_locked' | 'account_unlocked' | 'password_reset_admin' | 'password_change_self' | 'usuario_creado' | 'usuario_desactivado'
 
 export interface User {
   id: string
@@ -20,7 +21,24 @@ export interface User {
   turno_habitual: Turno | null
   rol_habitual: 'encargado' | 'apoyo' | null
   cliente_id: string | null
+  must_change_password: boolean
+  failed_login_attempts: number
+  locked_until: string | null
+  last_login_at: string | null
   created_at: string
+}
+
+export interface AuthEvent {
+  id: string
+  user_id: string | null
+  email: string
+  evento: TipoAuthEvento
+  actor_id: string | null
+  ip: string | null
+  user_agent: string | null
+  created_at: string
+  usuario?: Pick<User, 'nombre' | 'apellido'> | null
+  actor?: Pick<User, 'nombre' | 'apellido'> | null
 }
 
 export interface UserConEmpresa extends User {
