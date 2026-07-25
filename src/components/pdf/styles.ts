@@ -149,6 +149,48 @@ export const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
     borderRadius: 3,
   },
+  // KPI destacado (Informe de Confiabilidad)
+  kpiBox: {
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 4,
+    marginBottom: 16,
+    paddingVertical: 16,
+  },
+  kpiValue: {
+    fontSize: 32,
+    fontFamily: 'Helvetica-Bold',
+    color: '#1a6fa8',
+  },
+  kpiLabel: {
+    fontSize: 9,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  // Resumen de incidencias
+  resumenGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  resumenItem: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 4,
+    padding: 10,
+    alignItems: 'center',
+  },
+  resumenValue: {
+    fontSize: 18,
+    fontFamily: 'Helvetica-Bold',
+    color: '#1a2d42',
+  },
+  resumenLabel: {
+    fontSize: 8,
+    color: '#64748b',
+    marginTop: 2,
+    textAlign: 'center',
+  },
   // Footer
   footer: {
     position: 'absolute',

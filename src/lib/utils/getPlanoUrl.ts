@@ -4,13 +4,13 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 // duración, nunca a una URL pública permanente (expone el layout del predio).
 const SIGNED_URL_TTL_SECONDS = 3600
 
-export async function getPlanoUrl(clienteId: string): Promise<string | null> {
+export async function getPlanoUrl(planillaTipoId: string): Promise<string | null> {
   const admin = supabaseAdmin()
 
   const { data } = await admin
     .from('planos_planta')
     .select('path')
-    .eq('cliente_id', clienteId)
+    .eq('planilla_tipo_id', planillaTipoId)
     .maybeSingle()
 
   if (!data) return null

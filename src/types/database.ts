@@ -228,6 +228,7 @@ export interface PlanillaItemConfig {
 export interface PlanoPlanta {
   id: string
   cliente_id: string
+  planilla_tipo_id: string
   path: string
   nombre: string | null
   created_at: string

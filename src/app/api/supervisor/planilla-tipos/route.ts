@@ -74,9 +74,11 @@ export async function POST(req: NextRequest) {
     slug = `${baseSlug}-${suffix++}`
   }
 
+  // Nace desactivado: el supervisor tiene que habilitarlo explícitamente desde
+  // Clientes → Planillas antes de que le aparezca a los técnicos de ese cliente.
   const { data, error } = await admin
     .from('planilla_tipos')
-    .insert({ cliente_id: parsed.data.cliente_id, nombre: parsed.data.nombre, slug, es_legacy: false })
+    .insert({ cliente_id: parsed.data.cliente_id, nombre: parsed.data.nombre, slug, es_legacy: false, activo: false })
     .select(SELECT_FIELDS)
     .single()
 
