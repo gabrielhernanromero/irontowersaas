@@ -5,8 +5,18 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { InformeHidrantes } from '@/components/pdf/InformeHidrantes'
 import { InformeExtintores } from '@/components/pdf/InformeExtintores'
+import { InformeGenerico } from '@/components/pdf/InformeGenerico'
 import { sendInforme } from '@/lib/email/sendInforme'
-import type { User, Cliente, PlanillaHidrante, PlanillaExtintor } from '@/types/database'
+import type { User, Cliente, PlanillaHidrante, PlanillaExtintor, PlanillaItemRespuesta, TipoCampo } from '@/types/database'
+
+interface CampoDef {
+  clave: string
+  etiqueta: string
+  tipo_campo?: TipoCampo
+  opciones?: string[]
+  valor_min?: number | null
+  valor_max?: number | null
+}
 
 export async function POST(
   _req: NextRequest,
@@ -33,6 +43,17 @@ export async function POST(
     return NextResponse.json({ error: 'Planilla no encontrada' }, { status: 404 })
   }
 
+  // El template se decide por DÓNDE ESTÁN LOS DATOS de esta planilla puntual,
+  // no por el string `tipo` — Hidrantes/Extintores pueden tener planillas viejas
+  // en planilla_hidrantes/planilla_extintores y planillas nuevas (post-activación
+  // del motor genérico) en planilla_item_respuestas, ambas con tipo='hidrantes'.
+  const { count: countGenerico } = await admin
+    .from('planilla_item_respuestas')
+    .select('id', { count: 'exact', head: true })
+    .eq('planilla_id', planilla.id)
+  const usaGenerico = (countGenerico ?? 0) > 0
+  const esLegacyStorage = !usaGenerico && (planilla.tipo === 'hidrantes' || planilla.tipo === 'extintores')
+
   const [
     { data: tecnico },
     { data: cliente },
@@ -41,16 +62,49 @@ export async function POST(
   ] = await Promise.all([
     admin.from('users').select('*').eq('id', planilla.tecnico_id).single(),
     admin.from('clientes').select('*').eq('id', planilla.cliente_id).single(),
-    planilla.tipo === 'hidrantes'
+    esLegacyStorage && planilla.tipo === 'hidrantes'
       ? admin.from('planilla_hidrantes').select('*').eq('planilla_id', planilla.id).order('numero')
       : Promise.resolve({ data: [] }),
-    planilla.tipo === 'extintores'
+    esLegacyStorage && planilla.tipo === 'extintores'
       ? admin.from('planilla_extintores').select('*').eq('planilla_id', planilla.id).order('numero')
       : Promise.resolve({ data: [] }),
   ])
 
   if (!cliente) {
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
+  }
+
+  let genericoItems: PlanillaItemRespuesta[] = []
+  let genericoCampos: CampoDef[] = []
+  let tipoNombreGenerico = planilla.tipo
+  if (!esLegacyStorage) {
+    const { data: itemsData } = await admin
+      .from('planilla_item_respuestas')
+      .select('*')
+      .eq('planilla_id', planilla.id)
+      .order('numero')
+    genericoItems = (itemsData ?? []) as PlanillaItemRespuesta[]
+
+    if (planilla.snapshot_config) {
+      genericoCampos = planilla.snapshot_config.campos
+      tipoNombreGenerico = planilla.snapshot_config.tipo_nombre
+    } else {
+      const { data: tipoGenerico } = await admin
+        .from('planilla_tipos')
+        .select('id, nombre')
+        .eq('cliente_id', planilla.cliente_id)
+        .eq('slug', planilla.tipo)
+        .single()
+      if (tipoGenerico) {
+        const { data: camposData } = await admin
+          .from('planilla_tipo_campos')
+          .select('clave, etiqueta, tipo_campo, opciones, valor_min, valor_max')
+          .eq('planilla_tipo_id', tipoGenerico.id)
+          .order('orden')
+        genericoCampos = (camposData ?? []) as CampoDef[]
+        tipoNombreGenerico = tipoGenerico.nombre
+      }
+    }
   }
 
   // Obtener firma como base64
@@ -78,9 +132,16 @@ export async function POST(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const element: any = planilla.tipo === 'hidrantes'
+  const element: any = esLegacyStorage && planilla.tipo === 'hidrantes'
     ? createElement(InformeHidrantes, { ...props, items: (hidrantes ?? []) as PlanillaHidrante[] })
-    : createElement(InformeExtintores, { ...props, items: (extintores ?? []) as PlanillaExtintor[] })
+    : esLegacyStorage && planilla.tipo === 'extintores'
+    ? createElement(InformeExtintores, { ...props, items: (extintores ?? []) as PlanillaExtintor[] })
+    : createElement(InformeGenerico, {
+        ...props,
+        tipoNombre: tipoNombreGenerico,
+        campos: genericoCampos,
+        items: genericoItems,
+      })
 
   const pdfBuffer = await renderToBuffer(element)
 

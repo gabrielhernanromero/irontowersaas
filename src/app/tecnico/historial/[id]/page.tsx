@@ -4,6 +4,8 @@ import { getSession } from '@/lib/auth/getSession'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { CheckCircle2, Clock, ArrowLeft, Lock } from 'lucide-react'
+import { respuestaEsNovedad, type CampoDef } from '@/lib/validations/planillaGenerica'
+import FotoCell from './FotoCell'
 
 export default async function PlanillaDetalleTecnicoPage({
   params,
@@ -35,13 +37,19 @@ export default async function PlanillaDetalleTecnicoPage({
 
   if (!esAutor && !mismoPuesto && !esAdmin) notFound()
 
-  const [{ data: hidrantes }, { data: extintores }] = await Promise.all([
+  const [{ data: hidrantes }, { data: extintores }, { data: respuestasGenerico }] = await Promise.all([
     supabaseAdmin().from('planilla_hidrantes').select('*').eq('planilla_id', params.id).order('numero'),
     supabaseAdmin().from('planilla_extintores').select('*').eq('planilla_id', params.id).order('numero'),
+    supabaseAdmin().from('planilla_item_respuestas').select('*').eq('planilla_id', params.id).order('numero'),
   ])
 
   const esHidrante = planilla.tipo === 'hidrantes'
   const items = (esHidrante ? hidrantes : extintores) ?? []
+
+  // Motor genérico: la planilla trae su propio snapshot de campos configurados
+  // al momento del envío — no depende de la config actual del supervisor.
+  const camposGenerico = (planilla.snapshot_config as { campos?: CampoDef[] } | null)?.campos
+  const esGenerico = !hidrantes?.length && !extintores?.length && !!camposGenerico?.length
 
   // Firma: signed URL de 60 segundos (admin para evitar bloqueo de RLS en Storage)
   let firmaUrl: string | null = null
@@ -107,74 +115,120 @@ export default async function PlanillaDetalleTecnicoPage({
       {/* Ítems */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-4">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-brand-ink text-white text-xs">
-              <tr>
-                <th className="px-3 py-2 text-left">N°</th>
-                {esHidrante ? (
-                  <>
-                    <th className="px-2 py-2">Gab.</th>
-                    <th className="px-2 py-2">Manga</th>
-                    <th className="px-2 py-2">Lanza</th>
-                    <th className="px-2 py-2">Válv.</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="px-2 py-2 text-left">Tipo</th>
-                    <th className="px-2 py-2">Señal.</th>
-                    <th className="px-2 py-2">Acc.</th>
-                    <th className="px-2 py-2">P/P</th>
-                  </>
-                )}
-                <th className="px-3 py-2 text-left">Obs.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item: Record<string, unknown>, i: number) => {
-                const hasNo = esHidrante
-                  ? !item.gabinete || !item.manga || !item.lanza || !item.valvula
-                  : !item.senalizacion || !item.acceso || !item.presion_peso
+          {esGenerico ? (
+            <table className="w-full text-sm">
+              <thead className="bg-brand-ink text-white text-xs">
+                <tr>
+                  <th className="px-3 py-2 text-left">N°</th>
+                  {camposGenerico!.map((campo) => (
+                    <th key={campo.clave} className="px-2 py-2">{campo.etiqueta}</th>
+                  ))}
+                  <th className="px-3 py-2 text-left">Obs.</th>
+                  <th className="px-2 py-2">Foto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(respuestasGenerico ?? []).map((item, i) => {
+                  const respuestas = (item.respuestas ?? {}) as Record<string, unknown>
+                  const observaciones = (item.observaciones ?? {}) as Record<string, string | null>
+                  const hasNo = camposGenerico!.some((c) => respuestaEsNovedad(c, respuestas[c.clave]))
 
-                const obs = esHidrante
-                  ? [
-                      item.obs_gabinete ? `Gab: ${item.obs_gabinete}` : null,
-                      item.obs_manga ? `Manga: ${item.obs_manga}` : null,
-                      item.obs_lanza ? `Lanza: ${item.obs_lanza}` : null,
-                      item.obs_valvula ? `Válv: ${item.obs_valvula}` : null,
-                    ].filter(Boolean).join(' · ')
-                  : [
-                      item.obs_senalizacion ? `Señal: ${item.obs_senalizacion}` : null,
-                      item.obs_acceso ? `Acc: ${item.obs_acceso}` : null,
-                      item.obs_presion_peso ? `P/P: ${item.obs_presion_peso}` : null,
-                    ].filter(Boolean).join(' · ')
+                  return (
+                    <tr
+                      key={item.id as string}
+                      className={`border-b border-gray-100 ${i % 2 === 1 ? 'bg-gray-50' : ''} ${hasNo ? 'bg-red-50' : ''}`}
+                    >
+                      <td className="px-3 py-2 font-mono text-xs">{item.numero as string}</td>
+                      {camposGenerico!.map((campo) => (
+                        <td key={campo.clave} className="px-2 py-2 text-center">
+                          {campo.tipo_campo === 'check' || campo.tipo_campo === undefined
+                            ? badge(respuestas[campo.clave] as boolean)
+                            : String(respuestas[campo.clave] ?? '—')}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-gray-500 text-xs">
+                        {camposGenerico!
+                          .map((c) => observaciones[c.clave] ? `${c.etiqueta}: ${observaciones[c.clave]}` : null)
+                          .filter(Boolean).join(' · ') || '—'}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {item.foto_url ? <FotoCell url={item.foto_url as string} /> : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-brand-ink text-white text-xs">
+                <tr>
+                  <th className="px-3 py-2 text-left">N°</th>
+                  {esHidrante ? (
+                    <>
+                      <th className="px-2 py-2">Gab.</th>
+                      <th className="px-2 py-2">Manga</th>
+                      <th className="px-2 py-2">Lanza</th>
+                      <th className="px-2 py-2">Válv.</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-2 py-2 text-left">Tipo</th>
+                      <th className="px-2 py-2">Señal.</th>
+                      <th className="px-2 py-2">Acc.</th>
+                      <th className="px-2 py-2">P/P</th>
+                    </>
+                  )}
+                  <th className="px-3 py-2 text-left">Obs.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item: Record<string, unknown>, i: number) => {
+                  const hasNo = esHidrante
+                    ? !item.gabinete || !item.manga || !item.lanza || !item.valvula
+                    : !item.senalizacion || !item.acceso || !item.presion_peso
 
-                return (
-                  <tr
-                    key={item.id as string}
-                    className={`border-b border-gray-100 ${i % 2 === 1 ? 'bg-gray-50' : ''} ${hasNo ? 'bg-red-50' : ''}`}
-                  >
-                    <td className="px-3 py-2 font-mono text-xs">{item.numero as string}</td>
-                    {esHidrante ? (
-                      <>
-                        <td className="px-2 py-2 text-center">{badge(item.gabinete as boolean)}</td>
-                        <td className="px-2 py-2 text-center">{badge(item.manga as boolean)}</td>
-                        <td className="px-2 py-2 text-center">{badge(item.lanza as boolean)}</td>
-                        <td className="px-2 py-2 text-center">{badge(item.valvula as boolean)}</td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-2 py-2 text-xs">{item.tipo as string}</td>
-                        <td className="px-2 py-2 text-center">{badge(item.senalizacion as boolean)}</td>
-                        <td className="px-2 py-2 text-center">{badge(item.acceso as boolean)}</td>
-                        <td className="px-2 py-2 text-center">{badge(item.presion_peso as boolean)}</td>
-                      </>
-                    )}
-                    <td className="px-3 py-2 text-gray-500 text-xs">{obs || '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                  const obs = esHidrante
+                    ? [
+                        item.obs_gabinete ? `Gab: ${item.obs_gabinete}` : null,
+                        item.obs_manga ? `Manga: ${item.obs_manga}` : null,
+                        item.obs_lanza ? `Lanza: ${item.obs_lanza}` : null,
+                        item.obs_valvula ? `Válv: ${item.obs_valvula}` : null,
+                      ].filter(Boolean).join(' · ')
+                    : [
+                        item.obs_senalizacion ? `Señal: ${item.obs_senalizacion}` : null,
+                        item.obs_acceso ? `Acc: ${item.obs_acceso}` : null,
+                        item.obs_presion_peso ? `P/P: ${item.obs_presion_peso}` : null,
+                      ].filter(Boolean).join(' · ')
+
+                  return (
+                    <tr
+                      key={item.id as string}
+                      className={`border-b border-gray-100 ${i % 2 === 1 ? 'bg-gray-50' : ''} ${hasNo ? 'bg-red-50' : ''}`}
+                    >
+                      <td className="px-3 py-2 font-mono text-xs">{item.numero as string}</td>
+                      {esHidrante ? (
+                        <>
+                          <td className="px-2 py-2 text-center">{badge(item.gabinete as boolean)}</td>
+                          <td className="px-2 py-2 text-center">{badge(item.manga as boolean)}</td>
+                          <td className="px-2 py-2 text-center">{badge(item.lanza as boolean)}</td>
+                          <td className="px-2 py-2 text-center">{badge(item.valvula as boolean)}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-2 py-2 text-xs">{item.tipo as string}</td>
+                          <td className="px-2 py-2 text-center">{badge(item.senalizacion as boolean)}</td>
+                          <td className="px-2 py-2 text-center">{badge(item.acceso as boolean)}</td>
+                          <td className="px-2 py-2 text-center">{badge(item.presion_peso as boolean)}</td>
+                        </>
+                      )}
+                      <td className="px-3 py-2 text-gray-500 text-xs">{obs || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
