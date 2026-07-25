@@ -43,8 +43,8 @@ export default async function PlanillaDetallePage({
     firmaUrl = data?.signedUrl ?? null
   }
 
-  const items = hidrantes ?? extintores ?? []
   const esHidrante = (planilla.tipo as string) === 'hidrantes'
+  const items = esHidrante ? (hidrantes ?? []) : (extintores ?? [])
 
   return (
     <div className="max-w-3xl">
