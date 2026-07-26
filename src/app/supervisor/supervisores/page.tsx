@@ -9,7 +9,7 @@ export default async function SupervisoresPage() {
 
   const { data: supervisores } = await supabaseAdmin()
     .from('users')
-    .select('id, nombre, apellido, dni, email, rol, activo, created_at')
+    .select('id, nombre, apellido, dni, email, rol, activo, locked_until, created_at')
     .eq('rol', 'supervisor')
     .order('apellido', { ascending: true })
 

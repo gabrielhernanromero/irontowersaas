@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { generarPasswordTemporal } from '@/lib/auth/loginPolicy'
+import { logAuthEvent, getRequestIp } from '@/lib/auth/logAuthEvent'
+import { sendCredenciales } from '@/lib/email/sendCredenciales'
 import { z } from 'zod'
 
 const CreateUsuarioSchema = z.object({
@@ -8,7 +11,6 @@ const CreateUsuarioSchema = z.object({
   apellido:   z.string().min(1, 'Apellido requerido'),
   dni:        z.string().regex(/^\d{7,8}$/, 'El DNI debe tener 7 u 8 dígitos numéricos'),
   email:      z.string().email('El email no tiene un formato válido (ej: nombre@dominio.com)'),
-  password:   z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   cliente_id: z.string().uuid('Empresa inválida').optional(),
 })
 
@@ -31,8 +33,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  let actor
   try {
-    await requireRole('supervisor', 'admin')
+    actor = await requireRole('supervisor', 'admin')
   } catch {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
@@ -43,7 +46,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const { nombre, apellido, dni, email, password, cliente_id } = parsed.data
+  const { nombre, apellido, dni, email, cliente_id } = parsed.data
+  const tempPassword = generarPasswordTemporal()
 
   // Verificar DNI duplicado
   const { data: existeDNI } = await supabaseAdmin()
@@ -58,10 +62,11 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Crear usuario en Supabase Auth — user_metadata.rol es leído por el login para el redirect
+  // Crear usuario en Supabase Auth — user_metadata.rol es leído por el login para el redirect.
+  // La contraseña la genera el sistema, nunca la elige una persona.
   const { data: authData, error: authError } = await supabaseAdmin().auth.admin.createUser({
     email,
-    password,
+    password: tempPassword,
     email_confirm: true,
     user_metadata: { rol: 'tecnico', nombre, apellido },
   })
@@ -88,6 +93,7 @@ export async function POST(req: NextRequest) {
       rol: 'tecnico',
       activo: true,
       cliente_id: cliente_id ?? null,
+      must_change_password: true,
     })
 
   if (profileError) {
@@ -101,5 +107,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, id: authData.user.id }, { status: 201 })
+  await logAuthEvent({
+    email,
+    evento: 'usuario_creado',
+    userId: authData.user.id,
+    actorId: actor.id,
+    ip: getRequestIp(req),
+    userAgent: req.headers.get('user-agent'),
+  })
+
+  try {
+    await sendCredenciales({ nombre, email, tempPassword, motivo: 'alta' })
+  } catch (e) {
+    console.error('[admin/usuarios] error enviando email de credenciales:', (e as Error).message)
+  }
+
+  return NextResponse.json({ ok: true, id: authData.user.id, tempPassword }, { status: 201 })
 }

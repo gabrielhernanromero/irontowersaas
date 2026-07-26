@@ -3,18 +3,22 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  UserPlus, X, Eye, EyeOff, CheckCircle2,
+  UserPlus, X, CheckCircle2,
   Copy, Check, Edit2, ToggleLeft, ToggleRight, Loader2, Search,
+  KeyRound, Lock, Unlock,
 } from 'lucide-react'
 import type { User } from '@/types'
 
-type Supervisor = Pick<User, 'id' | 'nombre' | 'apellido' | 'dni' | 'email' | 'activo' | 'created_at'>
+type Supervisor = Pick<User, 'id' | 'nombre' | 'apellido' | 'dni' | 'email' | 'activo' | 'locked_until' | 'created_at'>
 
 interface CreateForm {
-  nombre: string; apellido: string; dni: string; email: string; password: string
+  nombre: string; apellido: string; dni: string; email: string
 }
 interface EditForm {
   nombre: string; apellido: string; dni: string
+}
+interface Credencial {
+  nombre: string; email: string; password: string; motivo: 'alta' | 'reseteo'
 }
 
 const INPUT_BASE = 'w-full border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 transition-colors'
@@ -29,7 +33,6 @@ function validateCrear(d: CreateForm) {
   if (dniClean.length < 7)       errs.dni       = 'El DNI debe tener al menos 7 dígitos'
   if (dniClean.length > 8)       errs.dni       = 'El DNI no puede tener más de 8 dígitos'
   if (!d.email.includes('@'))    errs.email     = 'El email no es válido'
-  if (d.password.length < 6)     errs.password  = 'La contraseña debe tener al menos 6 caracteres'
   return errs
 }
 
@@ -50,13 +53,13 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
   const [editing,      setEditing]      = useState<Supervisor | null>(null)
   const [submitting,   setSubmitting]   = useState(false)
   const [apiError,     setApiError]     = useState<string | null>(null)
-  const [showPass,     setShowPass]     = useState(false)
-  const [creado,       setCreado]       = useState<{ nombre: string; email: string; password: string } | null>(null)
+  const [credencial,   setCredencial]   = useState<Credencial | null>(null)
   const [copied,       setCopied]       = useState(false)
   const [toggling,     setToggling]     = useState<string | null>(null)
+  const [reseteando,   setReseteando]   = useState<string | null>(null)
   const [busqueda,     setBusqueda]     = useState('')
 
-  const [createForm,   setCreateForm]   = useState<CreateForm>({ nombre: '', apellido: '', dni: '', email: '', password: '' })
+  const [createForm,   setCreateForm]   = useState<CreateForm>({ nombre: '', apellido: '', dni: '', email: '' })
   const [createErrors, setCreateErrors] = useState<Partial<Record<keyof CreateForm, string>>>({})
   const [editForm,     setEditForm]     = useState<EditForm>({ nombre: '', apellido: '', dni: '' })
   const [editErrors,   setEditErrors]   = useState<Partial<Record<keyof EditForm, string>>>({})
@@ -77,7 +80,6 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
           apellido: createForm.apellido,
           dni:      createForm.dni.replace(/\D/g, ''),
           email:    createForm.email,
-          password: createForm.password,
         }),
       })
       const json = await res.json()
@@ -87,18 +89,42 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
         return
       }
 
-      setCreado({ nombre: `${createForm.nombre} ${createForm.apellido}`, email: createForm.email, password: createForm.password })
+      setCredencial({ nombre: `${createForm.nombre} ${createForm.apellido}`, email: createForm.email, password: json.tempPassword, motivo: 'alta' })
       setShowCreate(false)
-      setCreateForm({ nombre: '', apellido: '', dni: '', email: '', password: '' })
+      setCreateForm({ nombre: '', apellido: '', dni: '', email: '' })
       setCreateErrors({})
       router.refresh()
       setSupervisores(prev => [...prev, {
         id: json.id, nombre: createForm.nombre, apellido: createForm.apellido,
         dni: createForm.dni, email: createForm.email,
-        activo: true, created_at: new Date().toISOString(),
+        activo: true, locked_until: null, created_at: new Date().toISOString(),
       }].sort((a, b) => a.apellido.localeCompare(b.apellido)))
     } catch { setApiError('Error de conexión. Intentá de nuevo.') }
     finally  { setSubmitting(false) }
+  }
+
+  async function resetPassword(s: Supervisor) {
+    setReseteando(s.id)
+    try {
+      const res = await fetch(`/api/admin/supervisores/${s.id}/reset-password`, { method: 'POST' })
+      const json = await res.json()
+      if (res.ok) {
+        setCredencial({ nombre: `${s.nombre} ${s.apellido}`, email: s.email, password: json.tempPassword, motivo: 'reseteo' })
+        setSupervisores(prev => prev.map(x => x.id === s.id ? { ...x, locked_until: null } : x))
+      }
+    } finally { setReseteando(null) }
+  }
+
+  async function desbloquear(s: Supervisor) {
+    setToggling(s.id)
+    try {
+      const res = await fetch(`/api/admin/supervisores/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ desbloquear: true }),
+      })
+      if (res.ok) setSupervisores(prev => prev.map(x => x.id === s.id ? { ...x, locked_until: null } : x))
+    } finally { setToggling(null) }
   }
 
   function openEdit(s: Supervisor) {
@@ -154,8 +180,8 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
   }
 
   function copyCredentials() {
-    if (!creado) return
-    navigator.clipboard.writeText(`Usuario: ${creado.email}\nContraseña: ${creado.password}`)
+    if (!credencial) return
+    navigator.clipboard.writeText(`Usuario: ${credencial.email}\nContraseña: ${credencial.password}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -173,24 +199,29 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
 
   return (
     <>
-      {/* Banner de éxito */}
-      {creado && (
+      {/* Banner de credenciales (alta o reseteo) */}
+      {credencial && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={18} className="text-green-600 shrink-0" />
-            <p className="font-semibold text-green-800">Cuenta creada para {creado.nombre}</p>
+            <p className="font-semibold text-green-800">
+              {credencial.motivo === 'alta' ? 'Cuenta creada' : 'Contraseña restablecida'} para {credencial.nombre}
+            </p>
           </div>
           <div className="bg-white rounded-lg border border-green-200 p-3 font-mono text-sm">
-            <p className="text-gray-600">Usuario: <span className="text-brand-ink font-semibold">{creado.email}</span></p>
-            <p className="text-gray-600 mt-1">Contraseña: <span className="text-brand-ink font-semibold">{creado.password}</span></p>
+            <p className="text-gray-600">Usuario: <span className="text-brand-ink font-semibold">{credencial.email}</span></p>
+            <p className="text-gray-600 mt-1">Contraseña temporal: <span className="text-brand-ink font-semibold">{credencial.password}</span></p>
           </div>
+          <p className="text-xs text-green-800">
+            Se envió también por email. Se le va a pedir cambiarla al ingresar.
+          </p>
           <div className="flex gap-2">
             <button onClick={copyCredentials}
               className="flex items-center gap-2 text-sm bg-green-600 text-white px-3 py-2 rounded-lg">
               {copied ? <Check size={14} /> : <Copy size={14} />}
               {copied ? 'Copiado' : 'Copiar credenciales'}
             </button>
-            <button onClick={() => setCreado(null)}
+            <button onClick={() => setCredencial(null)}
               className="text-sm text-gray-500 px-3 py-2 rounded-lg border border-gray-200">
               Cerrar
             </button>
@@ -246,26 +277,9 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
                 {createErrors.email && <p className="text-red-600 text-xs mt-1">{createErrors.email}</p>}
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Contraseña temporal <span className="text-red-500">*</span>
-                <span className="text-gray-400 font-normal ml-1">(se la pasás al supervisor)</span>
-              </label>
-              <div className="relative">
-                <input
-                  value={createForm.password}
-                  onChange={e => { setCreateForm(p => ({ ...p, password: e.target.value })); setCreateErrors(p => ({ ...p, password: undefined })) }}
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="Mínimo 6 caracteres"
-                  className={(createErrors.password ? INPUT_ERR : INPUT_OK) + ' pr-10'}
-                />
-                <button type="button" onClick={() => setShowPass(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              {createErrors.password && <p className="text-red-600 text-xs mt-1">{createErrors.password}</p>}
-            </div>
+            <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+              Se va a generar una contraseña temporal automáticamente y se va a mostrar en pantalla al crear la cuenta (también se le manda por email).
+            </p>
             {apiError && (
               <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3">{apiError}</p>
             )}
@@ -349,8 +363,11 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
         <SupervisoresTable
           supervisores={activos}
           toggling={toggling}
+          reseteando={reseteando}
           onEdit={openEdit}
           onToggle={toggleActivo}
+          onReset={resetPassword}
+          onUnlock={desbloquear}
           emptyMessage={busqueda ? 'Sin resultados para esa búsqueda.' : 'No hay supervisores activos todavía.'}
         />
       )}
@@ -363,7 +380,16 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
             Supervisores inactivos
           </summary>
           <div className="mt-3">
-            <SupervisoresTable supervisores={inactivos} toggling={toggling} onEdit={openEdit} onToggle={toggleActivo} emptyMessage="" />
+            <SupervisoresTable
+              supervisores={inactivos}
+              toggling={toggling}
+              reseteando={reseteando}
+              onEdit={openEdit}
+              onToggle={toggleActivo}
+              onReset={resetPassword}
+              onUnlock={desbloquear}
+              emptyMessage=""
+            />
           </div>
         </details>
       )}
@@ -371,13 +397,20 @@ export default function SupervisoresClient({ supervisores: inicial }: { supervis
   )
 }
 
+function estaBloqueado(s: Supervisor) {
+  return !!s.locked_until && new Date(s.locked_until).getTime() > Date.now()
+}
+
 function SupervisoresTable({
-  supervisores, toggling, onEdit, onToggle, emptyMessage,
+  supervisores, toggling, reseteando, onEdit, onToggle, onReset, onUnlock, emptyMessage,
 }: {
   supervisores: Supervisor[]
   toggling: string | null
+  reseteando: string | null
   onEdit: (s: Supervisor) => void
   onToggle: (s: Supervisor) => void
+  onReset: (s: Supervisor) => void
+  onUnlock: (s: Supervisor) => void
   emptyMessage: string
 }) {
   if (supervisores.length === 0 && emptyMessage) {
@@ -409,14 +442,32 @@ function SupervisoresTable({
               </td>
               <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{s.dni ?? '—'}</td>
               <td className="px-4 py-3">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  s.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {s.activo ? 'Activo' : 'Inactivo'}
-                </span>
+                <div className="flex flex-col gap-1 items-start">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    s.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {s.activo ? 'Activo' : 'Inactivo'}
+                  </span>
+                  {estaBloqueado(s) && (
+                    <span className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                      <Lock size={10} />
+                      Bloqueado hasta {new Date(s.locked_until as string).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1 justify-end">
+                  {estaBloqueado(s) && (
+                    <button onClick={() => onUnlock(s)} disabled={toggling === s.id} title="Desbloquear"
+                      className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50">
+                      <Unlock size={14} />
+                    </button>
+                  )}
+                  <button onClick={() => onReset(s)} disabled={reseteando === s.id} title="Resetear contraseña"
+                    className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50">
+                    {reseteando === s.id ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                  </button>
                   <button onClick={() => onEdit(s)} title="Editar"
                     className="p-1.5 text-gray-400 hover:text-brand-ink hover:bg-gray-100 rounded-lg transition-colors">
                     <Edit2 size={14} />
