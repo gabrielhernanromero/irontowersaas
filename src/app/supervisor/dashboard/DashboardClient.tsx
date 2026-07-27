@@ -129,14 +129,26 @@ function agingLabel(iso: string): string {
   return `hace ${Math.floor(h / 24)} días`
 }
 
-// Calcula % del turno transcurrido (diurno ≈ 8h, nocturno ≈ 12h)
-function elapsedPct(horario_inicio: string, turno: 'diurno' | 'nocturno'): number {
-  const duracion = turno === 'diurno' ? 8 * 3600 : 12 * 3600
+// Calcula % del turno transcurrido usando horario_fin real; si no hay
+// horario_fin (turnos legacy) cae al estimado diurno ≈ 8h / nocturno ≈ 12h
+function elapsedPct(horario_inicio: string, turno: 'diurno' | 'nocturno', horario_fin: string | null): number {
   const [h, m] = horario_inicio.split(':').map(Number)
   const now   = new Date()
   const start = new Date(now)
   start.setHours(h, m, 0, 0)
   if (start.getTime() > now.getTime()) start.setDate(start.getDate() - 1)
+
+  let duracion: number
+  if (horario_fin) {
+    const [fh, fm] = horario_fin.split(':').map(Number)
+    const end = new Date(start)
+    end.setHours(fh, fm, 0, 0)
+    if (end.getTime() <= start.getTime()) end.setDate(end.getDate() + 1)
+    duracion = (end.getTime() - start.getTime()) / 1000
+  } else {
+    duracion = turno === 'diurno' ? 8 * 3600 : 12 * 3600
+  }
+
   const elapsed = Math.max(0, (now.getTime() - start.getTime()) / 1000)
   return Math.min(100, Math.round((elapsed / duracion) * 100))
 }
@@ -634,7 +646,7 @@ export default function DashboardClient({
             turnosFiltrados.map(turno => {
               const lastNov    = turno.novedades[0]
               const isPendiente = turno.estado === 'pendiente_relevo'
-              const pct        = elapsedPct(turno.horario_inicio, turno.turno)
+              const pct        = elapsedPct(turno.horario_inicio, turno.turno, turno.horario_fin)
               const rondas     = rondasPorTurno[turno.id]
               const isOvertime = pct >= 100
 
@@ -682,7 +694,7 @@ export default function DashboardClient({
                             )}
                             <span className="flex items-center gap-1 text-xs text-gray-500">
                               <Clock size={11} className="text-gray-400" />
-                              {turno.horario_inicio} · {turno.turno === 'diurno' ? 'Diurno' : 'Nocturno'}
+                              {turno.horario_inicio}{turno.horario_fin ? ` → ${turno.horario_fin}` : ''} · {turno.turno === 'diurno' ? 'Diurno' : 'Nocturno'}
                             </span>
                             <span className="text-xs text-gray-400">
                               {turno.novedades.length} novedad{turno.novedades.length !== 1 ? 'es' : ''}
