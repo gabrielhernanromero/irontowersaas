@@ -180,6 +180,7 @@ export default async function PlanillaDetalleTecnicoPage({
                     </>
                   )}
                   <th className="px-3 py-2 text-left">Obs.</th>
+                  <th className="px-2 py-2">Foto</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,6 +224,9 @@ export default async function PlanillaDetalleTecnicoPage({
                         </>
                       )}
                       <td className="px-3 py-2 text-gray-500 text-xs">{obs || '—'}</td>
+                      <td className="px-2 py-2 text-center">
+                        {item.foto_url ? <FotoCell url={item.foto_url as string} /> : '—'}
+                      </td>
                     </tr>
                   )
                 })}

@@ -1,11 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { X, MapPin, User, Calendar, Clock, FileText, AlertTriangle } from 'lucide-react'
+import { X, MapPin, User, Calendar, Clock, FileText, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { FotoThumb } from '@/components/ui/FotoLightbox'
 import FotoLightbox from './FotoLightbox'
 import { parsearCategoria, estadoActividad } from '../DashboardClient'
+
+interface ItemFoto {
+  numero: string
+  label: string
+  observacion: string | null
+  foto_url: string | null
+}
 
 interface NovedadFeed {
   id: string
@@ -33,6 +40,18 @@ interface Props {
 
 export default function NovedadSheet({ novedad, onClose, onVerIncidencia }: Props) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [items, setItems] = useState<ItemFoto[] | null>(null)
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    setItems(null)
+    setIndex(0)
+    if (!novedad.planilla_id) return
+    fetch(`/api/supervisor/planillas/${novedad.planilla_id}/fotos`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setItems(data?.items?.length ? data.items : null))
+      .catch(() => setItems(null))
+  }, [novedad.planilla_id])
 
   const cat    = parsearCategoria(novedad.descripcion, novedad.tipo)
   const estado = estadoActividad(novedad.tipo)
@@ -72,9 +91,61 @@ export default function NovedadSheet({ novedad, onClose, onVerIncidencia }: Prop
           {/* Detalle */}
           <p className="text-base text-gray-800 leading-relaxed">{detalle || novedad.descripcion}</p>
 
-          {/* Foto adjunta */}
-          {novedad.foto_url && (
-            <FotoThumb url={novedad.foto_url} onClick={() => setLightboxUrl(novedad.foto_url!)} className="w-full h-48" />
+          {/* Ítems de la planilla con observación/foto — con fallback a la
+              única foto guardada en la novedad si no hay lista o falló el fetch */}
+          {items ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Ítems con observación ({items.length})
+                </p>
+                {items.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                      disabled={index === 0}
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      aria-label="Ítem anterior"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-xs text-gray-400 tabular-nums">{index + 1} / {items.length}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
+                      disabled={index === items.length - 1}
+                      className="p-1.5 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      aria-label="Siguiente ítem"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <p className="text-base font-semibold text-brand-ink mb-2">{items[index].label}</p>
+                {items[index].foto_url ? (
+                  <FotoThumb
+                    url={items[index].foto_url!}
+                    onClick={() => setLightboxUrl(items[index].foto_url!)}
+                    className="w-full h-48 mb-2"
+                  />
+                ) : (
+                  <div className="w-full h-20 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 mb-2">
+                    Sin foto adjunta
+                  </div>
+                )}
+                {items[index].observacion && (
+                  <p className="text-base text-gray-700">{items[index].observacion}</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            novedad.foto_url && (
+              <FotoThumb url={novedad.foto_url} onClick={() => setLightboxUrl(novedad.foto_url!)} className="w-full h-48" />
+            )
           )}
 
           {/* Meta info */}

@@ -145,6 +145,7 @@ export default async function PlanillaDetallePage({
                     </>
                   )}
                   <th className="px-3 py-2 text-left">Observaciones</th>
+                  <th className="px-3 py-2">Foto</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,6 +188,9 @@ export default async function PlanillaDetallePage({
                               item.obs_acceso ? `Acceso: ${item.obs_acceso}` : null,
                               item.obs_presion_peso ? `Pres/Pes: ${item.obs_presion_peso}` : null,
                             ].filter(Boolean).join(' | ') || '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {item.foto_url ? <FotoCell url={item.foto_url as string} /> : '—'}
                       </td>
                     </tr>
                   )

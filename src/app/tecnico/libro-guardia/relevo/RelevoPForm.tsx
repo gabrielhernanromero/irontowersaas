@@ -28,6 +28,7 @@ interface PlanillaItem {
   // extintores
   senalizacion?: boolean; acceso?: boolean; presion_peso?: boolean
   obs_senalizacion?: string; obs_acceso?: string; obs_presion_peso?: string
+  foto_url?: string | null
   [k: string]: unknown
 }
 
@@ -743,6 +744,11 @@ export default function RelevoPForm({
                             </div>
                           ))}
                         </div>
+                        {item.foto_url && (
+                          <div className="mt-2">
+                            <VerFotoBtn url={item.foto_url} label="Ver foto del ítem" />
+                          </div>
+                        )}
                       </div>
                     )
                   })}
