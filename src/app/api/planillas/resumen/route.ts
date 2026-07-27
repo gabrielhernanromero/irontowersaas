@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   if (planilla.tipo === 'hidrantes') {
     const { data: items } = await supabaseAdmin()
       .from('planilla_hidrantes')
-      .select('numero, gabinete, manga, lanza, valvula, obs_gabinete, obs_manga, obs_lanza, obs_valvula')
+      .select('numero, gabinete, manga, lanza, valvula, obs_gabinete, obs_manga, obs_lanza, obs_valvula, foto_url')
       .eq('planilla_id', planillaId)
       .order('numero')
 
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   } else if (planilla.tipo === 'extintores') {
     const { data: items } = await supabaseAdmin()
       .from('planilla_extintores')
-      .select('numero, senalizacion, acceso, presion_peso, obs_senalizacion, obs_acceso, obs_presion_peso')
+      .select('numero, senalizacion, acceso, presion_peso, obs_senalizacion, obs_acceso, obs_presion_peso, foto_url')
       .eq('planilla_id', planillaId)
       .order('numero')
 
