@@ -8,6 +8,7 @@ const PatchSchema = z.object({
   nombre:      z.string().min(1).optional(),
   apellido:    z.string().min(1).optional(),
   dni:         z.string().regex(/^\d{7,8}$/).optional(),
+  telefono:    z.string().nullable().optional(),
   cliente_id:  z.string().uuid().nullable().optional(),
   activo:      z.boolean().optional(),
   desbloquear: z.boolean().optional(),

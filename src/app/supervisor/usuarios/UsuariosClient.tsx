@@ -35,7 +35,7 @@ function validateEditar(d: EditForm) {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CreateForm {
-  nombre: string; apellido: string; dni: string; email: string
+  nombre: string; apellido: string; dni: string; email: string; telefono: string
   cliente_id: string
 }
 
@@ -43,7 +43,7 @@ interface Credencial {
   nombre: string; email: string; password: string; motivo: 'alta' | 'reseteo'
 }
 interface EditForm {
-  nombre: string; apellido: string; dni: string; cliente_id: string
+  nombre: string; apellido: string; dni: string; telefono: string; cliente_id: string
 }
 
 interface Props {
@@ -51,7 +51,7 @@ interface Props {
   empresas: Pick<Cliente, 'id' | 'nombre_empresa'>[]
 }
 
-const INPUT_BASE = 'w-full border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 transition-colors'
+const INPUT_BASE = 'w-full border rounded-lg p-3 text-base focus:outline-none focus:ring-2 transition-colors'
 const INPUT_OK   = `${INPUT_BASE} border-gray-300 focus:ring-brand-orange/30`
 const INPUT_ERR  = `${INPUT_BASE} border-red-400 bg-red-50 focus:ring-red-300`
 
@@ -73,13 +73,13 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
 
   // Create form state
   const [createForm, setCreateForm] = useState<CreateForm>({
-    nombre: '', apellido: '', dni: '', email: '', cliente_id: '',
+    nombre: '', apellido: '', dni: '', email: '', telefono: '', cliente_id: '',
   })
   const [createErrors, setCreateErrors] = useState<Partial<Record<keyof CreateForm, string>>>({})
 
   // Edit form state
   const [editForm, setEditForm] = useState<EditForm>({
-    nombre: '', apellido: '', dni: '', cliente_id: '',
+    nombre: '', apellido: '', dni: '', telefono: '', cliente_id: '',
   })
   const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditForm, string>>>({})
 
@@ -100,6 +100,7 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
           apellido:   createForm.apellido,
           dni:        createForm.dni.replace(/\D/g, ''),
           email:      createForm.email,
+          telefono:   createForm.telefono || undefined,
           cliente_id: createForm.cliente_id || undefined,
         }),
       })
@@ -113,12 +114,12 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
       const empresa = empresas.find(e => e.id === createForm.cliente_id) ?? null
       setCredencial({ nombre: `${createForm.nombre} ${createForm.apellido}`, email: createForm.email, password: json.tempPassword, motivo: 'alta' })
       setShowCreate(false)
-      setCreateForm({ nombre: '', apellido: '', dni: '', email: '', cliente_id: '' })
+      setCreateForm({ nombre: '', apellido: '', dni: '', email: '', telefono: '', cliente_id: '' })
       setCreateErrors({})
       router.refresh()
       setTecnicos(prev => [...prev, {
         id: json.id, nombre: createForm.nombre, apellido: createForm.apellido,
-        dni: createForm.dni, email: createForm.email, rol: 'tecnico' as const,
+        dni: createForm.dni, telefono: createForm.telefono || null, email: createForm.email, rol: 'tecnico' as const,
         activo: true, turno_habitual: null, rol_habitual: null,
         cliente_id: createForm.cliente_id || null,
         must_change_password: true, failed_login_attempts: 0, locked_until: null, last_login_at: null,
@@ -159,7 +160,7 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
   function openEdit(t: UserConEmpresa) {
     setEditing(t)
     setEditForm({
-      nombre: t.nombre, apellido: t.apellido, dni: t.dni ?? '',
+      nombre: t.nombre, apellido: t.apellido, dni: t.dni ?? '', telefono: t.telefono ?? '',
       cliente_id: t.cliente_id ?? '',
     })
     setEditErrors({})
@@ -182,6 +183,7 @@ export default function UsuariosClient({ tecnicos: inicial, empresas }: Props) {
           nombre:     editForm.nombre,
           apellido:   editForm.apellido,
           dni:        editForm.dni.replace(/\D/g, ''),
+          telefono:   editForm.telefono || null,
           cliente_id: editForm.cliente_id || null,
         }),
       })
@@ -440,6 +442,17 @@ function TecnicoForm({
               ? <p className="text-red-600 text-xs mt-1">{errors.dni}</p>
               : <p className="text-xs text-gray-400 mt-1">Solo números, sin puntos ni guiones</p>
             }
+          </div>
+
+          {/* Teléfono */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Teléfono <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input value={form.telefono} onChange={e => onChange('telefono', e.target.value)}
+              inputMode="tel" placeholder="11 5555-5555"
+              className={inp('telefono')} />
+            <p className="text-xs text-gray-400 mt-1">Para que el supervisor pueda contactarlo desde el dashboard</p>
           </div>
 
           {/* Email (solo en crear) */}

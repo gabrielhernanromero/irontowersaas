@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   X, User, Clock, MapPin, Loader2, BookOpen, ShieldAlert,
   ClipboardCheck, CheckCircle2, CheckCircle, XCircle, Camera,
-  AlertTriangle, Package,
+  AlertTriangle, Package, Phone, Users, FileText, Circle,
 } from 'lucide-react'
 import FotoLightbox, { FotoThumb } from './FotoLightbox'
 
@@ -58,10 +58,27 @@ interface IncidenciaTurno {
 
 interface ElementoTurno {
   id: string
-  elemento_id: string
-  estado_operativo: 'ok' | 'falla' | 'faltante'
+  nombre: string
+  codigo_patrimonial: string
+  categoria: string | null
+  estado_admin: 'activo' | 'en_mantenimiento' | 'inactivo'
+  auditado: boolean
+  estado_operativo: 'ok' | 'falla' | 'faltante' | null
   observacion: string | null
-  elementos_puesto: { id: string; nombre: string; codigo_patrimonial: string; categoria: string | null } | null
+}
+
+interface Participante {
+  id: string
+  usuario_id: string
+  joined_at: string
+  users: { nombre: string; apellido: string; dni: string | null; telefono: string | null } | null
+}
+
+interface PlanillaChecklistItem {
+  nombre: string
+  slug: string
+  enviada: boolean
+  planillaId: string | null
 }
 
 interface TurnoDetalle {
@@ -78,6 +95,9 @@ interface TurnoDetalle {
   novedades: Novedad[]
   incidencias: IncidenciaTurno[]
   elementos: ElementoTurno[]
+  participantes: Participante[]
+  encargado_telefono: string | null
+  planillasChecklist: PlanillaChecklistItem[]
 }
 
 interface Props {
@@ -100,7 +120,7 @@ const ESTADO_INCIDENCIA: Record<IncidenciaTurno['estado'], { label: string; badg
   cerrado:        { label: 'Cerrada',         badge: 'bg-gray-100 text-gray-500' },
 }
 
-const ESTADO_ELEMENTO: Record<ElementoTurno['estado_operativo'], { label: string; badge: string }> = {
+const ESTADO_ELEMENTO: Record<'ok' | 'falla' | 'faltante', { label: string; badge: string }> = {
   ok:       { label: 'OK',       badge: 'bg-emerald-100 text-emerald-700' },
   falla:    { label: 'Falla',    badge: 'bg-amber-100 text-amber-700' },
   faltante: { label: 'Faltante', badge: 'bg-red-100 text-red-700' },
@@ -269,7 +289,76 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                     {turno.horario_inicio}
                     {turno.horario_fin ? ` → ${turno.horario_fin}` : ' → en curso'}
                   </div>
+                  {turno.encargado_telefono && (
+                    <div className="flex items-center gap-2.5 text-sm text-gray-600">
+                      <Phone size={14} className="text-gray-400 shrink-0" />
+                      <a
+                        href={`tel:${turno.encargado_telefono}`}
+                        className="text-brand-orange font-medium text-base py-2.5 min-h-[44px] flex items-center"
+                      >
+                        {turno.encargado_telefono}
+                      </a>
+                      <span className="text-xs text-gray-400">(encargado)</span>
+                    </div>
+                  )}
                 </div>
+
+                {/* Personal de apoyo cubriendo el puesto */}
+                {turno.participantes.length > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Users size={13} className="text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Apoyo en este turno
+                      </p>
+                    </div>
+                    <div className="flex flex-col">
+                      {turno.participantes.map(p => (
+                        <div key={p.id} className="flex items-center justify-between gap-2 py-2 min-h-[44px]">
+                          <span className="text-base text-gray-700">
+                            {p.users ? `${p.users.nombre} ${p.users.apellido}` : 'Técnico'}
+                            {p.users?.dni && <span className="text-gray-400 text-sm"> · DNI {p.users.dni}</span>}
+                          </span>
+                          {p.users?.telefono && (
+                            <a
+                              href={`tel:${p.users.telefono}`}
+                              className="text-brand-orange font-medium text-base shrink-0"
+                            >
+                              {p.users.telefono}
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Checklist de planillas del turno */}
+                {turno.planillasChecklist.length > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <FileText size={13} className="text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Planillas del turno
+                      </p>
+                    </div>
+                    <div className="flex flex-col">
+                      {turno.planillasChecklist.map(p => (
+                        <div key={p.slug} className="flex items-center gap-2 py-2 min-h-[44px]">
+                          {p.enviada
+                            ? <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                            : <Circle size={16} className="text-amber-400 shrink-0" />}
+                          <span className={`text-base ${p.enviada ? 'text-gray-700' : 'text-amber-700 font-medium'}`}>
+                            {p.nombre}
+                          </span>
+                          <span className="text-sm text-gray-400">
+                            {p.enviada ? 'Enviada' : 'Pendiente'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="h-px bg-gray-100 mx-5" />
@@ -477,23 +566,33 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                   {turno.elementos.length === 0 ? (
                     <div className="text-center py-6">
                       <Package size={24} className="mx-auto mb-2 text-gray-200" />
-                      <p className="text-sm text-gray-400">Sin verificación de elementos en este turno</p>
+                      <p className="text-sm text-gray-400">Sin elementos asignados a este puesto</p>
                     </div>
                   ) : (
                     turno.elementos.map(el => {
-                      const est = ESTADO_ELEMENTO[el.estado_operativo]
+                      const est = el.estado_operativo ? ESTADO_ELEMENTO[el.estado_operativo] : null
                       return (
                         <div key={el.id} className="flex items-center justify-between gap-3 border border-gray-100 rounded-xl px-3.5 py-2.5">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{el.elementos_puesto?.nombre ?? 'Elemento'}</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{el.nombre}</p>
                             <p className="text-xs text-gray-400">
-                              {el.elementos_puesto?.codigo_patrimonial}
+                              {el.codigo_patrimonial}
                               {el.observacion ? ` · ${el.observacion}` : ''}
                             </p>
                           </div>
-                          <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${est.badge}`}>
-                            {est.label}
-                          </span>
+                          {el.estado_admin === 'en_mantenimiento' ? (
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                              En mantenimiento
+                            </span>
+                          ) : est ? (
+                            <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${est.badge}`}>
+                              {est.label}
+                            </span>
+                          ) : (
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                              Sin controlar en este turno
+                            </span>
+                          )}
                         </div>
                       )
                     })
