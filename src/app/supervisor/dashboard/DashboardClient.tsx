@@ -235,6 +235,7 @@ export default function DashboardClient({
 
   const [clienteId, setClienteId] = useState<string | null>(null)
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('todos')
+  const [activityTurnoId, setActivityTurnoId] = useState<string | null>(null)
 
   const [turnoSheet,      setTurnoSheet]      = useState<string | null>(null)
   const [incidenciaSheet, setIncidenciaSheet] = useState<IncidenciaActiva | null>(null)
@@ -395,12 +396,23 @@ export default function DashboardClient({
     clienteId ? turnos.filter(t => t.cliente_id === clienteId) : turnos
   , [turnos, clienteId])
 
+  // Si el turno seleccionado para aislar su timeline deja de estar activo
+  // (cierra, o cambia el filtro de cliente), volver a mostrar todos.
+  useEffect(() => {
+    if (activityTurnoId && !turnosFiltrados.some(t => t.id === activityTurnoId)) {
+      setActivityTurnoId(null)
+    }
+  }, [turnosFiltrados, activityTurnoId])
+
   const novedadesFiltradas   = useMemo(() => {
     const byCliente = clienteId
       ? novedades.filter(n => n.libro_turno?.cliente_id === clienteId)
       : novedades
-    return byCliente.filter(n => matchesFeedFilter(n, feedFilter))
-  }, [novedades, clienteId, feedFilter])
+    const byTurno = activityTurnoId
+      ? byCliente.filter(n => n.turno_id === activityTurnoId)
+      : byCliente
+    return byTurno.filter(n => matchesFeedFilter(n, feedFilter))
+  }, [novedades, clienteId, activityTurnoId, feedFilter])
 
   const incidenciasFiltradas = useMemo(() =>
     clienteId ? incidencias.filter(i => i.cliente_id === clienteId) : incidencias
@@ -843,6 +855,36 @@ export default function DashboardClient({
             ))}
           </div>
         </div>
+
+        {/* Filtro por turno — para aislar el timeline de un turno puntual */}
+        {turnosFiltrados.length > 1 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setActivityTurnoId(null)}
+              className={`text-xs px-3 py-2 min-h-[44px] rounded-full font-medium transition-colors ${
+                activityTurnoId === null
+                  ? 'bg-brand-orange text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              Todos los turnos
+            </button>
+            {turnosFiltrados.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActivityTurnoId(t.id)}
+                className={`text-xs px-3 py-2 min-h-[44px] rounded-full font-medium transition-colors ${
+                  activityTurnoId === t.id
+                    ? 'bg-brand-orange text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {t.tecnico_nombre}
+                {!clienteId && t.clientes ? ` · ${t.clientes.nombre_empresa}` : ''}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           {novedadesFiltradas.length === 0 ? (

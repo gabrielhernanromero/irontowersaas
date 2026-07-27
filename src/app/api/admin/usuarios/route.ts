@@ -11,6 +11,7 @@ const CreateUsuarioSchema = z.object({
   apellido:   z.string().min(1, 'Apellido requerido'),
   dni:        z.string().regex(/^\d{7,8}$/, 'El DNI debe tener 7 u 8 dígitos numéricos'),
   email:      z.string().email('El email no tiene un formato válido (ej: nombre@dominio.com)'),
+  telefono:   z.string().optional(),
   cliente_id: z.string().uuid('Empresa inválida').optional(),
 })
 
@@ -23,7 +24,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin()
     .from('users')
-    .select('id, nombre, apellido, dni, email, rol, activo, turno_habitual, cliente_id, created_at')
+    .select('id, nombre, apellido, dni, telefono, email, rol, activo, turno_habitual, cliente_id, created_at')
     .eq('rol', 'tecnico')
     .order('apellido', { ascending: true })
 
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const { nombre, apellido, dni, email, cliente_id } = parsed.data
+  const { nombre, apellido, dni, email, telefono, cliente_id } = parsed.data
   const tempPassword = generarPasswordTemporal()
 
   // Verificar DNI duplicado
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       nombre,
       apellido,
       dni,
+      telefono: telefono || null,
       rol: 'tecnico',
       activo: true,
       cliente_id: cliente_id ?? null,
