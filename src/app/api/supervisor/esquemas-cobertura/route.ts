@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       )
     `)
     .eq('cliente_id', clienteId)
+    .eq('activo', true)
     .order('hora_inicio', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -56,11 +57,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'La hora de inicio y fin no pueden ser iguales.' }, { status: 400 })
   }
 
-  // Verificar duplicado: mismo nombre en el mismo cliente
+  // Verificar duplicado: mismo nombre en el mismo cliente (solo entre los
+  // activos — uno desactivado (ex-"eliminado") no debe bloquear el nombre)
   const { data: existeNombre } = await supabaseAdmin()
     .from('esquemas_cobertura')
     .select('id')
     .eq('cliente_id', cliente_id)
+    .eq('activo', true)
     .ilike('nombre', nombre.trim())
     .maybeSingle()
   if (existeNombre) {
@@ -72,6 +75,7 @@ export async function POST(req: NextRequest) {
     .from('esquemas_cobertura')
     .select('id, nombre')
     .eq('cliente_id', cliente_id)
+    .eq('activo', true)
     .eq('hora_inicio', hora_inicio)
     .eq('hora_fin', hora_fin)
     .maybeSingle()

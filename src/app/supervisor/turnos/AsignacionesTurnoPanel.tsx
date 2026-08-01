@@ -201,9 +201,18 @@ export default function AsignacionesTurnoPanel({ tecnicos, clientes }: Props) {
 
   async function eliminarEsquema(id: string, nombre: string) {
     if (!confirm(`¿Eliminar "${nombre}"? Se perderán todas las asignaciones permanentes.`)) return
-    const res = await fetch(`/api/supervisor/esquemas-cobertura/${id}`, { method: 'DELETE' })
-    if (res.ok) setEsquemas(prev => prev.filter(e => e.id !== id))
-    else        setError('Error al eliminar el turno')
+    setError(null)
+    try {
+      const res  = await fetch(`/api/supervisor/esquemas-cobertura/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setEsquemas(prev => prev.filter(e => e.id !== id))
+      if (data.softDeleted) {
+        alert(`"${nombre}" ya fue usado por técnicos, así que no se puede borrar del todo sin perder el historial de esos turnos — se desactivó en su lugar y ya no va a aparecer en la lista.`)
+      }
+    } catch (e) {
+      setError((e as Error).message)
+    }
   }
 
   async function asignarPersistente(esquema_id: string) {

@@ -51,6 +51,7 @@ export async function PATCH(
       .from('esquemas_cobertura')
       .select('id')
       .eq('cliente_id', actual.cliente_id)
+      .eq('activo', true)
       .ilike('nombre', nombreNuevo.trim())
       .neq('id', params.id)
       .maybeSingle()
@@ -68,6 +69,7 @@ export async function PATCH(
       .from('esquemas_cobertura')
       .select('id, nombre')
       .eq('cliente_id', actual.cliente_id)
+      .eq('activo', true)
       .eq('hora_inicio', horaInicioNueva)
       .eq('hora_fin', horaFinNueva)
       .neq('id', params.id)
@@ -104,6 +106,22 @@ export async function DELETE(
     .delete()
     .eq('id', params.id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+  if (!error) return NextResponse.json({ ok: true })
+
+  // Un esquema ya usado tiene turnos históricos en libro_turno referenciándolo
+  // (esa FK no cascadea a propósito, para no perder trazabilidad de turnos
+  // pasados). En ese caso no se puede borrar de verdad — se desactiva en su
+  // lugar, que ya estaba soportado por el PATCH pero sin ningún disparador en
+  // la UI.
+  if (error.code === '23503') {
+    const { error: updateErr } = await supabaseAdmin()
+      .from('esquemas_cobertura')
+      .update({ activo: false })
+      .eq('id', params.id)
+
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    return NextResponse.json({ ok: true, softDeleted: true })
+  }
+
+  return NextResponse.json({ error: error.message }, { status: 500 })
 }
