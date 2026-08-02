@@ -9,7 +9,10 @@ function makeHidranteItems(overrides: Partial<{
   manga: boolean
   lanza: boolean
   valvula: boolean
-  observaciones: string | null
+  obs_gabinete: string | null
+  obs_manga: string | null
+  obs_lanza: string | null
+  obs_valvula: string | null
 }> = {}, count = 48) {
   return Array.from({ length: count }, (_, i) => ({
     numero: `H-${String(i + 1).padStart(3, '0')}`,
@@ -17,7 +20,10 @@ function makeHidranteItems(overrides: Partial<{
     manga: true,
     lanza: true,
     valvula: true,
-    observaciones: null,
+    obs_gabinete: null,
+    obs_manga: null,
+    obs_lanza: null,
+    obs_valvula: null,
     foto_url: null,
     ...overrides,
   }))
@@ -28,7 +34,9 @@ function makeExtintorItems(overrides: Partial<{
   senalizacion: boolean
   acceso: boolean
   presion_peso: boolean
-  observaciones: string | null
+  obs_senalizacion: string | null
+  obs_acceso: string | null
+  obs_presion_peso: string | null
 }> = {}, count = 113) {
   return Array.from({ length: count }, (_, i) => ({
     numero: `E-${String(i + 1).padStart(3, '0')}`,
@@ -36,7 +44,9 @@ function makeExtintorItems(overrides: Partial<{
     senalizacion: true,
     acceso: true,
     presion_peso: true,
-    observaciones: null,
+    obs_senalizacion: null,
+    obs_acceso: null,
+    obs_presion_peso: null,
     foto_url: null,
     ...overrides,
   }))
@@ -47,6 +57,7 @@ const BASE_PLANILLA = {
   fecha: '2026-05-05',
   turno: 'diurno' as const,
   firma_dataurl: 'data:image/png;base64,abc123',
+  firma_aclaracion: 'Juan Pérez',
 }
 
 // ─── Regla 1: Una planilla por turno ─────────────────────────────────────────
@@ -94,28 +105,28 @@ describe('Regla 2 — Inmutabilidad post-envío', () => {
 // ─── Regla 3: NO → observaciones obligatorias ────────────────────────────────
 describe('Regla 3 — NO implica observaciones obligatorias', () => {
   it('hidrantes: gabinete=false sin observaciones → inválido', () => {
-    const items = makeHidranteItems({ gabinete: false, observaciones: null })
+    const items = makeHidranteItems({ gabinete: false, obs_gabinete: null })
     const result = PlanillaHidrantesSubmitSchema.safeParse({ ...BASE_PLANILLA, items })
     expect(result.success).toBe(false)
     if (!result.success) {
       const msgs = result.error.issues.map((i) => i.message)
-      expect(msgs).toContain('Las observaciones son obligatorias cuando hay un NO')
+      expect(msgs).toContain('La observación de Gabinete es obligatoria')
     }
   })
 
   it('hidrantes: gabinete=false CON observaciones → válido', () => {
-    const items = makeHidranteItems({ gabinete: false, observaciones: 'Gabinete roto' })
+    const items = makeHidranteItems({ gabinete: false, obs_gabinete: 'Gabinete roto' })
     const result = PlanillaHidrantesSubmitSchema.safeParse({ ...BASE_PLANILLA, items })
     expect(result.success).toBe(true)
   })
 
   it('extintores: acceso=false sin observaciones → inválido', () => {
-    const items = makeExtintorItems({ acceso: false, observaciones: null })
+    const items = makeExtintorItems({ acceso: false, obs_acceso: null })
     const result = PlanillaExtintoresSubmitSchema.safeParse({ ...BASE_PLANILLA, items })
     expect(result.success).toBe(false)
     if (!result.success) {
       const msgs = result.error.issues.map((i) => i.message)
-      expect(msgs).toContain('Las observaciones son obligatorias cuando hay un NO')
+      expect(msgs).toContain('La observación de Acceso es obligatoria')
     }
   })
 
@@ -125,13 +136,12 @@ describe('Regla 3 — NO implica observaciones obligatorias', () => {
     expect(result.success).toBe(true)
   })
 
-  it('todos los campos false de un hidrante → un solo error de observaciones', () => {
+  it('todos los campos false de un hidrante → error por cada observación faltante', () => {
     const items = makeHidranteItems({
       gabinete: false,
       manga: false,
       lanza: false,
       valvula: false,
-      observaciones: null,
     })
     const result = PlanillaHidrantesSubmitSchema.safeParse({ ...BASE_PLANILLA, items })
     expect(result.success).toBe(false)
@@ -141,7 +151,7 @@ describe('Regla 3 — NO implica observaciones obligatorias', () => {
 // ─── Regla 4: Alerta en NO ────────────────────────────────────────────────────
 describe('Regla 4 — Detección de NOs para alertas', () => {
   it('detecta correctamente items con algún NO en hidrantes', () => {
-    const items = makeHidranteItems({ gabinete: false, observaciones: 'obs' })
+    const items = makeHidranteItems({ gabinete: false, obs_gabinete: 'obs' })
     const hayNo = items.some(
       (i) => !i.gabinete || !i.manga || !i.lanza || !i.valvula
     )
@@ -157,7 +167,7 @@ describe('Regla 4 — Detección de NOs para alertas', () => {
   })
 
   it('detecta NOs en extintores', () => {
-    const items = makeExtintorItems({ presion_peso: false, observaciones: 'obs' })
+    const items = makeExtintorItems({ presion_peso: false, obs_presion_peso: 'obs' })
     const hayNo = items.some(
       (i) => !i.senalizacion || !i.acceso || !i.presion_peso
     )
@@ -211,9 +221,19 @@ describe('Regla 6 — Trazabilidad', () => {
 })
 
 // ─── Libro de Guardia ─────────────────────────────────────────────────────────
+const BASE_LIBRO = {
+  fecha: '2026-05-05',
+  turno: 'diurno' as const,
+  horario_inicio: '06:00',
+  horario_fin: '14:00',
+  sin_novedades: false,
+  descripcion: 'Novedad de prueba',
+}
+
 describe('LibroGuardia schema', () => {
   it('válido con campos obligatorios', () => {
     const result = LibroGuardiaSchema.safeParse({
+      ...BASE_LIBRO,
       hora: '14:30',
       riesgo_detectado: 'Fuga en tubería',
       medidas_adoptadas: 'Se aisló el área',
@@ -223,6 +243,7 @@ describe('LibroGuardia schema', () => {
 
   it('inválido sin riesgo_detectado', () => {
     const result = LibroGuardiaSchema.safeParse({
+      ...BASE_LIBRO,
       hora: '14:30',
       riesgo_detectado: '',
       medidas_adoptadas: 'Se aisló el área',
@@ -232,6 +253,7 @@ describe('LibroGuardia schema', () => {
 
   it('inválido con formato de hora incorrecto', () => {
     const result = LibroGuardiaSchema.safeParse({
+      ...BASE_LIBRO,
       hora: '2:30 PM',
       riesgo_detectado: 'algo',
       medidas_adoptadas: 'algo',
