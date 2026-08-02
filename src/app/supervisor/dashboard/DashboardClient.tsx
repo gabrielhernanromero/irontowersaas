@@ -5,7 +5,7 @@ import {
   Shield, AlertTriangle, MessageSquare, Bell,
   ChevronRight, Clock, MapPin, AlertCircle, Siren, X,
   ClipboardCheck, Users, CheckCircle2, TrendingUp, Download,
-  Camera, Filter, CheckCircle, TriangleAlert,
+  Camera, Filter, CheckCircle,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { downloadCsv } from '@/lib/exportCsv'
@@ -203,6 +203,13 @@ const FEED_FILTERS: { key: FeedFilter; label: string }[] = [
   { key: 'alerta',   label: 'Alertas'   },
 ]
 
+// Cuántas incidencias se muestran por página en el panel "Incidencias
+// abiertas" — con miles de clientes esta lista puede crecer mucho.
+const INCIDENCIAS_PAGE_SIZE = 6
+
+// Ídem para el feed "Actividad en vivo" — acumula todas las novedades del día.
+const ACTIVIDAD_PAGE_SIZE = 10
+
 function matchesFeedFilter(nov: NovedadFeed, filter: FeedFilter): boolean {
   if (filter === 'todos') return true
   const cat = parsearCategoria(nov.descripcion, nov.tipo).label.toLowerCase()
@@ -235,6 +242,8 @@ export default function DashboardClient({
 
   const [clienteId, setClienteId] = useState<string | null>(null)
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('todos')
+  const [incidenciasPage, setIncidenciasPage] = useState(1)
+  const [actividadPage, setActividadPage] = useState(1)
   const [activityTurnoId, setActivityTurnoId] = useState<string | null>(null)
 
   const [turnoSheet,      setTurnoSheet]      = useState<string | null>(null)
@@ -414,6 +423,19 @@ export default function DashboardClient({
     return byTurno.filter(n => matchesFeedFilter(n, feedFilter))
   }, [novedades, clienteId, activityTurnoId, feedFilter])
 
+  const actividadTotalPaginas = Math.max(1, Math.ceil(novedadesFiltradas.length / ACTIVIDAD_PAGE_SIZE))
+  const actividadPagina = novedadesFiltradas.slice(
+    (actividadPage - 1) * ACTIVIDAD_PAGE_SIZE,
+    actividadPage * ACTIVIDAD_PAGE_SIZE
+  )
+
+  // Volver a la primera página al cambiar cualquier filtro del feed, o si la
+  // página actual deja de existir (ej. llegó una novedad nueva y corrió todo).
+  useEffect(() => { setActividadPage(1) }, [clienteId, activityTurnoId, feedFilter])
+  useEffect(() => {
+    if (actividadPage > actividadTotalPaginas) setActividadPage(1)
+  }, [actividadPage, actividadTotalPaginas])
+
   const incidenciasFiltradas = useMemo(() =>
     clienteId ? incidencias.filter(i => i.cliente_id === clienteId) : incidencias
   , [incidencias, clienteId])
@@ -429,6 +451,19 @@ export default function DashboardClient({
     })
   }, [incidenciasFiltradas])
 
+  const incidenciasTotalPaginas = Math.max(1, Math.ceil(incidenciasOrdenadas.length / INCIDENCIAS_PAGE_SIZE))
+  const incidenciasPagina = incidenciasOrdenadas.slice(
+    (incidenciasPage - 1) * INCIDENCIAS_PAGE_SIZE,
+    incidenciasPage * INCIDENCIAS_PAGE_SIZE
+  )
+
+  // Volver a la primera página al cambiar de cliente, o si la página actual
+  // deja de existir (ej. se resolvió la última incidencia de esa página).
+  useEffect(() => { setIncidenciasPage(1) }, [clienteId])
+  useEffect(() => {
+    if (incidenciasPage > incidenciasTotalPaginas) setIncidenciasPage(1)
+  }, [incidenciasPage, incidenciasTotalPaginas])
+
   const kpis = clienteId
     ? {
         turnos:      turnosFiltrados.length,
@@ -443,48 +478,14 @@ export default function DashboardClient({
         alertas:     alertasSL,
       }
 
-  // ── Zona de atención inmediata ──────────────────────────────────────────────
-  const itemsUrgentes = useMemo(() => {
-    const items: { tipo: 'relevo' | 'incidencia_alta' | 'aprobacion'; label: string; sub: string; id: string; inc?: IncidenciaActiva }[] = []
-
-    // Turnos con relevo pendiente
-    turnos
-      .filter(t => t.estado === 'pendiente_relevo')
-      .forEach(t => items.push({
-        tipo: 'relevo',
-        label: `Relevo pendiente — ${t.tecnico_nombre}`,
-        sub: t.clientes?.nombre_empresa ?? 'Sin cliente',
-        id: t.id,
-      }))
-
-    // Incidencias ALTO sin resolver hace > 30 min
-    incidencias
-      .filter(i => i.severidad === 'alto' && minutosDesde(i.created_at) > 30)
-      .forEach(i => items.push({
-        tipo: 'incidencia_alta',
-        label: i.titulo,
-        sub: `${i.clientes?.nombre_empresa ?? ''} · ${agingLabel(i.created_at)}`,
-        id: i.id,
-        inc: i,
-      }))
-
-    // Incidencias que esperan aprobación del encargado > 15 min
-    incidencias
-      .filter(i => i.requiere_aprobacion && i.estado_aprobacion === 'pendiente_revision' && minutosDesde(i.created_at) > 15)
-      .forEach(i => {
-        if (!items.find(x => x.id === i.id)) {
-          items.push({
-            tipo: 'aprobacion',
-            label: `Aprobación pendiente — ${i.titulo}`,
-            sub: `${i.clientes?.nombre_empresa ?? ''} · ${agingLabel(i.created_at)}`,
-            id: i.id,
-            inc: i,
-          })
-        }
-      })
-
-    return items
-  }, [turnos, incidencias])
+  // Mismo criterio que antes marcaba una incidencia como "urgente" en la zona
+  // de atención inmediata (ya removida) — ahora solo decide el indicador
+  // pulsante dentro de la lista de "Incidencias abiertas".
+  function esIncidenciaUrgente(inc: IncidenciaActiva): boolean {
+    if (inc.severidad === 'alto' && minutosDesde(inc.created_at) > 30) return true
+    if (inc.requiere_aprobacion && inc.estado_aprobacion === 'pendiente_revision' && minutosDesde(inc.created_at) > 15) return true
+    return false
+  }
 
   function handleIncidenciaResolved(id: string) {
     setIncidencias(prev => prev.filter(i => i.id !== id))
@@ -555,40 +556,6 @@ export default function DashboardClient({
         </div>
         <ClienteSelector clientes={clientes} value={clienteId} onChange={setClienteId} />
       </div>
-
-      {/* ── Zona de atención inmediata ── */}
-      {itemsUrgentes.length > 0 && (
-        <div className="rounded-2xl bg-red-50/70 overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3">
-            <TriangleAlert size={14} className="text-red-600 shrink-0" />
-            <p className="text-xs font-bold text-red-700 uppercase tracking-wider">
-              {itemsUrgentes.length} {itemsUrgentes.length === 1 ? 'situación requiere atención' : 'situaciones requieren atención'}
-            </p>
-          </div>
-          <div className="divide-y divide-red-100/70">
-            {itemsUrgentes.map((item) => (
-              <button
-                key={`${item.tipo}-${item.id}`}
-                onClick={() => item.tipo === 'relevo' ? setTurnoSheet(item.id) : item.inc && setIncidenciaSheet(item.inc)}
-                className="w-full text-left px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-red-100/50 transition-colors group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${
-                    item.tipo === 'relevo'          ? 'bg-amber-500' :
-                    item.tipo === 'incidencia_alta' ? 'bg-red-500'   :
-                    'bg-orange-500'
-                  }`} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-red-800 line-clamp-1">{item.label}</p>
-                    <p className="text-xs text-red-600 mt-0.5">{item.sub}</p>
-                  </div>
-                </div>
-                <ChevronRight size={14} className="text-red-400 shrink-0 group-hover:text-red-600 transition-colors" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── KPIs (franja única, clickeable) ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm grid grid-cols-2 sm:grid-cols-4 divide-y divide-x-0 sm:divide-y-0 sm:divide-x divide-gray-100">
@@ -784,51 +751,84 @@ export default function DashboardClient({
               <p className="text-sm text-gray-400">Sin incidencias abiertas</p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
-              {incidenciasOrdenadas.map(inc => {
-                const s    = SEV[inc.severidad ?? 'bajo']
-                const hAge = horasAbierta(inc.created_at)
-                const ageCls =
-                  hAge > 4  ? 'text-red-500'   :
-                  hAge > 1  ? 'text-amber-500' :
-                  'text-gray-400'
-                return (
-                  <button
-                    key={inc.id}
-                    onClick={() => setIncidenciaSheet(inc)}
-                    className={`w-full text-left flex gap-0 border-l-4 ${s.border} hover:bg-gray-50 transition-colors group`}
-                  >
-                    <div className="flex-1 px-4 py-3 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${s.badge}`}>
-                          {inc.severidad ?? 'bajo'}
-                        </span>
-                        {inc.requiere_aprobacion && inc.estado_aprobacion === 'pendiente_revision' && (
-                          <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
-                            Pend. aprobación
+            <>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+                {incidenciasPagina.map(inc => {
+                  const s        = SEV[inc.severidad ?? 'bajo']
+                  const hAge     = horasAbierta(inc.created_at)
+                  const urgente  = esIncidenciaUrgente(inc)
+                  const ageCls =
+                    hAge > 4  ? 'text-red-500'   :
+                    hAge > 1  ? 'text-amber-500' :
+                    'text-gray-400'
+                  return (
+                    <button
+                      key={inc.id}
+                      onClick={() => setIncidenciaSheet(inc)}
+                      className={`w-full text-left flex gap-0 border-l-4 ${s.border} hover:bg-gray-50 transition-colors group`}
+                    >
+                      {urgente && (
+                        <div className="flex items-center pl-3" title="Requiere atención">
+                          <span className="relative flex h-2 w-2 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                           </span>
-                        )}
-                        {inc.foto_url && (
-                          <Camera size={11} className="text-gray-400" />
-                        )}
+                        </div>
+                      )}
+                      <div className="flex-1 px-4 py-3 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${s.badge}`}>
+                            {inc.severidad ?? 'bajo'}
+                          </span>
+                          {inc.requiere_aprobacion && inc.estado_aprobacion === 'pendiente_revision' && (
+                            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
+                              Pend. aprobación
+                            </span>
+                          )}
+                          {inc.foto_url && (
+                            <Camera size={11} className="text-gray-400" />
+                          )}
+                        </div>
+                        <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-brand-ink">
+                          {inc.titulo}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {inc.clientes && (
+                            <span className="text-xs text-gray-400">{inc.clientes.nombre_empresa}</span>
+                          )}
+                          <span className={`text-xs font-medium ${ageCls}`}>{agingLabel(inc.created_at)}</span>
+                        </div>
                       </div>
-                      <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-brand-ink">
-                        {inc.titulo}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {inc.clientes && (
-                          <span className="text-xs text-gray-400">{inc.clientes.nombre_empresa}</span>
-                        )}
-                        <span className={`text-xs font-medium ${ageCls}`}>{agingLabel(inc.created_at)}</span>
+                      <div className="flex items-center pr-3">
+                        <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
                       </div>
-                    </div>
-                    <div className="flex items-center pr-3">
-                      <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
-                    </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {incidenciasTotalPaginas > 1 && (
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setIncidenciasPage(p => Math.max(1, p - 1))}
+                    disabled={incidenciasPage === 1}
+                    className="px-3 py-2 min-h-[44px] text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                  >
+                    Anterior
                   </button>
-                )
-              })}
-            </div>
+                  <span className="text-xs text-gray-400">
+                    Página {incidenciasPage} de {incidenciasTotalPaginas}
+                  </span>
+                  <button
+                    onClick={() => setIncidenciasPage(p => Math.min(incidenciasTotalPaginas, p + 1))}
+                    disabled={incidenciasPage === incidenciasTotalPaginas}
+                    className="px-3 py-2 min-h-[44px] text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -898,7 +898,7 @@ export default function DashboardClient({
             <div className="relative">
               <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-100" />
               <div className="space-y-1">
-                {novedadesFiltradas.map((nov) => {
+                {actividadPagina.map((nov) => {
                   const turno  = nov.libro_turno
                   const cat    = parsearCategoria(nov.descripcion, nov.tipo)
                   const estado = estadoActividad(nov.tipo)
@@ -943,6 +943,28 @@ export default function DashboardClient({
             </div>
           )}
         </div>
+
+        {actividadTotalPaginas > 1 && (
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setActividadPage(p => Math.max(1, p - 1))}
+              disabled={actividadPage === 1}
+              className="px-3 py-2 min-h-[44px] text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Anterior
+            </button>
+            <span className="text-xs text-gray-400">
+              Página {actividadPage} de {actividadTotalPaginas}
+            </span>
+            <button
+              onClick={() => setActividadPage(p => Math.min(actividadTotalPaginas, p + 1))}
+              disabled={actividadPage === actividadTotalPaginas}
+              className="px-3 py-2 min-h-[44px] text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Side sheets + lightbox ── */}
