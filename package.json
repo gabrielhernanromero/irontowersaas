@@ -2,13 +2,24 @@
   "name": "iron-tower",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:staging": "set -a && . ./.env.staging.local && set +a && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest"
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:coverage": "jest --coverage tests/unit",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix"
+    ]
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -34,15 +45,23 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-signature-canvas": "^1.0.7",
     "@types/web-push": "^3.6.4",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "dotenv": "^17.4.2",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "husky": "^9.1.7",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
+    "lint-staged": "^16.4.0",
     "pg": "^8.20.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
