@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import type { Cliente, ElementoPuesto, EstadoAdmin, PlanillaTipo } from '@/types/database'
+import ContornoModal from './ContornoModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,13 @@ export default function ClientesClient({ initialClientes, initialElementos, init
       return next.sort((a, b) => a.nombre_empresa.localeCompare(b.nombre_empresa))
     })
     setClienteModal({ open: false, editing: null })
+  }
+
+  // Solo sincroniza el cliente en la lista — a diferencia de onClienteSaved,
+  // no cierra el modal de edición (el contorno se guarda aparte, en su propio
+  // sub-modal, sin interrumpir el resto de la edición del cliente).
+  function onContornoSaved(c: Cliente) {
+    setClientes(prev => prev.map(x => x.id === c.id ? c : x))
   }
 
   function onElementoSaved(el: ElementoPuesto) {
@@ -416,6 +424,7 @@ export default function ClientesClient({ initialClientes, initialElementos, init
         <ClienteModal
           cliente={clienteModal.editing}
           onSave={onClienteSaved}
+          onContornoSaved={onContornoSaved}
           onClose={() => setClienteModal({ open: false, editing: null })}
         />
       )}
@@ -459,12 +468,21 @@ function InfoField({ label, value }: { label: string; value: string }) {
 // ── ClienteModal ──────────────────────────────────────────────────────────────
 
 function ClienteModal({
-  cliente, onSave, onClose,
+  cliente, onSave, onContornoSaved, onClose,
 }: {
   cliente: Cliente | null
   onSave: (c: Cliente) => void
+  onContornoSaved: (c: Cliente) => void
   onClose: () => void
 }) {
+  const [contornoModalOpen, setContornoModalOpen] = useState(false)
+  const [contorno, setContorno] = useState<{
+    geojson: GeoJSON.Polygon | null
+    actualizadoAt: string | null
+  }>({
+    geojson: cliente?.contorno_geojson ?? null,
+    actualizadoAt: cliente?.contorno_actualizado_at ?? null,
+  })
   const [form, setForm] = useState({
     nombre_empresa:           cliente?.nombre_empresa           ?? '',
     cuit:                     cliente?.cuit                     ?? '',
@@ -631,6 +649,24 @@ function ClienteModal({
                 />
               </div>
             </div>
+
+            <div className="sm:col-span-2">
+              <button
+                type="button"
+                disabled={!cliente || form.latitud.trim() === '' || form.longitud.trim() === ''}
+                onClick={() => setContornoModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 border-2 border-gray-200 text-gray-700 font-semibold rounded-xl px-4 py-2.5 text-sm min-h-[44px] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              >
+                <MapPin size={15} />
+                {contorno.geojson ? 'Editar contorno de la sede' : 'Dibujar contorno de la sede'}
+              </button>
+              {!cliente && (
+                <p className="text-xs text-gray-400 mt-1">Guardá el cliente primero para poder dibujar el contorno.</p>
+              )}
+              {cliente && (form.latitud.trim() === '' || form.longitud.trim() === '') && (
+                <p className="text-xs text-gray-400 mt-1">Cargá las coordenadas de la sede primero.</p>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -655,6 +691,22 @@ function ClienteModal({
           </div>
         </form>
       </div>
+
+      {contornoModalOpen && cliente && (
+        <ContornoModal
+          clienteId={cliente.id}
+          clienteNombre={form.nombre_empresa}
+          lat={Number(form.latitud)}
+          lng={Number(form.longitud)}
+          contornoInicial={contorno.geojson}
+          onClose={() => setContornoModalOpen(false)}
+          onSave={(geojson, actualizadoAt) => {
+            setContorno({ geojson, actualizadoAt })
+            setContornoModalOpen(false)
+            onContornoSaved({ ...cliente, contorno_geojson: geojson, contorno_actualizado_at: actualizadoAt })
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
-const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, planillas_habilitadas, latitud, longitud, created_at'
+const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, planillas_habilitadas, latitud, longitud, contorno_geojson, contorno_actualizado_at, created_at'
 
 const PuestoSchema = z.object({
   nombre_empresa:           z.string().min(1, 'Nombre del puesto requerido'),
@@ -28,6 +28,12 @@ const FrecuenciaSchema         = z.object({
 const PlanillasHabilitadasSchema = z.object({
   id:                    z.string().uuid(),
   planillas_habilitadas: z.array(z.string()),
+})
+// GPS Fase 1.5 — contorno de la sede dibujado a mano. Capa visual, no
+// reemplaza la geocerca por distancia. `null` borra el contorno guardado.
+const ContornoSchema = z.object({
+  id:               z.string().uuid(),
+  contorno_geojson: z.record(z.string(), z.any()).nullable(),
 })
 
 export async function GET() {
@@ -101,6 +107,23 @@ export async function PATCH(req: NextRequest) {
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
+  }
+
+  // Contorno de la sede (GPS Fase 1.5)
+  const contornoP = ContornoSchema.safeParse(body)
+  if (contornoP.success) {
+    const { id, contorno_geojson } = contornoP.data
+    const { data, error } = await supabaseAdmin()
+      .from('clientes')
+      .update({
+        contorno_geojson,
+        contorno_actualizado_at: contorno_geojson ? new Date().toISOString() : null,
+      })
+      .eq('id', id)
+      .select(SELECT)
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, puesto: data })
   }
 
   // Actualización de frecuencia de rondas

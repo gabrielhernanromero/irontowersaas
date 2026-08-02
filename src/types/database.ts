@@ -69,6 +69,10 @@ export interface Cliente {
   horas_extra_tope_anual?: number
   latitud?: number | null
   longitud?: number | null
+  // GPS Fase 1.5 — contorno de la sede dibujado a mano sobre mapa satelital.
+  // Capa visual únicamente, la geocerca sigue siendo círculo+radio.
+  contorno_geojson?: GeoJSON.Polygon | null
+  contorno_actualizado_at?: string | null
 }
 
 export interface Sede {
