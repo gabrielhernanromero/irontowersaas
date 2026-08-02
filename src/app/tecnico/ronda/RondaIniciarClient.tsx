@@ -95,7 +95,7 @@ function calcularDuracionTurnoMin(horaInicio: string | null, horaFin: string | n
   if (!horaInicio || !horaFin) return 12 * 60
   const [hi, mi] = horaInicio.split(':').map(Number)
   const [hf, mf] = horaFin.split(':').map(Number)
-  let start = hi * 60 + mi
+  const start = hi * 60 + mi
   let end   = hf * 60 + mf
   if (end <= start) end += 24 * 60
   return end - start
