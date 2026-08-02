@@ -57,6 +57,16 @@ const user = await requireRole('tecnico', 'admin')
 8. git commit
 ```
 
+## Estándares de ingeniería (CI/CD)
+
+- **CI obligatorio**: GitHub Actions (`.github/workflows/ci.yml`) corre `lint` + `typecheck` + `test:coverage` en cada PR y push a `staging`/`main`. No mergear con el check en rojo.
+- **Conventional Commits**: los mensajes de commit se validan con `commitlint` (hook `commit-msg`). Formato `tipo: descripción` (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`).
+- **Pre-commit automático**: Husky corre `lint-staged` (ESLint `--fix`) sobre los archivos `.ts`/`.tsx` staged antes de cada commit.
+- **Cobertura mínima en reglas legales**: `jest.config.js` tiene `coverageThreshold` sobre los archivos que implementan la Regla 3 (`src/lib/validations/{extintor,libroGuardia,planilla,planillaGenerica}.ts`), calibrado al nivel medido — protege contra regresiones, no exige 100%.
+  - **Gap conocido**: `checkDuplicatePlanilla.ts` (Regla 1) y `createAlerta.ts` (Regla 4) no tienen tests hoy — no llevan threshold porque un piso de 0% no protege nada. Pendiente escribirles tests.
+- **Tests de integración** (`tests/integration/`) necesitan una DB real vía `.env.local` — no corren en CI (no hay secrets de Supabase configurados ahí a propósito, para no pegarle a `staging` en cada PR). Se corren a mano antes de mergear cambios riesgosos, junto con QA manual en staging.
+- **ESLint recién se instaló** (antes no existía en el repo). `@typescript-eslint/no-explicit-any` y `no-unused-vars` están en `warn` (no bloquean CI) porque hay ~90 warnings de deuda preexistente en código nunca linteado — se van bajando de a poco, no exigir 0 warnings de golpe en un PR no relacionado.
+
 ## Lo que NUNCA hacer
 
 - `UPDATE` o `DELETE` sobre planilla con `inmutable=true`

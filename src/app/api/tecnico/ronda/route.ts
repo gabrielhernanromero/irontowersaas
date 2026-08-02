@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (frecuenciaMin > 0 && turno.horario_inicio && turno.horario_fin) {
       const [hi, mi] = (turno.horario_inicio as string).split(':').map(Number)
       const [hf, mf] = (turno.horario_fin   as string).split(':').map(Number)
-      let start = hi * 60 + mi
+      const start = hi * 60 + mi
       let end   = hf * 60 + mf
       if (end <= start) end += 24 * 60
       const duracionMin = end - start

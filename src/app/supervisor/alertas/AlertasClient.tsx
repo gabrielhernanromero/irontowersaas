@@ -109,7 +109,7 @@ function RondaVencidaCard({
             <p className="text-sm text-gray-700 leading-snug">{alerta.mensaje}</p>
             {alerta.resolucion_observacion && (
               <p className="mt-2 text-sm text-gray-600 bg-white border border-emerald-100 rounded-lg px-3 py-2">
-                "{alerta.resolucion_observacion}"
+                &ldquo;{alerta.resolucion_observacion}&rdquo;
               </p>
             )}
             <p className="text-xs text-gray-400 mt-1">
