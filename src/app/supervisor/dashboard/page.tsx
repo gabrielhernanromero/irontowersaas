@@ -33,6 +33,31 @@ export default async function DashboardPage() {
 
   const todayStart = todayStartAR()
 
+  // Ids de turnos activos ahora mismo — se usan para que "Actividad en vivo"
+  // no le corte el historial a un turno que sigue abierto (ej. nocturno que
+  // arrancó ayer, o su novedad de apertura de hace varias horas).
+  const { data: turnosActivosIds } = await supabaseAdmin()
+    .from('libro_turno')
+    .select('id')
+    .in('estado', ['abierto', 'pendiente_relevo'])
+  const idsActivos = (turnosActivosIds ?? []).map(t => t.id)
+
+  // Todo lo de hoy, más todo el historial de los turnos que siguen activos
+  // (así la apertura de un turno activo nunca queda afuera del feed).
+  const novedadesQuery = supabaseAdmin()
+    .from('libro_novedad')
+    .select(`
+      id, turno_id, tipo, hora, descripcion, incidencia_id, planilla_id, foto_url, created_at,
+      libro_turno(id, tecnico_nombre, cliente_id, clientes(id, nombre_empresa))
+    `)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (idsActivos.length > 0) {
+    novedadesQuery.or(`created_at.gte.${todayStart},turno_id.in.(${idsActivos.join(',')})`)
+  } else {
+    novedadesQuery.gte('created_at', todayStart)
+  }
+
   const [
     { data: turnosRaw },
     { data: novedadesRaw },
@@ -55,15 +80,7 @@ export default async function DashboardPage() {
       .in('estado', ['abierto', 'pendiente_relevo'])
       .order('horario_inicio', { ascending: false }),
 
-    supabaseAdmin()
-      .from('libro_novedad')
-      .select(`
-        id, turno_id, tipo, hora, descripcion, incidencia_id, planilla_id, foto_url, created_at,
-        libro_turno(id, tecnico_nombre, cliente_id, clientes(id, nombre_empresa))
-      `)
-      .gte('created_at', todayStart)
-      .order('created_at', { ascending: false })
-      .limit(50),
+    novedadesQuery,
 
     supabaseAdmin()
       .from('incidencias')
