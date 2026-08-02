@@ -228,7 +228,9 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        {/* pb-8 — sin esto el último ítem de cualquier tab queda pegado al
+            borde inferior del panel, sin aire, y se percibe como cortado. */}
+        <div className="flex-1 overflow-y-auto pb-8">
           {loading && (
             <div className="flex items-center justify-center h-48">
               <Loader2 size={24} className="animate-spin text-gray-300" />
