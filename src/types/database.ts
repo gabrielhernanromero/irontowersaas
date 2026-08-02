@@ -16,6 +16,7 @@ export interface User {
   nombre: string
   apellido: string
   dni: string | null
+  telefono: string | null
   rol: Rol
   activo: boolean
   turno_habitual: Turno | null

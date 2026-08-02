@@ -78,7 +78,10 @@ export default async function DashboardPage() {
         novedades:libro_novedad(id, tipo, hora, descripcion, created_at)
       `)
       .in('estado', ['abierto', 'pendiente_relevo'])
-      .order('horario_inicio', { ascending: false }),
+      .order('horario_inicio', { ascending: false })
+      // Más nueva primero dentro de cada turno, para que turno.novedades[0]
+      // sea siempre la última novedad real (usado en el preview de la card).
+      .order('created_at', { referencedTable: 'libro_novedad', ascending: false }),
 
     novedadesQuery,
 
