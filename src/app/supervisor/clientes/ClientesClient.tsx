@@ -474,6 +474,8 @@ function ClienteModal({
     contacto_telefono:        cliente?.contacto_telefono        ?? '',
     frecuencia_ronda_minutos: String(cliente?.frecuencia_ronda_minutos ?? ''),
     aviso_ronda_minutos:      String(cliente?.aviso_ronda_minutos      ?? '10'),
+    latitud:                  String(cliente?.latitud  ?? ''),
+    longitud:                 String(cliente?.longitud ?? ''),
   })
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
@@ -496,6 +498,8 @@ function ClienteModal({
         contacto_nombre:  form.contacto_nombre,
         contacto_email:   form.contacto_email,
         contacto_telefono: form.contacto_telefono,
+        latitud:  form.latitud.trim()  === '' ? null : Number(form.latitud),
+        longitud: form.longitud.trim() === '' ? null : Number(form.longitud),
       }
       const res = await fetch('/api/supervisor/puestos', {
         method: cliente ? 'PATCH' : 'POST',
@@ -600,6 +604,32 @@ function ClienteModal({
                 placeholder="011-4000-0000"
                 required
               />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium mb-1">Coordenadas de la sede</label>
+              <p className="text-xs text-gray-500 mb-2">
+                Opcional. Se usa para verificar que las planillas se firmen en el lugar correcto.
+                Buscá la dirección en Google Maps, clic derecho sobre el pin y copiá las coordenadas.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  step="any"
+                  value={form.latitud}
+                  onChange={set('latitud')}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
+                  placeholder="Latitud (ej. -34.6037)"
+                />
+                <input
+                  type="number"
+                  step="any"
+                  value={form.longitud}
+                  onChange={set('longitud')}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
+                  placeholder="Longitud (ej. -58.3816)"
+                />
+              </div>
             </div>
           </div>
 

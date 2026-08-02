@@ -41,7 +41,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { turno_id, horario_fin, firma_cierre_dataurl, motivo_cierre_anticipado } = parsed.data
+  const {
+    turno_id, horario_fin, firma_cierre_dataurl, motivo_cierre_anticipado,
+    cierre_latitud, cierre_longitud, cierre_precision_m, cierre_gps_capturado_at,
+  } = parsed.data
 
   const { data: turno } = await supabaseAdmin()
     .from('libro_turno')
@@ -145,6 +148,10 @@ export async function POST(req: NextRequest) {
     estado: estadoCierre,
     horario_fin,
     firma_cierre_url: firmaCierreUrl,
+    cierre_latitud: cierre_latitud ?? null,
+    cierre_longitud: cierre_longitud ?? null,
+    cierre_precision_m: cierre_precision_m ?? null,
+    cierre_gps_capturado_at: cierre_gps_capturado_at ?? null,
   }
   if (esAnticipado && motivo_cierre_anticipado) {
     updatePayload.motivo_cierre_anticipado = motivo_cierre_anticipado

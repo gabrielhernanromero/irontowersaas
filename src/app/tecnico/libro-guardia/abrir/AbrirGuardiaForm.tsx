@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, AlertTriangle, Play, User, CreditCard, Clock, Building2, CalendarClock, Ban, Package, CheckCircle2, XCircle, Users, ShieldAlert, UserCheck } from 'lucide-react'
 import Link from 'next/link'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 function nowTime() { return new Date().toTimeString().slice(0, 5) }
 function todayDate() { return new Date().toISOString().split('T')[0] }
@@ -59,6 +60,7 @@ export default function AbrirGuardiaForm({
   const [horario, setHorario]       = useState(nowTime())
   const [turno]                     = useState<'diurno' | 'nocturno'>(turnoConfig ?? currentTurno())
   const [clienteId, setClienteId]   = useState<string>(clienteIdFijo ?? defaultClienteId ?? clientes[0]?.id ?? '')
+  const { data: gps } = useGeolocation()
 
   // Estado de verificación de elementos: mapa elementoId → { estado, observacion }
   const [verif, setVerif] = useState<Record<string, VerifState>>(() =>
@@ -98,6 +100,10 @@ export default function AbrirGuardiaForm({
           esquema_id:      esquema?.id || undefined,
           interino:        interino || undefined,
           turno_saliente_id: turnoSalienteId,
+          apertura_latitud: gps?.latitud ?? null,
+          apertura_longitud: gps?.longitud ?? null,
+          apertura_precision_m: gps?.precision_m ?? null,
+          apertura_gps_capturado_at: gps?.capturado_at ?? null,
           personal_apoyo: personalApoyo.length > 0
             ? personalApoyo.map(p => ({
                 usuario_id: p.usuario_id,

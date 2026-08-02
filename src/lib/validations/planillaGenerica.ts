@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { gpsCapturaFields } from './gps'
 
 const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
@@ -175,6 +176,7 @@ export function buildPlanillaGenericaSchema(campos: CampoDef[]) {
     items: z.array(GenericaItemSchema).min(1, 'No hay ítems configurados para este tipo de planilla'),
     firma_dataurl: z.string().min(1, 'La firma es obligatoria'),
     firma_aclaracion: z.string().min(1, 'La aclaración (nombre y apellido) es obligatoria'),
+    ...gpsCapturaFields('firma'),
   }).superRefine((data, ctx) => {
     data.items.forEach((item, i) => validarItemCampos(item, campos, ctx, i))
   })

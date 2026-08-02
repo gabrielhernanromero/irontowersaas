@@ -8,6 +8,7 @@ import { InformeExtintores } from '@/components/pdf/InformeExtintores'
 import { InformeGenerico } from '@/components/pdf/InformeGenerico'
 import { sendInforme } from '@/lib/email/sendInforme'
 import type { User, Cliente, PlanillaHidrante, PlanillaExtintor, PlanillaItemRespuesta, TipoCampo } from '@/types/database'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 
 interface CampoDef {
   clave: string
@@ -123,12 +124,21 @@ export async function POST(
     timeZone: 'America/Argentina/Buenos_Aires',
   })
 
+  // GPS Fase 1: solo distancia en texto neutro, nunca precisión ni estado
+  // de excepción/alerta — ver la misma lógica en api/informes/[planillaId]/pdf.
+  const { distanciaM, estado: estadoGeo } = evaluarGeocerca(
+    { lat: planilla.firma_latitud ?? null, lon: planilla.firma_longitud ?? null },
+    { lat: (cliente as Cliente).latitud ?? null, lon: (cliente as Cliente).longitud ?? null }
+  )
+  const firmaGpsResumen = estadoGeo === 'sin_datos' ? null : `Firmado a ${Math.round(distanciaM ?? 0)}m de la sede`
+
   const props = {
     planilla,
     tecnico: tecnico as User,
     cliente: cliente as Cliente,
     firmaBase64,
     generadoEn,
+    firmaGpsResumen,
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

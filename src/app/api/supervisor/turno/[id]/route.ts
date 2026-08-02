@@ -15,7 +15,11 @@ export async function GET(
     .select(`
       id, folio_numero, fecha, turno, tecnico_id, tecnico_nombre, tecnico_dni,
       horario_inicio, horario_fin, estado, cliente_id, created_at,
-      clientes(id, nombre_empresa),
+      apertura_latitud, apertura_longitud, apertura_precision_m, apertura_gps_capturado_at,
+      cierre_latitud, cierre_longitud, cierre_precision_m, cierre_gps_capturado_at,
+      relevo_latitud, relevo_longitud, relevo_precision_m, relevo_gps_capturado_at,
+      relevo_nombre, relevo_dni,
+      clientes(id, nombre_empresa, latitud, longitud),
       novedades:libro_novedad(
         id, tipo, hora, descripcion, riesgo_detectado,
         medidas_adoptadas, observaciones_generales,

@@ -6,6 +6,7 @@ import { checkDuplicatePlanilla } from '@/lib/utils/checkDuplicatePlanilla'
 import { validateItemsMatchCatalog } from '@/lib/utils/validatePlanillaItemsCatalog'
 import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 import { notificarNovedad } from '@/lib/alertas/notificarNovedad'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 
 export async function POST(
   req: NextRequest,
@@ -69,7 +70,10 @@ export async function POST(
     )
   }
 
-  const { cliente_id, fecha, turno, items, firma_dataurl, firma_aclaracion } = parsed.data
+  const {
+    cliente_id, fecha, turno, items, firma_dataurl, firma_aclaracion,
+    firma_latitud, firma_longitud, firma_precision_m, firma_gps_capturado_at,
+  } = parsed.data
 
   // Turno propio abierto
   let turnoActivo = (await admin
@@ -145,12 +149,40 @@ export async function POST(
       inmutable: false,
       user_agent: userAgent,
       snapshot_config: { tipo_nombre: tipo.nombre, campos },
+      firma_latitud: firma_latitud ?? null,
+      firma_longitud: firma_longitud ?? null,
+      firma_precision_m: firma_precision_m ?? null,
+      firma_gps_capturado_at: firma_gps_capturado_at ?? null,
     })
     .select('id')
     .single()
 
   if (planillaErr || !planilla) {
     return NextResponse.json({ error: 'Error al crear la planilla' }, { status: 500 })
+  }
+
+  // GPS Fase 1: alertar solo si el desvío contra la sede es grande — un
+  // desvío chico se explica por el margen de error normal del GPS y queda
+  // visible en el dashboard sin generar ruido de alertas.
+  if (firma_latitud != null && firma_longitud != null) {
+    const { data: clienteGeo } = await admin
+      .from('clientes')
+      .select('latitud, longitud')
+      .eq('id', cliente_id)
+      .single()
+
+    const { distanciaM, estado } = evaluarGeocerca(
+      { lat: firma_latitud, lon: firma_longitud },
+      { lat: clienteGeo?.latitud ?? null, lon: clienteGeo?.longitud ?? null }
+    )
+
+    if (estado === 'alerta') {
+      await alertarSupervisores(
+        'excepcion_gps',
+        `Planilla de ${tipo.nombre} firmada a ${Math.round(distanciaM ?? 0)}m de la sede — técnico ${user.id} — ${fecha} turno ${turno}`,
+        planilla.id
+      )
+    }
   }
 
   // Batch INSERT de los ítems (respuestas/observaciones son jsonb, keyed por campo.clave)

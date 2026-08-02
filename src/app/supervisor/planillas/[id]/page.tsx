@@ -2,6 +2,7 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { respuestaEsNovedad, type CampoDef } from '@/lib/validations/planillaGenerica'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 import FotoCell from './FotoCell'
 
 export default async function PlanillaDetallePage({
@@ -16,7 +17,7 @@ export default async function PlanillaDetallePage({
     .select(`
       *,
       users!tecnico_id(nombre, apellido),
-      clientes(nombre_empresa, direccion, cuit)
+      clientes(nombre_empresa, direccion, cuit, latitud, longitud)
     `)
     .eq('id', params.id)
     .single()
@@ -45,6 +46,13 @@ export default async function PlanillaDetallePage({
 
   const esHidrante = (planilla.tipo as string) === 'hidrantes'
   const items = esHidrante ? (hidrantes ?? []) : (extintores ?? [])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clienteGeo = (planilla as any).clientes as { latitud: number | null; longitud: number | null } | null
+  const { distanciaM, estado: estadoGeo } = evaluarGeocerca(
+    { lat: planilla.firma_latitud ?? null, lon: planilla.firma_longitud ?? null },
+    { lat: clienteGeo?.latitud ?? null, lon: clienteGeo?.longitud ?? null }
+  )
 
   return (
     <div className="max-w-3xl">
@@ -145,6 +153,7 @@ export default async function PlanillaDetallePage({
                     </>
                   )}
                   <th className="px-3 py-2 text-left">Observaciones</th>
+                  <th className="px-3 py-2">Foto</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,6 +197,9 @@ export default async function PlanillaDetallePage({
                               item.obs_presion_peso ? `Pres/Pes: ${item.obs_presion_peso}` : null,
                             ].filter(Boolean).join(' | ') || '—'}
                       </td>
+                      <td className="px-3 py-2 text-center">
+                        {item.foto_url ? <FotoCell url={item.foto_url as string} /> : '—'}
+                      </td>
                     </tr>
                   )
                 })}
@@ -206,6 +218,28 @@ export default async function PlanillaDetallePage({
           {planilla.firma_aclaracion && (
             <p className="text-xs text-gray-500 mt-2">{planilla.firma_aclaracion}</p>
           )}
+          <div className="mt-2">
+            {estadoGeo === 'alerta' && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">
+                ⚠ A {Math.round(distanciaM ?? 0)}m de la sede
+              </span>
+            )}
+            {estadoGeo === 'excepcion' && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                A {Math.round(distanciaM ?? 0)}m de la sede
+              </span>
+            )}
+            {estadoGeo === 'normal' && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
+                A {Math.round(distanciaM ?? 0)}m de la sede
+              </span>
+            )}
+            {estadoGeo === 'sin_datos' && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
+                Sin datos GPS
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

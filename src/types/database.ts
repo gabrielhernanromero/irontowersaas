@@ -3,7 +3,7 @@ export type Rol = 'admin' | 'supervisor' | 'tecnico' | 'cliente'
 // string es el slug de un planilla_tipos creado por el supervisor.
 export type TipoPlanilla = string
 export type Turno = 'diurno' | 'nocturno'
-export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado' | 'turno_sin_cerrar' | 'novedad_scan'
+export type TipoAlerta = 'novedad_planilla' | 'planilla_pendiente' | 'certificacion_vence' | 'ronda_proxima' | 'ronda_vencida' | 'ausencia_encargado' | 'ronda_asignada' | 'novedad_apoyo' | 'cierre_anticipado' | 'turno_sin_cerrar' | 'novedad_scan' | 'excepcion_gps'
 export type EstadoTurno = 'abierto' | 'pendiente_relevo' | 'cerrado'
 export type TipoNovedad = 'apertura' | 'novedad' | 'cierre' | 'alerta' | 'sistema' | 'ronda'
 export type EstadoAdmin = 'activo' | 'en_mantenimiento' | 'inactivo'
@@ -58,6 +58,35 @@ export interface Cliente {
   frecuencia_ronda_minutos: number | null
   aviso_ronda_minutos: number
   planillas_habilitadas: string[]
+  // Umbrales de validación de conflictos de turno (configurables por cliente).
+  // Opcionales en el tipo porque no todas las queries existentes de `clientes`
+  // los seleccionan (tienen default en la base, no son nullable ahí).
+  descanso_minimo_horas?: number
+  descanso_post_12h_horas?: number
+  jornada_maxima_horas?: number
+  maximo_semanal_horas?: number
+  horas_extra_tope_mensual?: number
+  horas_extra_tope_anual?: number
+  latitud?: number | null
+  longitud?: number | null
+}
+
+export interface Sede {
+  id: string
+  cliente_id: string
+  nombre: string
+  direccion: string | null
+  activo: boolean
+  created_at: string
+}
+
+export interface PuestoGuardia {
+  id: string
+  sede_id: string
+  nombre: string
+  activo: boolean
+  created_at: string
+  sede?: Pick<Sede, 'id' | 'nombre' | 'cliente_id'>
 }
 
 export interface PlanillaSnapshotConfig {
@@ -169,12 +198,21 @@ export interface Incidencia {
   detector?: { nombre: string; apellido: string } | null
 }
 
+// Rol de una asignación de turno. 'reten' cubre ausencias dentro de su ventana
+// de disponibilidad (ver RetenPool), no tiene esquema/horario fijo propio.
+export type RolTurno = 'encargado' | 'apoyo' | 'reten'
+
 export interface EsquemaCobertura {
   id: string
-  cliente_id: string
+  puesto_id: string
+  cliente_id: string   // derivado automáticamente de puesto_id vía trigger, no editar directo
   nombre: string
   hora_inicio: string  // "HH:MM:SS"
   hora_fin: string
+  fecha_desde: string
+  fecha_hasta: string | null
+  dias_semana: number[]
+  requiere_relevo: boolean
   activo: boolean
   created_at: string
   asignaciones?: AsignacionPersistente[]
@@ -184,7 +222,7 @@ export interface AsignacionPersistente {
   id: string
   esquema_id: string
   usuario_id: string
-  rol_turno: 'encargado' | 'apoyo'
+  rol_turno: RolTurno
   created_at: string
   usuario?: Pick<User, 'id' | 'nombre' | 'apellido' | 'dni'>
 }
@@ -194,10 +232,23 @@ export interface AsignacionTurno {
   id: string
   esquema_id: string
   usuario_id: string
-  rol_turno: 'encargado' | 'apoyo'
+  rol_turno: RolTurno
   fecha: string
   created_by: string
   created_at: string
+  usuario?: Pick<User, 'id' | 'nombre' | 'apellido' | 'dni'>
+}
+
+export interface RetenPool {
+  id: string
+  usuario_id: string
+  sede_id: string
+  dias_semana: number[]
+  hora_inicio: string  // "HH:MM:SS"
+  hora_fin: string
+  activo: boolean
+  created_at: string
+  usuario?: Pick<User, 'id' | 'nombre' | 'apellido' | 'dni'>
 }
 
 export interface ParticipacionTurno {

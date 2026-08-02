@@ -12,6 +12,7 @@ import {
 import ExtintorRow, { TIPOS_EXTINTOR } from './ExtintorRow'
 import SignatureCanvas from '@/components/signature/SignatureCanvas'
 import { VerFotoBtn } from '@/components/ui/FotoLightbox'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 function buildDefaultItems(catalogo: { numero: string; tipo_extintor: string | null }[]) {
   return catalogo.map((c) => ({
@@ -59,6 +60,7 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
   const [validationMessages, setValidationMessages] = useState<string[]>([])
   const [tipoDefault, setTipoDefault] = useState<string>('ABC')
   const [soloNovedades, setSoloNovedades] = useState(false)
+  const { data: gps } = useGeolocation()
 
   const methods = useForm<PlanillaExtintoresSubmit>({
     resolver: zodResolver(PlanillaExtintoresSubmitSchema),
@@ -109,10 +111,17 @@ export default function ExtintoresForm({ clienteId, clienteNombre, turnoDefault,
     setValidationMessages([])
     setSubmitting(true)
     try {
+      const payload = {
+        ...data,
+        firma_latitud: gps?.latitud ?? null,
+        firma_longitud: gps?.longitud ?? null,
+        firma_precision_m: gps?.precision_m ?? null,
+        firma_gps_capturado_at: gps?.capturado_at ?? null,
+      }
       const res = await fetch('/api/planillas/extintores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (!res.ok) {

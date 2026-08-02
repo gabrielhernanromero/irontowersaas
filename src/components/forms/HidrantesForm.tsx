@@ -12,6 +12,7 @@ import {
 import HidranteRow from './HidranteRow'
 import SignatureCanvas from '@/components/signature/SignatureCanvas'
 import { VerFotoBtn } from '@/components/ui/FotoLightbox'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 function buildSummary(errors: FieldErrors<PlanillaHidrantesSubmit>): string[] {
   const msgs: string[] = []
@@ -57,6 +58,9 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
   const [submitting, setSubmitting] = useState(false)
   const [alreadySent, setAlreadySent] = useState(false)
   const [validationMessages, setValidationMessages] = useState<string[]>([])
+  // Se pide en background al abrir el form (no al enviar) para que ya esté
+  // resuelto cuando el técnico termina de completar la planilla.
+  const { data: gps } = useGeolocation()
 
   const methods = useForm<PlanillaHidrantesSubmit>({
     resolver: zodResolver(PlanillaHidrantesSubmitSchema),
@@ -107,10 +111,17 @@ export default function HidrantesForm({ clienteId, clienteNombre, turnoDefault, 
     setValidationMessages([])
     setSubmitting(true)
     try {
+      const payload = {
+        ...data,
+        firma_latitud: gps?.latitud ?? null,
+        firma_longitud: gps?.longitud ?? null,
+        firma_precision_m: gps?.precision_m ?? null,
+        firma_gps_capturado_at: gps?.capturado_at ?? null,
+      }
       const res = await fetch('/api/planillas/hidrantes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (!res.ok) {

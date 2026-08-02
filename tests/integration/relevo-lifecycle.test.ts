@@ -15,8 +15,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import * as crypto from 'crypto'
 import * as dotenv from 'dotenv'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 
 dotenv.config({ path: '.env.local' })
+
+// Coordenadas de prueba para las columnas de GPS Fase 1 — Obelisco vs
+// Congreso (CABA), a ~2.6km de distancia, deliberadamente por encima del
+// umbral de alerta (1000m) para validar la clasificación de geocerca.
+const COORD_CIERRE = { lat: -34.6037, lon: -58.3816 }
+const COORD_RELEVO = { lat: -34.6095, lon: -58.3927 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -221,10 +228,12 @@ describe('Ciclo completo de relevo de guardia', () => {
         estado:      'pendiente_relevo',
         horario_fin,
         firma_cierre_url: 'firmas/test-cierre-placeholder.png',
+        cierre_latitud:  COORD_CIERRE.lat,
+        cierre_longitud: COORD_CIERRE.lon,
       })
       .eq('id', turnoAId)
       .eq('estado', 'abierto')  // guard: solo actualiza si está abierto
-      .select('id, estado, horario_fin')
+      .select('id, estado, horario_fin, cierre_latitud, cierre_longitud')
       .single()
 
     expect(error).toBeNull()
@@ -232,6 +241,8 @@ describe('Ciclo completo de relevo de guardia', () => {
 
     assert(data!.estado === 'pendiente_relevo', `estado debe ser "pendiente_relevo", es "${data!.estado}"`)
     assert(!!data!.horario_fin,                 'horario_fin debe quedar registrado')
+    assert(data!.cierre_latitud === COORD_CIERRE.lat, 'cierre_latitud debe quedar registrada')
+    assert(data!.cierre_longitud === COORD_CIERRE.lon, 'cierre_longitud debe quedar registrada')
 
     console.log(`   ✅ Turno A ahora en estado: "${data!.estado}" | Fin: ${data!.horario_fin}`)
 
@@ -279,10 +290,12 @@ describe('Ciclo completo de relevo de guardia', () => {
         firma_relevo_url: 'firmas/test-relevo-placeholder.png',
         relevo_nombre:    TECNICO_B.nombre,
         relevo_dni:       TECNICO_B.dni,
+        relevo_latitud:   COORD_RELEVO.lat,
+        relevo_longitud:  COORD_RELEVO.lon,
       })
       .eq('id', turnoAId)
       .eq('estado', 'pendiente_relevo')  // guard: solo si está pendiente
-      .select('id, estado, relevo_nombre, relevo_dni, horario_fin')
+      .select('id, estado, relevo_nombre, relevo_dni, horario_fin, cierre_latitud, cierre_longitud, relevo_latitud, relevo_longitud')
       .single()
 
     expect(closeErr).toBeNull()
@@ -291,6 +304,18 @@ describe('Ciclo completo de relevo de guardia', () => {
     assert(turnoCerrado!.relevo_dni    === TECNICO_B.dni,    'relevo_dni debe ser el DNI del Técnico B')
 
     console.log(`   ✅ Turno A cerrado | relevo firmado por: ${turnoCerrado!.relevo_nombre}`)
+
+    // GPS Fase 1: validación cruzada cierre-vs-relevo — mismas coordenadas
+    // que usa /api/libro-turno/relevo (route.ts) para decidir si alerta a
+    // los supervisores. Acá solo se verifica que la clasificación de
+    // geocerca sobre los datos persistidos da "alerta" (>1km), no que el
+    // endpoint HTTP la dispare (este test opera directo contra la DB).
+    const { estado: estadoGeoRelevo } = evaluarGeocerca(
+      { lat: turnoCerrado!.relevo_latitud, lon: turnoCerrado!.relevo_longitud },
+      { lat: turnoCerrado!.cierre_latitud, lon: turnoCerrado!.cierre_longitud }
+    )
+    assert(estadoGeoRelevo === 'alerta', `cierre y relevo a >1km deben clasificar como "alerta", dio "${estadoGeoRelevo}"`)
+    console.log(`   ✅ Geocerca cierre-vs-relevo clasificada como "${estadoGeoRelevo}" (coordenadas a ~2.6km)`)
 
     // ── 4c: Crear turno B ─────────────────────────────────────────────────
     const horarioInicioB = nowTime()
@@ -372,7 +397,7 @@ describe('Ciclo completo de relevo de guardia', () => {
     // Turno A debe estar cerrado con todos los campos requeridos
     const { data: turnoA } = await supabase
       .from('libro_turno')
-      .select('estado, horario_fin, firma_cierre_url, firma_relevo_url, relevo_nombre, relevo_dni')
+      .select('estado, horario_fin, firma_cierre_url, firma_relevo_url, relevo_nombre, relevo_dni, cierre_latitud, cierre_longitud, relevo_latitud, relevo_longitud')
       .eq('id', turnoAId)
       .single()
 
@@ -382,6 +407,8 @@ describe('Ciclo completo de relevo de guardia', () => {
     assert(!!turnoA!.firma_relevo_url,               'Turno A: firma_relevo_url debe estar registrada')
     assert(!!turnoA!.relevo_nombre,                  'Turno A: relevo_nombre debe estar registrado')
     assert(!!turnoA!.relevo_dni,                     'Turno A: relevo_dni debe estar registrado')
+    assert(turnoA!.cierre_latitud === COORD_CIERRE.lat,   'Turno A: cierre_latitud debe persistir')
+    assert(turnoA!.relevo_latitud === COORD_RELEVO.lat,   'Turno A: relevo_latitud debe persistir')
 
     // Turno B debe estar abierto
     const { data: turnoB } = await supabase

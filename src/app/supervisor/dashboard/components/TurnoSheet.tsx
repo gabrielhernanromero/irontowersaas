@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import {
   X, User, Clock, MapPin, Loader2, BookOpen, ShieldAlert,
   ClipboardCheck, CheckCircle2, CheckCircle, XCircle, Camera,
-  AlertTriangle, Package, Phone, Users, FileText, Circle,
+  AlertTriangle, Package, Phone, Users, FileText, Circle, Navigation,
 } from 'lucide-react'
 import FotoLightbox, { FotoThumb } from './FotoLightbox'
+import { evaluarGeocerca, type EstadoGeocerca } from '@/lib/gps/geocerca'
 
 interface Novedad {
   id: string
@@ -91,13 +92,78 @@ interface TurnoDetalle {
   horario_inicio: string
   horario_fin: string | null
   estado: string
-  clientes: { id: string; nombre_empresa: string } | null
+  clientes: { id: string; nombre_empresa: string; latitud: number | null; longitud: number | null } | null
   novedades: Novedad[]
   incidencias: IncidenciaTurno[]
   elementos: ElementoTurno[]
   participantes: Participante[]
   encargado_telefono: string | null
   planillasChecklist: PlanillaChecklistItem[]
+  apertura_latitud: number | null
+  apertura_longitud: number | null
+  apertura_precision_m: number | null
+  apertura_gps_capturado_at: string | null
+  cierre_latitud: number | null
+  cierre_longitud: number | null
+  cierre_precision_m: number | null
+  cierre_gps_capturado_at: string | null
+  relevo_latitud: number | null
+  relevo_longitud: number | null
+  relevo_precision_m: number | null
+  relevo_gps_capturado_at: string | null
+  relevo_nombre: string | null
+  relevo_dni: string | null
+}
+
+const GEOCERCA_BADGE: Record<EstadoGeocerca, string> = {
+  normal:     'bg-emerald-100 text-emerald-700',
+  excepcion:  'bg-amber-100 text-amber-700',
+  alerta:     'bg-red-100 text-red-700',
+  sin_datos:  'bg-gray-100 text-gray-500',
+}
+
+interface GpsEvento {
+  label: string
+  lat: number | null
+  lon: number | null
+  capturadoAt: string | null
+}
+
+function GpsRow({ evento, cliente }: { evento: GpsEvento; cliente: { latitud: number | null; longitud: number | null } | null }) {
+  const { distanciaM, estado } = evaluarGeocerca(
+    { lat: evento.lat, lon: evento.lon },
+    { lat: cliente?.latitud ?? null, lon: cliente?.longitud ?? null }
+  )
+  const hora = evento.capturadoAt
+    ? new Date(evento.capturadoAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+    : null
+
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm text-gray-600 shrink-0">{evento.label}</span>
+        {hora && <span className="text-xs text-gray-400 shrink-0">{hora}</span>}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${GEOCERCA_BADGE[estado]}`}>
+          {estado === 'sin_datos'
+            ? 'Sin datos GPS'
+            : `${estado === 'alerta' ? '⚠ ' : ''}A ${Math.round(distanciaM ?? 0)}m de la sede`}
+        </span>
+        {evento.lat !== null && evento.lon !== null && (
+          <a
+            href={`https://www.google.com/maps?q=${evento.lat},${evento.lon}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-400 hover:text-brand-orange p-1 -m-1"
+            aria-label={`Ver ${evento.label.toLowerCase()} en el mapa`}
+          >
+            <Navigation size={14} />
+          </a>
+        )}
+      </div>
+    </div>
+  )
 }
 
 interface Props {
@@ -248,7 +314,9 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        {/* pb-8 — sin esto el último ítem de cualquier tab queda pegado al
+            borde inferior del panel, sin aire, y se percibe como cortado. */}
+        <div className="flex-1 overflow-y-auto pb-8">
           {loading && (
             <div className="flex items-center justify-center h-48">
               <Loader2 size={24} className="animate-spin text-gray-300" />
@@ -301,6 +369,49 @@ export default function TurnoSheet({ turnoId, onClose }: Props) {
                       <span className="text-xs text-gray-400">(encargado)</span>
                     </div>
                   )}
+                </div>
+
+                {/* Ubicación GPS — apertura siempre, cierre/relevo si ya ocurrieron */}
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <MapPin size={13} className="text-gray-400" />
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Ubicación
+                    </p>
+                  </div>
+                  <div className="flex flex-col divide-y divide-gray-100">
+                    <GpsRow
+                      evento={{
+                        label: 'Apertura',
+                        lat: turno.apertura_latitud,
+                        lon: turno.apertura_longitud,
+                        capturadoAt: turno.apertura_gps_capturado_at,
+                      }}
+                      cliente={turno.clientes}
+                    />
+                    {turno.estado !== 'abierto' && (
+                      <GpsRow
+                        evento={{
+                          label: 'Cierre',
+                          lat: turno.cierre_latitud,
+                          lon: turno.cierre_longitud,
+                          capturadoAt: turno.cierre_gps_capturado_at,
+                        }}
+                        cliente={turno.clientes}
+                      />
+                    )}
+                    {turno.relevo_nombre && (
+                      <GpsRow
+                        evento={{
+                          label: `Relevo (${turno.relevo_nombre})`,
+                          lat: turno.relevo_latitud,
+                          lon: turno.relevo_longitud,
+                          capturadoAt: turno.relevo_gps_capturado_at,
+                        }}
+                        cliente={turno.clientes}
+                      />
+                    )}
+                  </div>
                 </div>
 
                 {/* Personal de apoyo cubriendo el puesto */}

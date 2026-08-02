@@ -19,6 +19,7 @@ import RelevoInventarioChecklist, { type ControlItem } from '@/components/invent
 import { RelevoPSchema, type RelevoPInput } from '@/lib/validations/libroTurno'
 import type { Incidencia, LibroNovedad, EstadoAdmin } from '@/types/database'
 import { VerFotoBtn } from '@/components/ui/FotoLightbox'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 interface PlanillaItem {
   numero: number
@@ -115,6 +116,7 @@ export default function RelevoPForm({
     Object.fromEntries(personalApoyo.map(p => [p.usuario_id, true]))
   )
   const [conocidas, setConocidas] = useState<Set<string>>(new Set())
+  const { data: gps } = useGeolocation()
 
   const incidenciasRonda    = incidenciasActivas.filter(i => i.punto_control_id)
   const incidenciasGenerales = incidenciasActivas.filter(i => !i.elemento_afectado_id && !i.punto_control_id)
@@ -179,6 +181,10 @@ export default function RelevoPForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
+          relevo_latitud: gps?.latitud ?? null,
+          relevo_longitud: gps?.longitud ?? null,
+          relevo_precision_m: gps?.precision_m ?? null,
+          relevo_gps_capturado_at: gps?.capturado_at ?? null,
           personal_apoyo: personalApoyo.length > 0
             ? personalApoyo.map(p => ({
                 usuario_id: p.usuario_id,

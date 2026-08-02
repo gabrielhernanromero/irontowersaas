@@ -12,6 +12,7 @@ import {
 import PlanillaGenericaRow from './PlanillaGenericaRow'
 import SignatureCanvas from '@/components/signature/SignatureCanvas'
 import { VerFotoBtn } from '@/components/ui/FotoLightbox'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 function buildSummary(errors: FieldErrors<PlanillaGenericaSubmit>): string[] {
   const msgs: string[] = []
@@ -72,6 +73,7 @@ export default function PlanillaGenericaForm({
   const [submitting, setSubmitting] = useState(false)
   const [alreadySent, setAlreadySent] = useState(false)
   const [validationMessages, setValidationMessages] = useState<string[]>([])
+  const { data: gps } = useGeolocation()
 
   const schema = buildPlanillaGenericaSchema(campos)
 
@@ -124,10 +126,17 @@ export default function PlanillaGenericaForm({
     setValidationMessages([])
     setSubmitting(true)
     try {
+      const payload = {
+        ...data,
+        firma_latitud: gps?.latitud ?? null,
+        firma_longitud: gps?.longitud ?? null,
+        firma_precision_m: gps?.precision_m ?? null,
+        firma_gps_capturado_at: gps?.capturado_at ?? null,
+      }
       const res = await fetch(`/api/planillas/generico/${tipoId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (!res.ok) {

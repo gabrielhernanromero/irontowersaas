@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { gpsCapturaFields } from './gps'
 
 const ExtintorItemSchema = z.object({
   numero: z.string(),
@@ -42,6 +43,7 @@ export const PlanillaExtintoresSubmitSchema = z.object({
   items: z.array(ExtintorItemSchema).min(1, 'Debe haber al menos 1 extintor'),
   firma_dataurl: z.string().min(1, 'La firma es obligatoria'),
   firma_aclaracion: z.string().min(1, 'La aclaración (nombre y apellido) es obligatoria'),
+  ...gpsCapturaFields('firma'),
 }).superRefine((data, ctx) => {
   data.items.forEach((item, i) => requireObsIfNo(item, ctx, i))
 })

@@ -27,6 +27,7 @@ interface Props {
   cliente: Cliente
   firmaBase64: string | null
   generadoEn: string
+  firmaGpsResumen: string | null
 }
 
 function Badge({ value }: { value: boolean }) {
@@ -50,6 +51,7 @@ export function InformeGenerico({
   cliente,
   firmaBase64,
   generadoEn,
+  firmaGpsResumen,
 }: Props) {
   const novedades = items.filter((item) => itemTieneNovedad(item, campos))
 
@@ -158,6 +160,9 @@ export function InformeGenerico({
               <View style={[styles.firmaImage, { justifyContent: 'center', alignItems: 'center' }]}>
                 <Text style={{ fontSize: 8, color: '#94a3b8' }}>Sin firma</Text>
               </View>
+            )}
+            {firmaGpsResumen && (
+              <Text style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>{firmaGpsResumen}</Text>
             )}
           </View>
           <Text style={{ fontSize: 8, color: '#94a3b8' }}>

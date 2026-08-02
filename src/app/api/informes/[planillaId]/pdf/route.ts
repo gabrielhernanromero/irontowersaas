@@ -7,6 +7,7 @@ import { InformeHidrantes } from '@/components/pdf/InformeHidrantes'
 import { InformeExtintores } from '@/components/pdf/InformeExtintores'
 import { InformeGenerico } from '@/components/pdf/InformeGenerico'
 import type { User, Cliente, PlanillaHidrante, PlanillaExtintor, PlanillaItemRespuesta, TipoCampo } from '@/types/database'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 
 interface CampoDef {
   clave: string
@@ -141,12 +142,22 @@ export async function GET(
     timeZone: 'America/Argentina/Buenos_Aires',
   })
 
+  // GPS Fase 1: solo se muestra la distancia en texto neutro — nunca la
+  // precisión ni el estado de excepción/alerta (eso es control interno,
+  // no algo que se blanquea en el documento que recibe el cliente final).
+  const { distanciaM, estado: estadoGeo } = evaluarGeocerca(
+    { lat: planilla.firma_latitud ?? null, lon: planilla.firma_longitud ?? null },
+    { lat: (cliente as Cliente | null)?.latitud ?? null, lon: (cliente as Cliente | null)?.longitud ?? null }
+  )
+  const firmaGpsResumen = estadoGeo === 'sin_datos' ? null : `Firmado a ${Math.round(distanciaM ?? 0)}m de la sede`
+
   const props = {
     planilla,
     tecnico: tecnico as User,
     cliente: cliente as Cliente,
     firmaBase64,
     generadoEn,
+    firmaGpsResumen,
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

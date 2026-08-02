@@ -11,6 +11,7 @@ const FirmaCanvas = dynamic(() => import('@/components/signature/FirmaCanvas'), 
   loading: () => <div className="h-[170px] bg-gray-100 rounded-lg animate-pulse" />,
 })
 import { CerrarTurnoSchema, type CerrarTurnoInput } from '@/lib/validations/libroTurno'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 function nowTime() { return new Date().toTimeString().slice(0, 5) }
 
@@ -51,6 +52,7 @@ export default function CerrarGuardiaForm({ turnoId, horaFinEsquema }: Props) {
   const [motivoError, setMotivoError] = useState('')
   const [minsAnticipado, setMinsAnticipado] = useState(0)
   const [formDataPendiente, setFormDataPendiente] = useState<CerrarTurnoInput | null>(null)
+  const { data: gps } = useGeolocation()
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<CerrarTurnoInput>({
     resolver: zodResolver(CerrarTurnoSchema),
@@ -73,7 +75,14 @@ export default function CerrarGuardiaForm({ turnoId, horaFinEsquema }: Props) {
       const res = await fetch('/api/libro-turno/cerrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, motivo_cierre_anticipado: motivoCierre }),
+        body: JSON.stringify({
+          ...data,
+          motivo_cierre_anticipado: motivoCierre,
+          cierre_latitud: gps?.latitud ?? null,
+          cierre_longitud: gps?.longitud ?? null,
+          cierre_precision_m: gps?.precision_m ?? null,
+          cierre_gps_capturado_at: gps?.capturado_at ?? null,
+        }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al cerrar el turno'); return }

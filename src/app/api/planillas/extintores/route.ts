@@ -6,6 +6,7 @@ import { checkDuplicatePlanilla } from '@/lib/utils/checkDuplicatePlanilla'
 import { validateItemsMatchCatalog } from '@/lib/utils/validatePlanillaItemsCatalog'
 import { alertarSupervisores } from '@/lib/alertas/createAlerta'
 import { notificarNovedad } from '@/lib/alertas/notificarNovedad'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 
 export async function POST(req: NextRequest) {
   // Regla 6: autenticación y captura de user_agent
@@ -36,7 +37,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { cliente_id, fecha, turno, items, firma_dataurl, firma_aclaracion } = parsed.data
+  const {
+    cliente_id, fecha, turno, items, firma_dataurl, firma_aclaracion,
+    firma_latitud, firma_longitud, firma_precision_m, firma_gps_capturado_at,
+  } = parsed.data
   const admin = supabaseAdmin()
 
   // Turno propio abierto
@@ -131,6 +135,10 @@ export async function POST(req: NextRequest) {
       firma_aclaracion,
       inmutable: false,
       user_agent: userAgent,
+      firma_latitud: firma_latitud ?? null,
+      firma_longitud: firma_longitud ?? null,
+      firma_precision_m: firma_precision_m ?? null,
+      firma_gps_capturado_at: firma_gps_capturado_at ?? null,
     })
     .select('id')
     .single()
@@ -138,6 +146,30 @@ export async function POST(req: NextRequest) {
   if (planillaErr || !planilla) {
     console.error('[extintores] planilla insert:', planillaErr?.message)
     return NextResponse.json({ error: 'Error al crear la planilla' }, { status: 500 })
+  }
+
+  // GPS Fase 1: alertar solo si el desvío contra la sede es grande — un
+  // desvío chico se explica por el margen de error normal del GPS y queda
+  // visible en el dashboard sin generar ruido de alertas.
+  if (firma_latitud != null && firma_longitud != null) {
+    const { data: clienteGeo } = await admin
+      .from('clientes')
+      .select('latitud, longitud')
+      .eq('id', cliente_id)
+      .single()
+
+    const { distanciaM, estado } = evaluarGeocerca(
+      { lat: firma_latitud, lon: firma_longitud },
+      { lat: clienteGeo?.latitud ?? null, lon: clienteGeo?.longitud ?? null }
+    )
+
+    if (estado === 'alerta') {
+      await alertarSupervisores(
+        'excepcion_gps',
+        `Planilla de extintores firmada a ${Math.round(distanciaM ?? 0)}m de la sede — técnico ${user.id} — ${fecha} turno ${turno}`,
+        planilla.id
+      )
+    }
   }
 
   // Batch INSERT de los 113 ítems

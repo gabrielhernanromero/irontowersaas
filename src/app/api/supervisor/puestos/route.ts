@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
-const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, planillas_habilitadas, created_at'
+const SELECT = 'id, nombre_empresa, cuit, direccion, contacto_nombre, contacto_email, contacto_telefono, activo, frecuencia_ronda_minutos, aviso_ronda_minutos, planillas_habilitadas, latitud, longitud, created_at'
 
 const PuestoSchema = z.object({
   nombre_empresa:           z.string().min(1, 'Nombre del puesto requerido'),
@@ -14,6 +14,8 @@ const PuestoSchema = z.object({
   contacto_telefono:        z.string().min(1, 'Teléfono requerido'),
   frecuencia_ronda_minutos: z.number().int().positive().nullable().optional(),
   aviso_ronda_minutos:      z.number().int().min(1).max(60).optional(),
+  latitud:                  z.number().min(-90).max(90).nullable().optional(),
+  longitud:                 z.number().min(-180).max(180).nullable().optional(),
 })
 
 const UpdatePuestoSchema       = PuestoSchema.extend({ id: z.string().uuid() })

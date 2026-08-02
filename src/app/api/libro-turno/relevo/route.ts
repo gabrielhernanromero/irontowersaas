@@ -6,6 +6,8 @@ import { RelevoPSchema, RelevoEspecSchema } from '@/lib/validations/libroTurno'
 import type { LibroNovedad } from '@/types/database'
 import { findEsquemaActivo, type EsquemaVentana } from '@/lib/esquemas/validarVentana'
 import { getArgTime } from '@/lib/cobertura/timeUtils'
+import { alertarSupervisores } from '@/lib/alertas/createAlerta'
+import { evaluarGeocerca } from '@/lib/gps/geocerca'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,11 +71,15 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno, personal_apoyo, incidencias_conocidas } = parsed.data
+  const {
+    turno_saliente_id, relevo_nombre, relevo_dni, firma_relevo_dataurl, horario_inicio, fecha, turno,
+    personal_apoyo, incidencias_conocidas,
+    relevo_latitud, relevo_longitud, relevo_precision_m, relevo_gps_capturado_at,
+  } = parsed.data
 
   const { data: turnoSaliente } = await supabaseAdmin()
     .from('libro_turno')
-    .select('id, estado, firma_relevo_url, cliente_id')
+    .select('id, estado, firma_relevo_url, cliente_id, cierre_latitud, cierre_longitud')
     .eq('id', turno_saliente_id)
     .single()
 
@@ -151,10 +157,37 @@ export async function PATCH(req: NextRequest) {
 
   const { error: closeErr } = await supabaseAdmin()
     .from('libro_turno')
-    .update({ estado: 'cerrado', firma_relevo_url: firmaPath, relevo_nombre, relevo_dni })
+    .update({
+      estado: 'cerrado',
+      firma_relevo_url: firmaPath,
+      relevo_nombre,
+      relevo_dni,
+      relevo_latitud: relevo_latitud ?? null,
+      relevo_longitud: relevo_longitud ?? null,
+      relevo_precision_m: relevo_precision_m ?? null,
+      relevo_gps_capturado_at: relevo_gps_capturado_at ?? null,
+    })
     .eq('id', turno_saliente_id)
 
   if (closeErr) return NextResponse.json({ error: 'Error al cerrar el turno saliente' }, { status: 500 })
+
+  // GPS Fase 1: validación cruzada cierre-vs-relevo. Como el relevo es
+  // hombre-por-hombre (ambos técnicos presentes), las dos coordenadas
+  // deberían coincidir — es una señal antifraude más fuerte que comparar
+  // contra la sede, sin depender de que el cliente tenga coordenadas cargadas.
+  if (relevo_latitud != null && relevo_longitud != null) {
+    const { distanciaM, estado } = evaluarGeocerca(
+      { lat: relevo_latitud, lon: relevo_longitud },
+      { lat: turnoSaliente.cierre_latitud ?? null, lon: turnoSaliente.cierre_longitud ?? null }
+    )
+    if (estado === 'alerta') {
+      await alertarSupervisores(
+        'excepcion_gps',
+        `Cierre y relevo del turno reportados a ${Math.round(distanciaM ?? 0)}m de distancia — ${relevo_nombre} (relevo)`,
+        { turnoId: turno_saliente_id }
+      ).catch(() => {})
+    }
+  }
 
   // Detectar el esquema activo para el usuario entrante, para que el nuevo turno
   // quede vinculado al esquema correcto y el cierre detecte el relevo siguiente.
@@ -194,7 +227,17 @@ export async function PATCH(req: NextRequest) {
 
   const { data: nuevoTurno, error: insertErr } = await supabaseAdmin()
     .from('libro_turno')
-    .insert({ fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni, horario_inicio, horario_fin: esquemaHoraFinNuevoTurno, estado: 'abierto', cliente_id: turnoSaliente.cliente_id ?? null, esquema_id: esquemaIdNuevoTurno })
+    .insert({
+      fecha, turno, tecnico_id: user.id, tecnico_nombre: relevo_nombre, tecnico_dni: relevo_dni,
+      horario_inicio, horario_fin: esquemaHoraFinNuevoTurno, estado: 'abierto',
+      cliente_id: turnoSaliente.cliente_id ?? null, esquema_id: esquemaIdNuevoTurno,
+      // El técnico entrante ya está parado en el sitio al firmar el relevo —
+      // reusamos la misma captura como apertura de su propio turno nuevo.
+      apertura_latitud: relevo_latitud ?? null,
+      apertura_longitud: relevo_longitud ?? null,
+      apertura_precision_m: relevo_precision_m ?? null,
+      apertura_gps_capturado_at: relevo_gps_capturado_at ?? null,
+    })
     .select()
     .single()
 

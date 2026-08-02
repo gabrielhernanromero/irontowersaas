@@ -32,7 +32,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', issues: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, cliente_id, esquema_id, interino, personal_apoyo, turno_saliente_id, relevo_firma_dataurl, verificacion_elementos } = parsed.data
+  const {
+    fecha, turno, tecnico_nombre, tecnico_dni, horario_inicio, cliente_id, esquema_id, interino,
+    personal_apoyo, turno_saliente_id, relevo_firma_dataurl, verificacion_elementos,
+    apertura_latitud, apertura_longitud, apertura_precision_m, apertura_gps_capturado_at,
+    relevo_latitud, relevo_longitud, relevo_precision_m, relevo_gps_capturado_at,
+  } = parsed.data
 
   let esquemaHoraFin: string | null = null
 
@@ -143,6 +148,10 @@ export async function POST(req: NextRequest) {
           firma_relevo_url: firmaPath,
           relevo_nombre: tecnico_nombre,
           relevo_dni: tecnico_dni,
+          relevo_latitud: relevo_latitud ?? null,
+          relevo_longitud: relevo_longitud ?? null,
+          relevo_precision_m: relevo_precision_m ?? null,
+          relevo_gps_capturado_at: relevo_gps_capturado_at ?? null,
         })
         .eq('id', turno_saliente_id)
         .in('estado', ['cerrado', 'pendiente_relevo'])
@@ -170,6 +179,10 @@ export async function POST(req: NextRequest) {
       esquema_id:  esquema_id  ?? null,
       interino:    interino    ?? false,
       estado: 'abierto',
+      apertura_latitud: apertura_latitud ?? null,
+      apertura_longitud: apertura_longitud ?? null,
+      apertura_precision_m: apertura_precision_m ?? null,
+      apertura_gps_capturado_at: apertura_gps_capturado_at ?? null,
     })
     .select()
     .single()

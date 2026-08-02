@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { gpsCapturaFields } from './gps'
 
 const hora = /^\d{2}:\d{2}$/
 
@@ -32,6 +33,9 @@ export const AbrirTurnoSchema = z.object({
   relevo_firma_dataurl: z.string().optional(),
   // Verificación de elementos del puesto al abrir guardia
   verificacion_elementos: z.array(VerificacionElementoSchema).optional(),
+  ...gpsCapturaFields('apertura'),
+  // Solo se usan si viene turno_saliente_id (relevo embebido al abrir)
+  ...gpsCapturaFields('relevo'),
 })
 
 export const NuevaNovedadSchema = z.object({
@@ -58,6 +62,7 @@ export const CerrarTurnoSchema = z.object({
   horario_fin: z.string().regex(hora, 'Formato HH:MM'),
   firma_cierre_dataurl: z.string().min(1, 'Tu firma es obligatoria para cerrar el turno'),
   motivo_cierre_anticipado: z.string().optional(),
+  ...gpsCapturaFields('cierre'),
 })
 
 export const RelevoPSchema = z.object({
@@ -73,6 +78,7 @@ export const RelevoPSchema = z.object({
   personal_apoyo: z.array(PersonalApoyoSchema).optional(),
   // IDs de incidencias de ronda que el entrante tomó conocimiento
   incidencias_conocidas: z.array(z.string().uuid()).optional(),
+  ...gpsCapturaFields('relevo'),
 })
 
 // ── Relevo por Especificación Técnica (PIN auth + SHA-256 + firmas-relevos) ──
