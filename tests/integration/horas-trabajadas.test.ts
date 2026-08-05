@@ -12,6 +12,8 @@
  *  - Tarifas: override de técnico tiene prioridad sobre la tarifa base;
  *    si no hay tarifa para un tipo, el monto queda null y se marca
  *    tarifaIncompleta.
+ *  - Vigencia de tarifas: cambiar una tarifa NO modifica retroactivamente
+ *    el monto ya calculado de turnos anteriores a la fecha del cambio.
  *
  * Usa el cliente de Supabase con service role key (bypasea RLS), igual que
  * el resto de los tests de este directorio. Limpieza manual al final.
@@ -117,7 +119,7 @@ describe('calcularHorasTrabajadas', () => {
     const { data: tarifaBaseDiurno } = await admin
       .from('tarifas_turno').insert({ tipo: 'diurno', valor: 1000 }).select('id').single()
     const { data: tarifaOverrideB } = await admin
-      .from('tarifas_turno').insert({ tecnico_id: TECNICO_B.id, tipo: 'diurno', valor: 1500 }).select('id').single()
+      .from('tarifas_turno').insert({ tecnico_id: TECNICO_B.id, valor: 1500 }).select('id').single()
     if (tarifaBaseDiurno) tarifaIds.push(tarifaBaseDiurno.id)
     if (tarifaOverrideB) tarifaIds.push(tarifaOverrideB.id)
 
@@ -171,28 +173,60 @@ describe('calcularHorasTrabajadas', () => {
     assert(turnoForzado!.excepcion === true, 'cierre forzado debe marcarse como excepción')
   })
 
-  test('detecta feriado nacional y usa esa tarifa en vez de diurno/nocturno', () => {
-    const b = resumen.find((r) => r.tecnicoId === TECNICO_B.id)!
-    const turnoFeriado = b.detalle.find((d) => d.fecha === FECHA_FERIADO)
-    assert(!!turnoFeriado, 'debe existir el turno en fecha feriada')
-    assert(turnoFeriado!.feriado?.tipo === 'nacional', 'debe traer el tipo de feriado correcto')
-    // No hay tarifa cargada para feriado_nacional en este test → monto null
-    assert(turnoFeriado!.montoEstimado === null, 'sin tarifa de feriado_nacional cargada, el monto debe ser null')
+  test('feriado nacional sin tarifa propia cae al precio general (diurno)', () => {
+    // Usa Técnico A (sin override) para probar el fallback puro — Técnico B
+    // tiene un override que aplica a todo, ver el test de abajo.
+    const a = resumen.find((r) => r.tecnicoId === TECNICO_A.id)!
+    const turno1 = a.detalle.find((d) => d.turno === 'diurno')!
+    assert(turno1.montoEstimado === 1000, `sin tarifa específica, debe caer al precio general (1000), fue ${turno1.montoEstimado}`)
   })
 
-  test('el override de técnico tiene prioridad sobre la tarifa base', () => {
+  test('el override de técnico (precio único, sin tipo) tiene prioridad sobre la tarifa base — incluso en feriado', () => {
     const b = resumen.find((r) => r.tecnicoId === TECNICO_B.id)!
     const turnoForzado = b.detalle.find((d) => d.cierreForzado)!
-    assert(turnoForzado.montoEstimado === 1500, `Técnico B tiene override de $1500 para diurno, fue ${turnoForzado.montoEstimado}`)
+    assert(turnoForzado.montoEstimado === 1500, `Técnico B tiene override de $1500, fue ${turnoForzado.montoEstimado}`)
+
+    // El override no distingue tipo: también gana en el turno de feriado.
+    const turnoFeriado = b.detalle.find((d) => d.fecha === FECHA_FERIADO)!
+    assert(turnoFeriado.feriado?.tipo === 'nacional', 'debe traer el tipo de feriado correcto')
+    assert(turnoFeriado.montoEstimado === 1500, `el override de Técnico B debe aplicar también en feriado (1500), fue ${turnoFeriado.montoEstimado}`)
 
     const a = resumen.find((r) => r.tecnicoId === TECNICO_A.id)!
     const turno1 = a.detalle.find((d) => d.turno === 'diurno')!
     assert(turno1.montoEstimado === 1000, `Técnico A no tiene override, debe usar la base de $1000, fue ${turno1.montoEstimado}`)
   })
 
-  test('tarifaIncompleta queda true cuando algún turno no tiene tarifa aplicable', () => {
+  test('nocturno sin tarifa propia cae al precio general (diurno), sin marcar tarifa incompleta', () => {
     const a = resumen.find((r) => r.tecnicoId === TECNICO_A.id)!
-    // El turno nocturno de A no tiene tarifa de tipo 'nocturno' cargada
-    assert(a.tarifaIncompleta === true, 'debe marcar tarifa incompleta cuando falta la tarifa de algún tipo')
+    const turnoNocturno = a.detalle.find((d) => d.turno === 'nocturno')!
+    assert(turnoNocturno.montoEstimado === 1000, `nocturno sin tarifa propia debe caer al precio general (1000), fue ${turnoNocturno.montoEstimado}`)
+    assert(a.tarifaIncompleta === false, 'no debe quedar "incompleta" si todo resuelve por el fallback al precio general')
+  })
+
+  test('cambiar la tarifa de un técnico NO modifica el monto ya calculado de turnos pasados', async () => {
+    // Simula el caso real: a Técnico A le pagaban $500 por turno diurno
+    // desde 2020, y HOY se le sube a $2000. Un turno viejo (antes del
+    // cambio) tiene que seguir mostrando $500 — no $2000 — cuando se
+    // vuelve a generar el reporte.
+    const { data: overrideViejo } = await admin
+      .from('tarifas_turno')
+      .insert({ tecnico_id: TECNICO_A.id, valor: 500, vigente_desde: '2020-01-01' })
+      .select('id').single()
+    const { data: overrideNuevo } = await admin
+      .from('tarifas_turno')
+      .insert({ tecnico_id: TECNICO_A.id, valor: 2000, vigente_desde: HOY })
+      .select('id').single()
+    if (overrideViejo) tarifaIds.push(overrideViejo.id)
+    if (overrideNuevo) tarifaIds.push(overrideNuevo.id)
+
+    const turnoViejoId = await crearTurno({ tecnico: TECNICO_A, fecha: '2026-01-15', turno: 'diurno', estado: 'cerrado' })
+
+    const resumenVigencia = await calcularHorasTrabajadas(admin, { desde: '2020-01-01', hasta: '2027-12-31', tecnicoId: TECNICO_A.id })
+    const a = resumenVigencia.find((r) => r.tecnicoId === TECNICO_A.id)!
+    const turnoViejo = a.detalle.find((d) => d.turnoId === turnoViejoId)!
+    const turnoDeHoy = a.detalle.find((d) => d.fecha === HOY && d.turno === 'diurno')!
+
+    assert(turnoViejo.montoEstimado === 500, `turno de 2026-01-15 debe usar la tarifa vigente en ese momento ($500), fue ${turnoViejo.montoEstimado}`)
+    assert(turnoDeHoy.montoEstimado === 2000, `turno de hoy debe usar la tarifa nueva ($2000), fue ${turnoDeHoy.montoEstimado}`)
   })
 })

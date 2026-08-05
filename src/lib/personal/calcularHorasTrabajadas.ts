@@ -182,7 +182,7 @@ export async function calcularHorasTrabajadas(
       .lte('fecha', hasta),
     admin
       .from('tarifas_turno')
-      .select('tecnico_id, tipo, valor'),
+      .select('tecnico_id, tipo, valor, vigente_desde'),
   ])
 
   const novedadesPorTurno = new Map<string, { apertura?: string; cierre?: string; cierreTecnicoId?: string }>()
@@ -207,13 +207,42 @@ export async function calcularHorasTrabajadas(
     feriadosPorFecha.set(f.fecha, { nombre: f.nombre, tipo: f.tipo })
   }
 
-  const tarifaBase = new Map<TipoTarifa, number>()
-  const tarifaOverride = new Map<string, number>() // key: `${tecnicoId}:${tipo}`
-  for (const t of (tarifasRes.data ?? []) as { tecnico_id: string | null; tipo: TipoTarifa; valor: number }[]) {
-    if (t.tecnico_id) tarifaOverride.set(`${t.tecnico_id}:${t.tipo}`, t.valor)
-    else tarifaBase.set(t.tipo, t.valor)
+  // Historial de vigencias, ordenado por fecha de inicio ascendente — un
+  // cambio de tarifa NO pisa el valor anterior, agrega una fila nueva
+  // "desde tal fecha". Cada turno usa la que estaba vigente en SU fecha,
+  // no la más reciente, para que un cambio de tarifa nunca modifique
+  // retroactivamente lo ya calculado.
+  // La excepción de un técnico es un precio único (sin tipo): aplica igual
+  // sea el turno diurno, nocturno o feriado — por eso va en su propio mapa
+  // sin distinguir tipo, a diferencia de la tarifa base.
+  type Vigencia = { vigente_desde: string; valor: number }
+  const tarifaBaseHist = new Map<TipoTarifa, Vigencia[]>()
+  const tarifaOverrideHist = new Map<string, Vigencia[]>() // key: tecnicoId
+  for (const t of (tarifasRes.data ?? []) as { tecnico_id: string | null; tipo: TipoTarifa | null; valor: number; vigente_desde: string }[]) {
+    if (t.tecnico_id) {
+      const lista = tarifaOverrideHist.get(t.tecnico_id) ?? []
+      lista.push({ vigente_desde: t.vigente_desde, valor: t.valor })
+      tarifaOverrideHist.set(t.tecnico_id, lista)
+    } else if (t.tipo) {
+      const lista = tarifaBaseHist.get(t.tipo) ?? []
+      lista.push({ vigente_desde: t.vigente_desde, valor: t.valor })
+      tarifaBaseHist.set(t.tipo, lista)
+    }
   }
-  const hayTarifas = tarifaBase.size > 0 || tarifaOverride.size > 0
+  for (const lista of Array.from(tarifaBaseHist.values())) lista.sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde))
+  for (const lista of Array.from(tarifaOverrideHist.values())) lista.sort((a, b) => a.vigente_desde.localeCompare(b.vigente_desde))
+
+  function tarifaVigenteEn(historial: Vigencia[] | undefined, fecha: string): number | null {
+    if (!historial) return null
+    let resultado: number | null = null
+    for (const v of historial) {
+      if (v.vigente_desde > fecha) break
+      resultado = v.valor
+    }
+    return resultado
+  }
+
+  const hayTarifas = tarifaBaseHist.size > 0 || tarifaOverrideHist.size > 0
 
   const tecnicoIds = Array.from(new Set(filas.map((f) => f.tecnicoId)))
   const { data: tecnicosData } = await admin
@@ -252,10 +281,16 @@ export async function calcularHorasTrabajadas(
       ? (feriado.tipo === 'nacional' ? 'feriado_nacional' : 'feriado_puente')
       : base.turno
 
+    // 'diurno' funciona como precio general/de fallback en la UI ("Precio
+    // general por turno"): si nocturno o feriado no tienen tarifa propia
+    // cargada, usan la misma tarifa que un turno diurno en vez de quedar
+    // sin monto.
     let montoEstimado: number | null = null
     if (hayTarifas) {
-      const override = tarifaOverride.get(`${tId}:${tipoTarifa}`)
-      montoEstimado = override ?? tarifaBase.get(tipoTarifa) ?? null
+      const override = tarifaVigenteEn(tarifaOverrideHist.get(tId), base.fecha)
+      const especifica = tarifaVigenteEn(tarifaBaseHist.get(tipoTarifa), base.fecha)
+      const general = tarifaVigenteEn(tarifaBaseHist.get('diurno'), base.fecha)
+      montoEstimado = override ?? especifica ?? general ?? null
     }
 
     const cierreAnticipado = !!base.motivoCierreAnticipado

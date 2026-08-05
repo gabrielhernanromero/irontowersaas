@@ -6,7 +6,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  try { await requireRole('admin') } catch {
+  try { await requireRole('supervisor', 'admin') } catch {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
