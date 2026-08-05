@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth/requireRole'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { calcularHorasTrabajadas } from '@/lib/personal/calcularHorasTrabajadas'
+import { calcularHorasTrabajadas } from '@/lib/liquidaciones/calcularHorasTrabajadas'
 import { z } from 'zod'
 
 const QuerySchema = z.object({

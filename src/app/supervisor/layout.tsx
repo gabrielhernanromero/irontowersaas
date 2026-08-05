@@ -35,7 +35,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
           <SideLink href="/supervisor/libro-guardia" icon={<BookOpen size={18} />} label="Libro de Guardia" />
           <SideLink href="/supervisor/rondas"   icon={<ClipboardCheck size={18} />} label="Rondas" />
           <SideLink href="/supervisor/usuarios" icon={<Users size={18} />} label="Técnicos" />
-          <SideLink href="/supervisor/personal/horas" icon={<Clock size={18} />} label="Personal" />
+          <SideLink href="/supervisor/liquidaciones/horas" icon={<Clock size={18} />} label="Liquidaciones" />
           <SideLink href="/supervisor/seguridad" icon={<History size={18} />} label="Seguridad" />
           {esAdmin && (
             <SideLink href="/supervisor/supervisores" icon={<ShieldCheck size={18} />} label="Supervisores" />
@@ -69,7 +69,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
             <MobileLink href="/supervisor/informes" icon={<FileText size={20} />} label="Informes" />
             <MobileLink href="/supervisor/clientes" icon={<Target size={20} />} label="Clientes" />
             <MobileLink href="/supervisor/usuarios" icon={<Users size={20} />} label="Técnicos" />
-            <MobileLink href="/supervisor/personal/horas" icon={<Clock size={20} />} label="Personal" />
+            <MobileLink href="/supervisor/liquidaciones/horas" icon={<Clock size={20} />} label="Liquidaciones" />
           </div>
         </nav>
       </div>

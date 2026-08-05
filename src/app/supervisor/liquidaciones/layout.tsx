@@ -1,8 +1,8 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { Clock } from 'lucide-react'
-import PersonalTabs from './PersonalTabs'
+import LiquidacionesTabs from './LiquidacionesTabs'
 
-export default async function PersonalLayout({ children }: { children: React.ReactNode }) {
+export default async function LiquidacionesLayout({ children }: { children: React.ReactNode }) {
   await requireRole('supervisor', 'admin')
 
   return (
@@ -13,11 +13,11 @@ export default async function PersonalLayout({ children }: { children: React.Rea
             <Clock size={22} className="text-brand-orange" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Personal</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Liquidaciones</h1>
             <p className="text-sm text-gray-500">Horas, feriados y tarifas para liquidar sueldos</p>
           </div>
         </div>
-        <PersonalTabs />
+        <LiquidacionesTabs />
       </div>
       {children}
     </div>

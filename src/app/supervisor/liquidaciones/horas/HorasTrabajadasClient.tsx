@@ -7,8 +7,8 @@ import {
 } from 'lucide-react'
 import { SkeletonListItem } from '@/components/ui/Skeleton'
 import { downloadCsv } from '@/lib/exportCsv'
-import { rangoSemanaActual, rangoQuincenaActual, rangoMesActual } from '@/lib/personal/periodosPreset'
-import type { ResumenTecnico, TurnoTrabajado } from '@/lib/personal/calcularHorasTrabajadas'
+import { rangoSemanaActual, rangoQuincenaActual, rangoMesActual } from '@/lib/liquidaciones/periodosPreset'
+import type { ResumenTecnico, TurnoTrabajado } from '@/lib/liquidaciones/calcularHorasTrabajadas'
 
 interface Tecnico { id: string; nombre: string; apellido: string }
 
@@ -136,7 +136,7 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
     try {
       const qs = new URLSearchParams({ desde: rangoDesde, hasta: rangoHasta })
       if (tecnico) qs.set('tecnicoId', tecnico)
-      const res = await fetch(`/api/supervisor/personal/horas?${qs.toString()}`)
+      const res = await fetch(`/api/supervisor/liquidaciones/horas?${qs.toString()}`)
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al cargar el reporte'); return }
       setResumen(json.tecnicos)

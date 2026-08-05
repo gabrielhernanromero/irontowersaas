@@ -4,12 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const TABS = [
-  { href: '/supervisor/personal/horas', label: 'Horas trabajadas' },
-  { href: '/supervisor/personal/feriados', label: 'Feriados' },
-  { href: '/supervisor/personal/tarifas', label: 'Tarifas' },
+  { href: '/supervisor/liquidaciones/horas', label: 'Horas trabajadas' },
+  { href: '/supervisor/liquidaciones/feriados', label: 'Feriados' },
+  { href: '/supervisor/liquidaciones/tarifas', label: 'Tarifas' },
 ]
 
-export default function PersonalTabs() {
+export default function LiquidacionesTabs() {
   const pathname = usePathname()
 
   return (

@@ -28,7 +28,7 @@ import * as dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { calcularHorasTrabajadas } from '@/lib/personal/calcularHorasTrabajadas'
+import { calcularHorasTrabajadas } from '@/lib/liquidaciones/calcularHorasTrabajadas'
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(`❌ Assertion failed: ${message}`)
