@@ -36,6 +36,9 @@ export interface ResumenTecnico {
   excepciones: number
   montoTotalEstimado: number | null
   tarifaIncompleta: boolean
+  // Sedes distintas en las que trabajó dentro del rango — más de una avisa
+  // que el total de este técnico mezcla turnos de varios clientes.
+  sedes: string[]
   detalle: TurnoTrabajado[]
 }
 
@@ -76,9 +79,9 @@ interface TurnoBase {
 // por el saliente.
 export async function calcularHorasTrabajadas(
   admin: ReturnType<typeof supabaseAdmin>,
-  params: { desde: string; hasta: string; tecnicoId?: string },
+  params: { desde: string; hasta: string; tecnicoId?: string; clienteId?: string },
 ): Promise<ResumenTecnico[]> {
-  const { desde, hasta, tecnicoId } = params
+  const { desde, hasta, tecnicoId, clienteId } = params
   const ESTADOS_CONTABLES = ['cerrado', 'pendiente_relevo']
 
   let queryEncargado = admin
@@ -92,6 +95,7 @@ export async function calcularHorasTrabajadas(
     .gte('fecha', desde)
     .lte('fecha', hasta)
   if (tecnicoId) queryEncargado = queryEncargado.eq('tecnico_id', tecnicoId)
+  if (clienteId) queryEncargado = queryEncargado.eq('cliente_id', clienteId)
 
   let queryApoyo = admin
     .from('participaciones_turno')
@@ -107,6 +111,7 @@ export async function calcularHorasTrabajadas(
     .gte('libro_turno.fecha', desde)
     .lte('libro_turno.fecha', hasta)
   if (tecnicoId) queryApoyo = queryApoyo.eq('usuario_id', tecnicoId)
+  if (clienteId) queryApoyo = queryApoyo.eq('libro_turno.cliente_id', clienteId)
 
   const [encargadoRes, apoyoRes] = await Promise.all([queryEncargado, queryApoyo])
 
@@ -332,11 +337,13 @@ export async function calcularHorasTrabajadas(
         excepciones: 0,
         montoTotalEstimado: null,
         tarifaIncompleta: false,
+        sedes: [],
         detalle: [],
       }
       resumenPorTecnico.set(tId, resumen)
     }
 
+    if (!resumen.sedes.includes(base.clienteNombre)) resumen.sedes.push(base.clienteNombre)
     resumen.totalTurnos++
     if (base.turno === 'diurno') resumen.turnosDiurnos++
     else resumen.turnosNocturnos++

@@ -8,6 +8,7 @@ const QuerySchema = z.object({
   desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha "desde" inválida'),
   hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha "hasta" inválida'),
   tecnicoId: z.string().uuid().optional(),
+  clienteId: z.string().uuid().optional(),
 }).refine((v) => v.desde <= v.hasta, { message: 'El rango de fechas es inválido (desde > hasta)' })
 
 export async function GET(req: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     desde: searchParams.get('desde') ?? undefined,
     hasta: searchParams.get('hasta') ?? undefined,
     tecnicoId: searchParams.get('tecnicoId') ?? undefined,
+    clienteId: searchParams.get('clienteId') ?? undefined,
   })
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
