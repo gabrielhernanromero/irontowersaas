@@ -11,6 +11,7 @@ import { rangoSemanaActual, rangoQuincenaActual, rangoMesActual } from '@/lib/li
 import type { ResumenTecnico, TurnoTrabajado } from '@/lib/liquidaciones/calcularHorasTrabajadas'
 
 interface Tecnico { id: string; nombre: string; apellido: string }
+interface Cliente { id: string; nombre_empresa: string }
 
 function horaArg(iso: string): string {
   const d = new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000)
@@ -117,7 +118,7 @@ function DetalleTecnico({ detalle, hayTarifas }: { detalle: TurnoTrabajado[]; ha
   )
 }
 
-export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[] }) {
+export default function HorasTrabajadasClient({ tecnicos, clientes }: { tecnicos: Tecnico[]; clientes: Cliente[] }) {
   const hoy = new Date()
   const defaultDesde = new Date(hoy.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const defaultHasta = hoy.toISOString().slice(0, 10)
@@ -125,17 +126,19 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
   const [desde, setDesde] = useState(defaultDesde)
   const [hasta, setHasta] = useState(defaultHasta)
   const [tecnicoId, setTecnicoId] = useState('')
+  const [clienteId, setClienteId] = useState('')
   const [resumen, setResumen] = useState<ResumenTecnico[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandido, setExpandido] = useState<string | null>(null)
 
-  const buscar = useCallback(async (rangoDesde: string, rangoHasta: string, tecnico: string) => {
+  const buscar = useCallback(async (rangoDesde: string, rangoHasta: string, tecnico: string, cliente: string) => {
     setLoading(true)
     setError(null)
     try {
       const qs = new URLSearchParams({ desde: rangoDesde, hasta: rangoHasta })
       if (tecnico) qs.set('tecnicoId', tecnico)
+      if (cliente) qs.set('clienteId', cliente)
       const res = await fetch(`/api/supervisor/liquidaciones/horas?${qs.toString()}`)
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Error al cargar el reporte'); return }
@@ -147,12 +150,12 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
     }
   }, [])
 
-  useEffect(() => { buscar(defaultDesde, defaultHasta, '') }, [buscar, defaultDesde, defaultHasta])
+  useEffect(() => { buscar(defaultDesde, defaultHasta, '', '') }, [buscar, defaultDesde, defaultHasta])
 
   function aplicarPreset(rango: { desde: string; hasta: string }) {
     setDesde(rango.desde)
     setHasta(rango.hasta)
-    buscar(rango.desde, rango.hasta, tecnicoId)
+    buscar(rango.desde, rango.hasta, tecnicoId, clienteId)
   }
 
   const todosLosTurnos = (resumen ?? []).flatMap((t) => t.detalle.map((d) => ({ ...d, tecnico: t })))
@@ -163,6 +166,7 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
     downloadCsv(
       resumen.map((t) => ({
         Técnico: `${t.nombre} ${t.apellido}`,
+        Sedes: t.sedes.join(' | '),
         'Total turnos': t.totalTurnos,
         Diurnos: t.turnosDiurnos,
         Nocturnos: t.turnosNocturnos,
@@ -224,8 +228,17 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
               ))}
             </select>
           </div>
+          <div className="w-full sm:w-auto">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Sede</label>
+            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className="w-full sm:w-auto sm:min-w-[10rem] border border-gray-300 rounded-lg p-2 text-base min-h-[44px]">
+              <option value="">Todas</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre_empresa}</option>
+              ))}
+            </select>
+          </div>
           <button
-            onClick={() => buscar(desde, hasta, tecnicoId)}
+            onClick={() => buscar(desde, hasta, tecnicoId, clienteId)}
             className="w-full sm:w-auto bg-brand-orange text-white font-semibold px-4 py-2 rounded-lg text-base min-h-[44px]"
           >
             Buscar
@@ -267,7 +280,14 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
                       className="w-full flex items-center justify-between p-4 min-h-[44px]"
                     >
                       <div className="text-left">
-                        <p className="font-semibold text-gray-900">{t.nombre} {t.apellido}</p>
+                        <p className="font-semibold text-gray-900 flex items-center gap-1.5">
+                          {t.nombre} {t.apellido}
+                          {t.sedes.length > 1 && (
+                            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title={t.sedes.join(', ')}>
+                              {t.sedes.length} sedes
+                            </span>
+                          )}
+                        </p>
                         <p className="text-sm text-gray-500">
                           {t.totalTurnos} turnos · {t.turnosDiurnos} diurnos · {t.turnosNocturnos} nocturnos
                           {(t.turnosFeriadoNacional + t.turnosFeriadoPuente) > 0 && (
@@ -318,7 +338,16 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
                             onClick={() => setExpandido(expandido === t.tecnicoId ? null : t.tecnicoId)}
                             className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                           >
-                            <td className="p-3 font-medium text-gray-900">{t.nombre} {t.apellido}</td>
+                            <td className="p-3 font-medium text-gray-900">
+                              <span className="flex items-center gap-1.5">
+                                {t.nombre} {t.apellido}
+                                {t.sedes.length > 1 && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title={t.sedes.join(', ')}>
+                                    {t.sedes.length} sedes
+                                  </span>
+                                )}
+                              </span>
+                            </td>
                             <td className="p-3 text-right">{t.totalTurnos}</td>
                             <td className="p-3 text-right text-gray-500">{t.turnosDiurnos}</td>
                             <td className="p-3 text-right text-gray-500">{t.turnosNocturnos}</td>
