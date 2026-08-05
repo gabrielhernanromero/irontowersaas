@@ -80,7 +80,7 @@ export default function FeriadosClient({ feriados: inicial }: { feriados: Feriad
         </button>
       </div>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-600 text-base">{error}</p>}
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
         {feriados.length === 0 && <p className="p-4 text-sm text-gray-500">Todavía no hay feriados cargados.</p>}

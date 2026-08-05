@@ -151,7 +151,7 @@ export default function TarifasClient({ tarifas: inicial, tecnicos }: { tarifas:
         Opcional: si no cargás nada acá, el reporte de horas trabajadas sigue funcionando igual, solo sin columna de $.
       </p>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-600 text-base">{error}</p>}
 
       {/* Precio general */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-4">

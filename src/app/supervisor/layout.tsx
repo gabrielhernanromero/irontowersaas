@@ -69,6 +69,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
             <MobileLink href="/supervisor/informes" icon={<FileText size={20} />} label="Informes" />
             <MobileLink href="/supervisor/clientes" icon={<Target size={20} />} label="Clientes" />
             <MobileLink href="/supervisor/usuarios" icon={<Users size={20} />} label="Técnicos" />
+            <MobileLink href="/supervisor/personal/horas" icon={<Clock size={20} />} label="Personal" />
           </div>
         </nav>
       </div>

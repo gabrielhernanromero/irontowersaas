@@ -59,7 +59,7 @@ export default function TecnicoSelect({
       <button
         type="button"
         onClick={toggleAbierto}
-        className="w-full sm:w-56 flex items-center justify-between gap-2 bg-white border border-gray-300 rounded-lg p-2 text-base min-h-[44px]"
+        className="w-full sm:w-56 flex items-center justify-between gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[44px]"
       >
         <span className={seleccionado ? 'text-gray-900' : 'text-gray-400'}>
           {seleccionado ? `${seleccionado.nombre} ${seleccionado.apellido}` : 'Elegir técnico…'}

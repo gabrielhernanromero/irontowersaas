@@ -233,7 +233,7 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
         </div>
       </div>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-600 text-base">{error}</p>}
       {loading && (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 4 }).map((_, i) => <SkeletonListItem key={i} />)}
@@ -243,10 +243,10 @@ export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[
       {!loading && resumen && (
         <>
           <div className="flex flex-wrap gap-2">
-            <button onClick={exportarResumen} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 min-h-[44px]">
+            <button onClick={exportarResumen} className="flex items-center gap-2 px-3 py-2 text-base rounded-lg border border-gray-300 hover:bg-gray-50 min-h-[44px]">
               <Download size={16} /> Exportar resumen
             </button>
-            <button onClick={exportarDetalle} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 min-h-[44px]">
+            <button onClick={exportarDetalle} className="flex items-center gap-2 px-3 py-2 text-base rounded-lg border border-gray-300 hover:bg-gray-50 min-h-[44px]">
               <Download size={16} /> Exportar detalle
             </button>
           </div>
