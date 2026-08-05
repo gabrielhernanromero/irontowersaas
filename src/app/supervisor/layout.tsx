@@ -1,7 +1,7 @@
 import { requireRole } from '@/lib/auth/requireRole'
 import { getSession } from '@/lib/auth/getSession'
 import Link from 'next/link'
-import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Target, ClipboardCheck, CalendarDays, ShieldCheck, BookOpen, History } from 'lucide-react'
+import { LayoutDashboard, Bell, ClipboardList, FileText, Users, Target, ClipboardCheck, CalendarDays, ShieldCheck, BookOpen, History, Clock } from 'lucide-react'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 import OfflineBanner from '@/components/OfflineBanner'
 import LogoutButton from '@/components/ui/LogoutButton'
@@ -35,6 +35,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
           <SideLink href="/supervisor/libro-guardia" icon={<BookOpen size={18} />} label="Libro de Guardia" />
           <SideLink href="/supervisor/rondas"   icon={<ClipboardCheck size={18} />} label="Rondas" />
           <SideLink href="/supervisor/usuarios" icon={<Users size={18} />} label="Técnicos" />
+          <SideLink href="/supervisor/personal/horas" icon={<Clock size={18} />} label="Personal" />
           <SideLink href="/supervisor/seguridad" icon={<History size={18} />} label="Seguridad" />
           {esAdmin && (
             <SideLink href="/supervisor/supervisores" icon={<ShieldCheck size={18} />} label="Supervisores" />
@@ -57,7 +58,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto">{children}</main>
+        <main className="flex-1 p-4 pb-24 md:p-6 max-w-6xl w-full mx-auto">{children}</main>
 
         {/* Bottom nav mobile */}
         <nav className="md:hidden print:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
@@ -68,6 +69,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
             <MobileLink href="/supervisor/informes" icon={<FileText size={20} />} label="Informes" />
             <MobileLink href="/supervisor/clientes" icon={<Target size={20} />} label="Clientes" />
             <MobileLink href="/supervisor/usuarios" icon={<Users size={20} />} label="Técnicos" />
+            <MobileLink href="/supervisor/personal/horas" icon={<Clock size={20} />} label="Personal" />
           </div>
         </nav>
       </div>
