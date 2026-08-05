@@ -58,7 +58,7 @@ export default async function SupervisorLayout({ children }: { children: React.R
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto">{children}</main>
+        <main className="flex-1 p-4 pb-24 md:p-6 max-w-6xl w-full mx-auto">{children}</main>
 
         {/* Bottom nav mobile */}
         <nav className="md:hidden print:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
