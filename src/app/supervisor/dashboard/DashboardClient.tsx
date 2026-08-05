@@ -5,7 +5,7 @@ import {
   Shield, AlertTriangle, MessageSquare, Bell,
   ChevronRight, Clock, MapPin, AlertCircle, Siren, X,
   ClipboardCheck, Users, CheckCircle2, TrendingUp, Download,
-  Camera, Filter, CheckCircle, TriangleAlert,
+  Camera, Filter, CheckCircle,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { downloadCsv } from '@/lib/exportCsv'
@@ -566,40 +566,6 @@ export default function DashboardClient({
         </div>
         <ClienteSelector clientes={clientes} value={clienteId} onChange={setClienteId} />
       </div>
-
-      {/* ── Zona de atención inmediata ── */}
-      {itemsUrgentes.length > 0 && (
-        <div className="rounded-2xl bg-red-50/70 overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3">
-            <TriangleAlert size={14} className="text-red-600 shrink-0" />
-            <p className="text-xs font-bold text-red-700 uppercase tracking-wider">
-              {itemsUrgentes.length} {itemsUrgentes.length === 1 ? 'situación requiere atención' : 'situaciones requieren atención'}
-            </p>
-          </div>
-          <div className="divide-y divide-red-100/70">
-            {itemsUrgentes.map((item) => (
-              <button
-                key={`${item.tipo}-${item.id}`}
-                onClick={() => item.tipo === 'relevo' ? setTurnoSheet(item.id) : item.inc && setIncidenciaSheet(item.inc)}
-                className="w-full text-left px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-red-100/50 transition-colors group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${
-                    item.tipo === 'relevo'          ? 'bg-amber-500' :
-                    item.tipo === 'incidencia_alta' ? 'bg-red-500'   :
-                    'bg-orange-500'
-                  }`} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-red-800 line-clamp-1">{item.label}</p>
-                    <p className="text-xs text-red-600 mt-0.5">{item.sub}</p>
-                  </div>
-                </div>
-                <ChevronRight size={14} className="text-red-400 shrink-0 group-hover:text-red-600 transition-colors" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── KPIs (franja única, clickeable) ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm grid grid-cols-2 sm:grid-cols-4 divide-y divide-x-0 sm:divide-y-0 sm:divide-x divide-gray-100">
