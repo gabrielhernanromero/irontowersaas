@@ -486,6 +486,17 @@ export default function DashboardClient({
     return items
   }, [turnos, incidencias])
 
+  // El panel de abajo no repite lo que ya está en itemsUrgentes — solo agrega
+  // el resto de incidencias que todavía no cruzaron el umbral de urgencia.
+  const idsEnAtencion = useMemo(
+    () => new Set(itemsUrgentes.filter(i => i.inc).map(i => i.inc!.id)),
+    [itemsUrgentes],
+  )
+  const otrasIncidencias = useMemo(
+    () => incidenciasOrdenadas.filter(inc => !idsEnAtencion.has(inc.id)),
+    [incidenciasOrdenadas, idsEnAtencion],
+  )
+
   function handleIncidenciaResolved(id: string) {
     setIncidencias(prev => prev.filter(i => i.id !== id))
     if (incidenciaSheet?.id === id) setIncidenciaSheet(null)
@@ -611,15 +622,17 @@ export default function DashboardClient({
           sub={{ text: `${resumen.turnosCerrados} cerradas hoy`, cls: 'text-gray-400' }}
         />
         <KpiItem
-          value={kpis.incidencias}
-          label="Incidencias abiertas"
+          value={itemsUrgentes.length}
+          label="Requiere atención"
           icon={AlertTriangle}
-          valueColorClass={kpis.incidencias > 0 ? 'text-red-600' : undefined}
+          valueColorClass={itemsUrgentes.length > 0 ? 'text-red-600' : undefined}
           onClick={() => irASeccion(incidenciasSectionRef, 'incidencias')}
           sub={
-            incidencias.filter(i => i.severidad === 'alto').length > 0
-              ? { text: `${incidencias.filter(i => i.severidad === 'alto').length} de severidad alta`, cls: 'text-red-500 font-semibold' }
-              : { text: 'sin críticas abiertas', cls: 'text-gray-400' }
+            itemsUrgentes.length === 0
+              ? { text: 'todo al día', cls: 'text-gray-400' }
+              : itemsUrgentes.filter(i => i.tipo === 'relevo').length > 0
+                ? { text: `${itemsUrgentes.filter(i => i.tipo === 'relevo').length} relevo(s) pendiente(s)`, cls: 'text-amber-600 font-semibold' }
+                : { text: `${itemsUrgentes.length} de severidad alta`, cls: 'text-red-500 font-semibold' }
           }
         />
         <KpiItem
@@ -765,7 +778,7 @@ export default function DashboardClient({
           }`}
         >
           <div className="flex items-center justify-between">
-            <SectionLabel>Incidencias abiertas</SectionLabel>
+            <SectionLabel>Requiere tu atención</SectionLabel>
             {incidenciasFiltradas.length > 0 && (
               <button
                 onClick={exportarIncidencias}
@@ -778,57 +791,99 @@ export default function DashboardClient({
             )}
           </div>
 
-          {incidenciasOrdenadas.length === 0 ? (
+          {itemsUrgentes.length === 0 && otrasIncidencias.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
               <CheckCircle2 size={24} className="mx-auto mb-2 text-emerald-200" />
-              <p className="text-sm text-gray-400">Sin incidencias abiertas</p>
+              <p className="text-sm text-gray-400">Sin situaciones abiertas</p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
-              {incidenciasOrdenadas.map(inc => {
-                const s    = SEV[inc.severidad ?? 'bajo']
-                const hAge = horasAbierta(inc.created_at)
-                const ageCls =
-                  hAge > 4  ? 'text-red-500'   :
-                  hAge > 1  ? 'text-amber-500' :
-                  'text-gray-400'
-                return (
-                  <button
-                    key={inc.id}
-                    onClick={() => setIncidenciaSheet(inc)}
-                    className={`w-full text-left flex gap-0 border-l-4 ${s.border} hover:bg-gray-50 transition-colors group`}
-                  >
-                    <div className="flex-1 px-4 py-3 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${s.badge}`}>
-                          {inc.severidad ?? 'bajo'}
-                        </span>
-                        {inc.requiere_aprobacion && inc.estado_aprobacion === 'pendiente_revision' && (
-                          <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
-                            Pend. aprobación
-                          </span>
-                        )}
-                        {inc.foto_url && (
-                          <Camera size={11} className="text-gray-400" />
-                        )}
-                      </div>
-                      <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-brand-ink">
-                        {inc.titulo}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {inc.clientes && (
-                          <span className="text-xs text-gray-400">{inc.clientes.nombre_empresa}</span>
-                        )}
-                        <span className={`text-xs font-medium ${ageCls}`}>{agingLabel(inc.created_at)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center pr-3">
-                      <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              {itemsUrgentes.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+                  {itemsUrgentes.map(item => {
+                    const badge =
+                      item.tipo === 'relevo'          ? { text: 'Relevo',     cls: 'bg-amber-100 text-amber-700', border: 'border-amber-400' } :
+                      item.tipo === 'incidencia_alta' ? { text: 'Alto',       cls: 'bg-red-100 text-red-700',     border: 'border-red-400' }   :
+                                                         { text: 'Aprobación', cls: 'bg-orange-100 text-orange-700', border: 'border-orange-400' }
+                    return (
+                      <button
+                        key={`${item.tipo}-${item.id}`}
+                        onClick={() => item.tipo === 'relevo' ? setTurnoSheet(item.id) : item.inc && setIncidenciaSheet(item.inc)}
+                        className={`w-full text-left flex gap-0 border-l-4 ${badge.border} hover:bg-gray-50 transition-colors group`}
+                      >
+                        <div className="flex-1 px-4 py-3 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${badge.cls}`}>
+                              {badge.text}
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-brand-ink">
+                            {item.label}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1 line-clamp-1">{item.sub}</p>
+                        </div>
+                        <div className="flex items-center pr-3">
+                          <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {otrasIncidencias.length > 0 && (
+                <div>
+                  {itemsUrgentes.length > 0 && (
+                    <p className="text-xs text-gray-400 font-medium px-1 mb-1.5">Otras incidencias abiertas</p>
+                  )}
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+                    {otrasIncidencias.map(inc => {
+                      const s    = SEV[inc.severidad ?? 'bajo']
+                      const hAge = horasAbierta(inc.created_at)
+                      const ageCls =
+                        hAge > 4  ? 'text-red-500'   :
+                        hAge > 1  ? 'text-amber-500' :
+                        'text-gray-400'
+                      return (
+                        <button
+                          key={inc.id}
+                          onClick={() => setIncidenciaSheet(inc)}
+                          className={`w-full text-left flex gap-0 border-l-4 ${s.border} hover:bg-gray-50 transition-colors group`}
+                        >
+                          <div className="flex-1 px-4 py-3 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${s.badge}`}>
+                                {inc.severidad ?? 'bajo'}
+                              </span>
+                              {inc.requiere_aprobacion && inc.estado_aprobacion === 'pendiente_revision' && (
+                                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
+                                  Pend. aprobación
+                                </span>
+                              )}
+                              {inc.foto_url && (
+                                <Camera size={11} className="text-gray-400" />
+                              )}
+                            </div>
+                            <p className="text-sm font-semibold text-gray-800 line-clamp-1 group-hover:text-brand-ink">
+                              {inc.titulo}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {inc.clientes && (
+                                <span className="text-xs text-gray-400">{inc.clientes.nombre_empresa}</span>
+                              )}
+                              <span className={`text-xs font-medium ${ageCls}`}>{agingLabel(inc.created_at)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center pr-3">
+                            <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
