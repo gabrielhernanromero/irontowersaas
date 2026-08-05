@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { ArrowLeft, CalendarDays, Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus } from 'lucide-react'
 
 interface Feriado {
   id: string
@@ -50,21 +49,6 @@ export default function FeriadosClient({ feriados: inicial }: { feriados: Feriad
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/supervisor/personal/horas" className="flex items-center gap-1 text-sm text-brand-orange mb-2 w-fit">
-          <ArrowLeft size={16} /> Volver a horas trabajadas
-        </Link>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center">
-            <CalendarDays size={22} className="text-brand-orange" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Feriados</h1>
-            <p className="text-sm text-gray-500">Calendario usado para marcar turnos trabajados en feriado</p>
-          </div>
-        </div>
-      </div>
-
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
         <div className="w-full sm:w-auto">
           <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>

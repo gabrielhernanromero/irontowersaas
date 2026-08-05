@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import {
-  Clock, AlertTriangle, ChevronDown, ChevronUp, Download,
-  Sun, Moon, Loader2, Settings,
+  ChevronDown, ChevronUp, Download,
+  Sun, Moon,
 } from 'lucide-react'
+import { SkeletonListItem } from '@/components/ui/Skeleton'
 import { downloadCsv } from '@/lib/exportCsv'
 import { rangoSemanaActual, rangoQuincenaActual, rangoMesActual } from '@/lib/personal/periodosPreset'
 import type { ResumenTecnico, TurnoTrabajado } from '@/lib/personal/calcularHorasTrabajadas'
@@ -35,7 +35,89 @@ function fmtMoneda(v: number): string {
   return v.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 }
 
-export default function HorasTrabajadasClient({ tecnicos, esAdmin }: { tecnicos: Tecnico[]; esAdmin: boolean }) {
+function mesLabel(mesKey: string): string {
+  const [y, m] = mesKey.split('-').map(Number)
+  const label = new Date(y, m - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function agruparPorMes(detalle: TurnoTrabajado[]): { mesKey: string; turnos: TurnoTrabajado[] }[] {
+  const ordenado = detalle.slice().sort((a, b) => b.fecha.localeCompare(a.fecha))
+  const grupos = new Map<string, TurnoTrabajado[]>()
+  for (const t of ordenado) {
+    const key = t.fecha.slice(0, 7) // YYYY-MM
+    if (!grupos.has(key)) grupos.set(key, [])
+    grupos.get(key)!.push(t)
+  }
+  return Array.from(grupos.entries()).map(([mesKey, turnos]) => ({ mesKey, turnos }))
+}
+
+function GrillaTurnos({ turnos, hayTarifas }: { turnos: TurnoTrabajado[]; hayTarifas: boolean }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {turnos.map((turno) => (
+        <div key={turno.turnoId} className="border border-gray-200 rounded-lg p-3 text-sm flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">{fechaCorta(turno.fecha)}</span>
+            <span className="flex items-center gap-1 text-gray-500">
+              {turno.turno === 'diurno' ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-indigo-500" />}
+              {turno.turno === 'diurno' ? 'Diurno' : 'Nocturno'}
+            </span>
+          </div>
+          <p className="text-gray-500">{turno.rol === 'encargado' ? 'Encargado' : 'Apoyo'} · {turno.clienteNombre}</p>
+          <p className="text-gray-700">
+            {turno.aperturaReal ? horaArg(turno.aperturaReal) : '—'} → {turno.cierreForzado ? 'sin cierre propio' : (turno.cierreReal ? horaArg(turno.cierreReal) : '—')}
+            {turno.rol === 'apoyo' && !turno.cierreForzado && ' (aprox.)'}
+            {turno.horasTrabajadas !== null && <> · {turno.horasTrabajadas} hs</>}
+          </p>
+          {turno.feriado && (
+            <span className="inline-block w-fit px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs">
+              Feriado {turno.feriado.tipo === 'nacional' ? 'nacional' : 'puente'}
+            </span>
+          )}
+          {turno.rondas && (
+            <p className={turno.rondas.completas < turno.rondas.total ? 'text-amber-600' : 'text-gray-500'}>
+              Rondas: {turno.rondas.completas}/{turno.rondas.total}
+            </p>
+          )}
+          {turno.excepcion && (
+            <p className="text-amber-600 text-xs">{motivosExcepcion(turno).join(' · ')}</p>
+          )}
+          {hayTarifas && turno.montoEstimado !== null && (
+            <p className="font-medium">{fmtMoneda(turno.montoEstimado)}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DetalleTecnico({ detalle, hayTarifas }: { detalle: TurnoTrabajado[]; hayTarifas: boolean }) {
+  const grupos = agruparPorMes(detalle)
+
+  // Un solo click (la fila del técnico) muestra todo. Con un solo mes no
+  // hace falta ninguna etiqueta de por medio.
+  if (grupos.length <= 1) {
+    return <GrillaTurnos turnos={detalle} hayTarifas={hayTarifas} />
+  }
+
+  // Con varios meses, agrupar es solo una etiqueta visual (no un botón) —
+  // organiza sin agregar otro nivel de click.
+  return (
+    <div className="flex flex-col gap-4">
+      {grupos.map((grupo) => (
+        <div key={grupo.mesKey}>
+          <p className="text-sm font-medium text-gray-500 mb-2">
+            {mesLabel(grupo.mesKey)} · {grupo.turnos.length} turno{grupo.turnos.length !== 1 ? 's' : ''}
+          </p>
+          <GrillaTurnos turnos={grupo.turnos} hayTarifas={hayTarifas} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function HorasTrabajadasClient({ tecnicos }: { tecnicos: Tecnico[] }) {
   const hoy = new Date()
   const defaultDesde = new Date(hoy.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const defaultHasta = hoy.toISOString().slice(0, 10)
@@ -74,7 +156,6 @@ export default function HorasTrabajadasClient({ tecnicos, esAdmin }: { tecnicos:
   }
 
   const todosLosTurnos = (resumen ?? []).flatMap((t) => t.detalle.map((d) => ({ ...d, tecnico: t })))
-  const paraRevisar = todosLosTurnos.filter((d) => d.excepcion).sort((a, b) => b.fecha.localeCompare(a.fecha))
   const hayTarifas = (resumen ?? []).some((t) => t.montoTotalEstimado !== null)
 
   function exportarResumen() {
@@ -118,28 +199,6 @@ export default function HorasTrabajadasClient({ tecnicos, esAdmin }: { tecnicos:
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center">
-            <Clock size={22} className="text-brand-orange" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Personal · Horas trabajadas</h1>
-            <p className="text-sm text-gray-500">Turnos cubiertos por técnico, para liquidar sueldos</p>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 text-sm">
-          <Link href="/supervisor/personal/feriados" className="text-brand-orange hover:underline">
-            Gestionar feriados →
-          </Link>
-          {esAdmin && (
-            <Link href="/supervisor/personal/tarifas" className="flex items-center gap-1 text-brand-orange hover:underline">
-              <Settings size={14} /> Configurar tarifas →
-            </Link>
-          )}
-        </div>
-      </div>
-
       {/* Filtros */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
@@ -175,7 +234,11 @@ export default function HorasTrabajadasClient({ tecnicos, esAdmin }: { tecnicos:
       </div>
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
-      {loading && <div className="flex items-center gap-2 text-gray-500 text-sm"><Loader2 size={16} className="animate-spin" /> Cargando…</div>}
+      {loading && (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonListItem key={i} />)}
+        </div>
+      )}
 
       {!loading && resumen && (
         <>
@@ -188,94 +251,106 @@ export default function HorasTrabajadasClient({ tecnicos, esAdmin }: { tecnicos:
             </button>
           </div>
 
-          {/* Para revisar */}
-          {paraRevisar.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle size={18} className="text-amber-600" />
-                <h2 className="font-semibold text-amber-900">Para revisar ({paraRevisar.length})</h2>
-              </div>
-              <ul className="flex flex-col gap-2">
-                {paraRevisar.map((t) => (
-                  <li key={`${t.turnoId}-${t.tecnico.tecnicoId}`} className="text-sm text-amber-900">
-                    <span className="font-medium">{t.tecnico.nombre} {t.tecnico.apellido}</span> — {fechaCorta(t.fecha)} {t.turno === 'diurno' ? 'diurno' : 'nocturno'}: {motivosExcepcion(t).join(' · ')}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Por técnico */}
+          {resumen.length === 0 && (
+            <p className="text-sm text-gray-500">No hay turnos cerrados en el rango elegido.</p>
           )}
 
-          {/* Por técnico */}
-          <div className="flex flex-col gap-3">
-            {resumen.length === 0 && (
-              <p className="text-sm text-gray-500">No hay turnos cerrados en el rango elegido.</p>
-            )}
-            {resumen.map((t) => (
-              <div key={t.tecnicoId} className="bg-white rounded-xl border border-gray-200 shadow-sm">
-                <button
-                  onClick={() => setExpandido(expandido === t.tecnicoId ? null : t.tecnicoId)}
-                  className="w-full flex items-center justify-between p-4 min-h-[44px]"
-                >
-                  <div className="text-left">
-                    <p className="font-semibold text-gray-900">{t.nombre} {t.apellido}</p>
-                    <p className="text-sm text-gray-500">
-                      {t.totalTurnos} turnos · {t.turnosDiurnos} diurnos · {t.turnosNocturnos} nocturnos
-                      {(t.turnosFeriadoNacional + t.turnosFeriadoPuente) > 0 && (
-                        <> · {t.turnosFeriadoNacional + t.turnosFeriadoPuente} en feriado</>
-                      )}
-                      {' · '}{t.horasTotales} hs
-                      {t.excepciones > 0 && <span className="text-amber-600"> · {t.excepciones} excepciones</span>}
-                      {hayTarifas && t.montoTotalEstimado !== null && (
-                        <> · <span className="font-medium">{fmtMoneda(t.montoTotalEstimado)}{t.tarifaIncompleta ? ' (parcial)' : ''}</span></>
-                      )}
-                    </p>
-                  </div>
-                  {expandido === t.tecnicoId ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
+          {resumen.length > 0 && (
+            <>
+              {/* Mobile: tarjetas */}
+              <div className="sm:hidden flex flex-col gap-3">
+                {resumen.map((t) => (
+                  <div key={t.tecnicoId} className="bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <button
+                      onClick={() => setExpandido(expandido === t.tecnicoId ? null : t.tecnicoId)}
+                      className="w-full flex items-center justify-between p-4 min-h-[44px]"
+                    >
+                      <div className="text-left">
+                        <p className="font-semibold text-gray-900">{t.nombre} {t.apellido}</p>
+                        <p className="text-sm text-gray-500">
+                          {t.totalTurnos} turnos · {t.turnosDiurnos} diurnos · {t.turnosNocturnos} nocturnos
+                          {(t.turnosFeriadoNacional + t.turnosFeriadoPuente) > 0 && (
+                            <> · {t.turnosFeriadoNacional + t.turnosFeriadoPuente} en feriado</>
+                          )}
+                          {' · '}{t.horasTotales} hs
+                          {t.excepciones > 0 && <span className="text-amber-600"> · {t.excepciones} excepciones</span>}
+                          {hayTarifas && t.montoTotalEstimado !== null && (
+                            <> · <span className="font-medium">{fmtMoneda(t.montoTotalEstimado)}{t.tarifaIncompleta ? ' (parcial)' : ''}</span></>
+                          )}
+                        </p>
+                      </div>
+                      {expandido === t.tecnicoId ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
 
-                {expandido === t.tecnicoId && (
-                  <div className="border-t border-gray-100 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {t.detalle
-                      .slice()
-                      .sort((a, b) => b.fecha.localeCompare(a.fecha))
-                      .map((turno) => (
-                        <div key={turno.turnoId} className="border border-gray-200 rounded-lg p-3 text-sm flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{fechaCorta(turno.fecha)}</span>
-                            <span className="flex items-center gap-1 text-gray-500">
-                              {turno.turno === 'diurno' ? <Sun size={14} /> : <Moon size={14} />}
-                              {turno.turno === 'diurno' ? 'Diurno' : 'Nocturno'}
-                            </span>
-                          </div>
-                          <p className="text-gray-500">{turno.rol === 'encargado' ? 'Encargado' : 'Apoyo'} · {turno.clienteNombre}</p>
-                          <p className="text-gray-700">
-                            {turno.aperturaReal ? horaArg(turno.aperturaReal) : '—'} → {turno.cierreForzado ? 'sin cierre propio' : (turno.cierreReal ? horaArg(turno.cierreReal) : '—')}
-                            {turno.rol === 'apoyo' && !turno.cierreForzado && ' (aprox.)'}
-                            {turno.horasTrabajadas !== null && <> · {turno.horasTrabajadas} hs</>}
-                          </p>
-                          {turno.feriado && (
-                            <span className="inline-block w-fit px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs">
-                              Feriado {turno.feriado.tipo === 'nacional' ? 'nacional' : 'puente'}
-                            </span>
-                          )}
-                          {turno.rondas && (
-                            <p className={turno.rondas.completas < turno.rondas.total ? 'text-amber-600' : 'text-gray-500'}>
-                              Rondas: {turno.rondas.completas}/{turno.rondas.total}
-                            </p>
-                          )}
-                          {turno.excepcion && (
-                            <p className="text-amber-600 text-xs">{motivosExcepcion(turno).join(' · ')}</p>
-                          )}
-                          {hayTarifas && turno.montoEstimado !== null && (
-                            <p className="font-medium">{fmtMoneda(turno.montoEstimado)}</p>
-                          )}
-                        </div>
-                      ))}
+                    {expandido === t.tecnicoId && (
+                      <div className="border-t border-gray-100 p-4">
+                        <DetalleTecnico detalle={t.detalle} hayTarifas={hayTarifas} />
+                      </div>
+                    )}
                   </div>
+                ))}
+              </div>
+
+              {/* Desktop: tabla */}
+              <div className="hidden sm:block bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b border-gray-200">
+                      <th className="p-3 font-medium">Técnico</th>
+                      <th className="p-3 font-medium text-right">Turnos</th>
+                      <th className="p-3 font-medium text-right">Diurnos</th>
+                      <th className="p-3 font-medium text-right">Nocturnos</th>
+                      <th className="p-3 font-medium text-right">Feriados</th>
+                      <th className="p-3 font-medium text-right">Horas</th>
+                      <th className="p-3 font-medium text-right">Excepciones</th>
+                      <th className="p-3 font-medium text-right">$ estimado</th>
+                      <th className="p-3 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resumen.map((t) => {
+                      const feriados = t.turnosFeriadoNacional + t.turnosFeriadoPuente
+                      return (
+                        <Fragment key={t.tecnicoId}>
+                          <tr
+                            onClick={() => setExpandido(expandido === t.tecnicoId ? null : t.tecnicoId)}
+                            className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <td className="p-3 font-medium text-gray-900">{t.nombre} {t.apellido}</td>
+                            <td className="p-3 text-right">{t.totalTurnos}</td>
+                            <td className="p-3 text-right text-gray-500">{t.turnosDiurnos}</td>
+                            <td className="p-3 text-right text-gray-500">{t.turnosNocturnos}</td>
+                            <td className="p-3 text-right text-gray-500">{feriados > 0 ? feriados : '—'}</td>
+                            <td className="p-3 text-right">{t.horasTotales}</td>
+                            <td className="p-3 text-right">
+                              {t.excepciones > 0 ? <span className="text-amber-600">{t.excepciones}</span> : '—'}
+                            </td>
+                            <td className="p-3 text-right font-medium">
+                              {hayTarifas && t.montoTotalEstimado !== null ? `${fmtMoneda(t.montoTotalEstimado)}${t.tarifaIncompleta ? ' *' : ''}` : '—'}
+                            </td>
+                            <td className="p-3 text-gray-400">{expandido === t.tecnicoId ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</td>
+                          </tr>
+                          {expandido === t.tecnicoId && (
+                            <tr>
+                              <td colSpan={9} className="p-4 bg-gray-50 border-b border-gray-100">
+                                <DetalleTecnico detalle={t.detalle} hayTarifas={hayTarifas} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                </div>
+                {resumen.some((t) => t.tarifaIncompleta) && (
+                  <p className="text-xs text-gray-400 p-3 border-t border-gray-100">* Tarifa parcial: falta cargar el precio de algún tipo de turno para este técnico.</p>
                 )}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </>
       )}
     </div>
